@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- The shortcuts dialog in a plain browser, with shortcuts-fake.js
+       standing in for the backend (see its header for ?theme= and ?inuse=).
+       Size the browser window to about 460 x 320 to see it as the app
+       shows it. Same CSP as the app. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src ipc: http://ipc.localhost; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Tack shortcuts</title>
+  <link rel="stylesheet" href="../styles/shortcuts.css">
+  <style>
+    /* Preview only: "closed" greys the dialog out, as the window would go. */
+    html.closed body { opacity: .35; pointer-events: none; transition: opacity 200ms ease; }
+  </style>
+</head>
+<body>
+  <script type="module" src="shortcuts-fake.js"></script>
+  <script type="module" src="../scripts/shortcuts.js"></script>
+</body>
+</html>

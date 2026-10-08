@@ -14,6 +14,10 @@ const THUMB_SIDE: u32 = 360;
 const THUMB_QUALITY: u8 = 85;
 /// Long side of the drag image.
 const DRAG_SIDE: u32 = 160;
+/// Long side of the picture a new capture flies onto the board with: about
+/// the snip itself on most screens, so it looks like the snip lifting off.
+const FLIGHT_SIDE: u32 = 1600;
+const FLIGHT_QUALITY: u8 = 80;
 
 /// A print's picture, as the UI gets it.
 #[derive(Clone, Debug)]
@@ -42,11 +46,25 @@ pub fn make(path: &Path) -> Result<Thumb, String> {
 pub fn from_image(img: DynamicImage) -> Result<Thumb, String> {
     let (width, height) = img.dimensions();
     let small = if width.max(height) > THUMB_SIDE { img.thumbnail(THUMB_SIDE, THUMB_SIDE) } else { img };
-    let rgb = flatten(&small);
+    Ok(Thumb { data_url: jpeg_data_url(&small, THUMB_QUALITY)?, width, height })
+}
+
+/// For a capture that flies onto the board: the picture it flies with (a
+/// JPEG data URL, long side at most 1600 px) and its thumbnail, drawn from
+/// that picture rather than from the full image, which is quicker.
+pub fn for_flight(img: &DynamicImage) -> Result<(String, Thumb), String> {
+    let (width, height) = img.dimensions();
+    let flight = if width.max(height) > FLIGHT_SIDE { img.thumbnail(FLIGHT_SIDE, FLIGHT_SIDE) } else { img.clone() };
+    let flight_url = jpeg_data_url(&flight, FLIGHT_QUALITY)?;
+    let thumb = from_image(flight)?;
+    Ok((flight_url, Thumb { width, height, ..thumb }))
+}
+
+fn jpeg_data_url(img: &DynamicImage, quality: u8) -> Result<String, String> {
+    let rgb = flatten(img);
     let mut jpeg = Vec::new();
-    JpegEncoder::new_with_quality(&mut jpeg, THUMB_QUALITY).encode_image(&rgb).map_err(|e| e.to_string())?;
-    let data_url = format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(&jpeg));
-    Ok(Thumb { data_url, width, height })
+    JpegEncoder::new_with_quality(&mut jpeg, quality).encode_image(&rgb).map_err(|e| e.to_string())?;
+    Ok(format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(&jpeg)))
 }
 
 /// Snipping Tool creates the file first and writes it a moment later, so a
@@ -115,6 +133,16 @@ mod tests {
         let drag = drag_image(&thumb.data_url).unwrap();
         assert_eq!((drag.width, drag.height), (160, 80));
         assert_eq!(drag.bgra.len(), 160 * 80 * 4);
+    }
+
+    #[test]
+    fn a_flight_picture_is_capped_and_its_thumbnail_keeps_the_original_size() {
+        let img = DynamicImage::ImageRgb8(RgbImage::from_pixel(3200, 1600, image::Rgb([200, 100, 50])));
+        let (flight, thumb) = for_flight(&img).unwrap();
+        assert!(flight.starts_with("data:image/jpeg;base64,"));
+        assert_eq!((thumb.width, thumb.height), (3200, 1600));
+        let drag = drag_image(&flight).unwrap();
+        assert_eq!((drag.width, drag.height), (160, 80));
     }
 
     #[test]

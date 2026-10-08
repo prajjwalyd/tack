@@ -1,0 +1,205 @@
+/* The shortcuts dialog (shortcuts.html, scripts/shortcuts.js): a small
+   Windows 11 dialog. A Mica-like solid background that follows the system
+   theme, one settings card with two rows, each shortcut shown as keycaps,
+   and a footer with "Reset to defaults", Cancel and an accent Save.
+   Fluent's metrics: Segoe UI Variable 14/20, 4 px controls, 32 px buttons,
+   the two-tone focus ring. <html data-theme="light|dark"> forces a theme
+   (the dev preview). */
+
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#f3f3f3, #202020);
+  --ink: light-dark(#1a1a1a, #ffffff);
+  --ink-2: light-dark(#5f5f5f, #c8c8c8);
+  --ink-3: light-dark(#8a8a8a, #9a9a9a);
+  --card: light-dark(rgba(255, 255, 255, .72), rgba(255, 255, 255, .052));
+  --card-edge: light-dark(rgba(0, 0, 0, .062), rgba(0, 0, 0, .22));
+  --divider: light-dark(rgba(0, 0, 0, .07), rgba(255, 255, 255, .06));
+  --hover: light-dark(rgba(0, 0, 0, .037), rgba(255, 255, 255, .06));
+  --press: light-dark(rgba(0, 0, 0, .024), rgba(255, 255, 255, .04));
+  --cap: light-dark(#ffffff, #3a3a3a);
+  --cap-edge: light-dark(rgba(0, 0, 0, .10), rgba(255, 255, 255, .09));
+  --cap-base: light-dark(rgba(0, 0, 0, .22), rgba(0, 0, 0, .45));
+  --btn: light-dark(#fdfdfd, #2d2d2d);
+  --btn-hover: light-dark(#f6f6f6, #323232);
+  --btn-press: light-dark(#f3f3f3, #282828);
+  --btn-edge: light-dark(rgba(0, 0, 0, .07), rgba(255, 255, 255, .07));
+  --btn-base: light-dark(rgba(0, 0, 0, .16), rgba(255, 255, 255, .03));
+  --accent: light-dark(#005fb8, #60cdff);
+  --accent-hover: light-dark(#1a6dc0, #5bbbe8);
+  --accent-press: light-dark(#3d82c8, #56a8d1);
+  --on-accent: light-dark(#ffffff, #000000);
+  --warn: light-dark(#9d5d00, #fce100);
+  --footer: light-dark(rgba(0, 0, 0, .022), rgba(0, 0, 0, .16));
+  --focus-outer: light-dark(rgba(0, 0, 0, .9), #ffffff);
+  --focus-inner: light-dark(#ffffff, rgba(0, 0, 0, .7));
+  --font: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-small: "Segoe UI Variable Small", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 14px/20px var(--font);
+  -webkit-font-smoothing: antialiased;
+  cursor: default;
+  user-select: none;
+  overflow: hidden;
+}
+
+.dialog { flex: 1; padding: 16px 20px 12px; }
+.intro {
+  margin: 0 0 10px;
+  font: 400 13px/18px var(--font);
+  color: var(--ink-2);
+}
+
+/* ---------------------------------------------------------------- the card */
+.card {
+  border-radius: 6px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--card-edge);
+}
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 12px;
+  min-height: 56px;
+  padding: 8px 10px 8px 16px;
+}
+.row + .row { border-top: 1px solid var(--divider); }
+.label { font-weight: 400; }
+
+.field {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 168px;
+  min-height: 40px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: default;
+  outline: none;
+  transition: background-color 80ms ease, border-color 80ms ease;
+}
+.field:hover { background: var(--hover); }
+.field:active { background: var(--press); }
+.field.capturing {
+  background: var(--cap);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.field .wait { color: var(--ink-2); font-size: 13px; padding: 0 4px; }
+.field .off { color: var(--ink-3); padding: 0 6px; }
+
+/* Keycaps, like a physical key seen from above: a lighter top, a firmer base. */
+kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 4px;
+  background: var(--cap);
+  box-shadow: inset 0 0 0 1px var(--cap-edge), inset 0 -1.5px 0 var(--cap-base), 0 1px 1.5px light-dark(rgba(0, 0, 0, .05), rgba(0, 0, 0, .25));
+  color: var(--ink);
+  font: 600 12px/1 var(--font-small);
+  letter-spacing: .2px;
+}
+
+.status {
+  grid-column: 1 / -1;
+  display: none;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 2px 0 4px;
+  font: 400 12px/16px var(--font-small);
+  color: var(--ink-2);
+}
+.status.warn { display: flex; }
+.status.warn svg { flex: none; width: 14px; height: 14px; margin-top: 1px; color: var(--warn); }
+
+/* ---------------------------------------------------------------- footer */
+footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px 16px;
+  background: var(--footer);
+  border-top: 1px solid var(--divider);
+}
+footer .spacer { flex: 1; }
+
+button { font: inherit; }
+.std {
+  min-width: 88px;
+  height: 32px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--btn);
+  box-shadow: inset 0 0 0 1px var(--btn-edge), inset 0 -1px 0 var(--btn-base);
+  color: var(--ink);
+  outline: none;
+}
+.std:hover { background: var(--btn-hover); }
+.std:active { background: var(--btn-press); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--btn-edge); }
+.std.accent {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: inset 0 0 0 1px light-dark(rgba(255, 255, 255, .08), rgba(0, 0, 0, .08)), inset 0 -1px 0 light-dark(rgba(0, 0, 0, .40), rgba(0, 0, 0, .14));
+}
+.std.accent:hover { background: var(--accent-hover); }
+.std.accent:active { background: var(--accent-press); color: light-dark(rgba(255, 255, 255, .8), rgba(0, 0, 0, .6)); }
+.std:disabled { opacity: .55; }
+.text {
+  height: 32px;
+  padding: 0 10px;
+  margin-left: -10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  outline: none;
+}
+.text:hover { background: var(--hover); }
+.text:active { background: var(--press); opacity: .8; }
+
+/* Fluent's focus: a 2 px outer ring with a 1 px inner one in the opposite tone. */
+.field:focus-visible,
+.std:focus-visible,
+.text:focus-visible {
+  outline: 2px solid var(--focus-outer);
+  outline-offset: 1px;
+}
+.std:focus-visible,
+.text:focus-visible { box-shadow: 0 0 0 1px var(--focus-inner); }
+.field:focus-visible:not(.capturing) { box-shadow: 0 0 0 1px var(--focus-inner); }
+
+/* ---------------------------------------------------------------- High Contrast */
+@media (forced-colors: active) {
+  .card { border: 1px solid CanvasText; }
+  .field { border-color: ButtonText; }
+  .field.capturing { border: 2px solid Highlight; }
+  kbd { border: 1px solid CanvasText; box-shadow: none; }
+  .std { background: ButtonFace; color: ButtonText; border: 1px solid ButtonText; }
+  /* System colours set by hand: left to the browser, the label would get a
+     Canvas backplate and vanish on the Highlight fill. */
+  .std.accent { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; }
+  .text { color: LinkText; }
+  .field:focus-visible, .std:focus-visible, .text:focus-visible { outline: 2px solid Highlight; box-shadow: none; }
+  .status.warn svg { color: CanvasText; }
+}

@@ -1,0 +1,42 @@
+/* The empty state: one small blank index card pinned to the felt,
+   "Take a screenshot · Win + Shift + S", in quiet Segoe UI Variable.
+   layout.js shows it when the board has no prints. (The paper notes pinned
+   in the row are styles/note.css.) */
+
+.hint-card {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--top-hidden) + var(--board-h) / 2 + 2px);
+  padding: 15px 20px 14px;
+  border-radius: var(--hint-radius);
+  background: var(--hint-paper);
+  box-shadow: var(--shadow-rest);
+  color: var(--hint-ink);
+  white-space: nowrap;
+  translate: -50% -50%;
+  rotate: -1deg;
+  opacity: 0;
+  scale: .97;
+  transition: opacity 180ms ease, scale 260ms var(--ease-out);
+  pointer-events: none;
+}
+.hint-card.show { opacity: 1; scale: 1; transition-delay: 120ms; }
+.hint-card .pin { left: calc(50% - var(--pin-size) / 2); top: 3px; }
+.hint-card p {
+  margin: 0;
+  font: 400 var(--hint-size)/18px var(--font-ui);
+  letter-spacing: .1px;
+}
+.hint-card .dot { padding: 0 7px; opacity: .55; }
+.hint-card .keys { font-weight: 600; color: var(--hint-ink-strong); }
+
+/* An empty board opened from the keyboard has the focus itself: the ring
+   goes round the card, the only thing on it. */
+#board.kbd.focused .hint-card.show::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: calc(var(--hint-radius) + 5px);
+  border: 2px solid var(--focus-ring);
+  box-shadow: 0 0 0 1px var(--focus-edge), inset 0 0 0 1px var(--focus-edge);
+}

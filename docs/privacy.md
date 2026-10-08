@@ -6,8 +6,50 @@ Nothing. Tack's code has no network access: no HTTP client, no update check,
 no analytics. The board is a local page whose content security policy only
 allows Tack's own files, `data:` images and the local IPC channel, so even a
 bug in the page could not reach the internet. Your board lives in
-`%APPDATA%\Tack\board.json` and unsaved captures in
-`%LOCALAPPDATA%\Tack\Captures`.
+`%APPDATA%\Tack\board.json`, unsaved captures in
+`%LOCALAPPDATA%\Tack\Captures` and notes in `%LOCALAPPDATA%\Tack\Notes`.
+
+## Text, the clipboard and notes
+
+Text reaches the board only when you put it there: **Win+Alt+C** on a
+selection, or text or a link dropped on the board. Tack never reads text
+off the clipboard on its own. Its clipboard listener only looks at
+pictures Snipping Tool puts there (see the README), and it ignores the
+clipboard altogether while Win+Alt+C runs.
+
+What Win+Alt+C does with the clipboard:
+
+- It asks the app in front to copy the selection (it sends that app
+  Ctrl+C), reads that copy once, and then puts back what you had on the
+  clipboard before, so a paste still pastes what it did. The copy put back
+  is marked to stay out of Windows' clipboard history and cloud clipboard,
+  which already hold the original, so it does not show up twice.
+- The app's own copy is an ordinary copy: if clipboard history (Win+V) is
+  on, the selection appears there, as it would after Ctrl+C.
+- What comes back is every part of the clipboard that is plain data: text,
+  pictures, HTML and rich text, copied files, and any privacy markers. A
+  live object copied from Office as an embedded object comes back as its
+  text, rich text and picture, but no longer as an object.
+- Content the copying app marked private is never pinned: password
+  managers mark their copies with `ExcludeClipboardContentFromMonitorProcessing`,
+  `CanIncludeInClipboardHistory` set to 0, or `Clipboard Viewer Ignore`, and
+  Tack honours all three ("Not pinned: marked private"). If what you had on
+  the clipboard before was marked private, it goes back with its marks.
+- If nothing was selected, nothing is read and the clipboard is left as it
+  was.
+
+Notes are plain UTF-8 text files, at most 20 KB each, in
+`%LOCALAPPDATA%\Tack\Notes`; board.json holds only their paths, never their
+text. Like captures, they leave with their print: unpinned, cleared, or
+aged out after a week unless kept, a note's file goes to the Recycle Bin,
+never deleted outright.
+
+Links are never fetched: no page title, no preview, no icon. The domain a
+link note shows is read from the link itself. Opening one (double-click,
+Ctrl+Enter, or Open link) hands it to your default browser, and only links
+that start with `http://` or `https://` are ever opened. A picture dropped
+on the board is saved as it is in `Captures`; a dragged web image that
+arrives only as its address is pinned as a link, never downloaded.
 
 ## The WebView2 runtime
 

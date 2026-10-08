@@ -3,18 +3,24 @@
 //! so this crate never depends on Tauri: `tack-app` wires the callbacks to
 //! the board and the UI.
 //!
-//! Threads: the clipboard listener, the hotkey and the pointer poller each
-//! run on a thread of their own with their own message loop or timer. Window
-//! operations ([`overlay`], [`drag_out`]) must run on the UI thread, which is
-//! the caller's job.
+//! Threads: the clipboard listener, the hotkeys and the pointer poller each
+//! run on a thread of their own with their own message loop or timer;
+//! pinning the selection blocks for a moment and runs on a worker. Window
+//! operations ([`overlay`], [`focus`], [`drag_out`]) must run on the UI
+//! thread, which is the caller's job.
 
 pub mod autostart;
+pub mod capture_origin;
+pub mod clipboard;
 pub mod drag_out;
 pub mod edge_reveal;
+pub mod focus;
 pub mod hotkey;
 pub mod overlay;
 pub mod pointer;
+pub mod sandbox;
 pub mod screenshots;
+pub mod selection;
 pub mod shell;
 pub mod single_instance;
 pub mod snipping_tool;

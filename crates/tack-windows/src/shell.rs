@@ -1,6 +1,7 @@
 //! Talking to the Windows shell on a print's behalf: opening and editing its
-//! file, showing it in Explorer, moving it to the Recycle Bin, and putting
-//! its image on the clipboard.
+//! file, opening a note's link in the browser, showing it in Explorer,
+//! moving it to the Recycle Bin, and putting its image or text on the
+//! clipboard.
 
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -40,6 +41,18 @@ pub fn edit(path: &Path) {
     shell_execute("edit", path.to_path_buf(), Some("open"));
 }
 
+/// Opens a web link in the default browser. Only `http` and `https` links
+/// (see `tack_core::note::link_of`) are ever passed in: anything else handed
+/// to ShellExecute could start a program.
+pub fn open_url(url: &str) {
+    let lower = url.to_ascii_lowercase();
+    if !(lower.starts_with("https://") || lower.starts_with("http://")) || url.chars().any(char::is_whitespace) {
+        eprintln!("tack: not opening a link that is not http or https");
+        return;
+    }
+    shell_execute("open", PathBuf::from(url), None);
+}
+
 pub fn open_folder(path: &Path) {
     shell_execute("open", path.to_path_buf(), None);
 }
@@ -69,4 +82,11 @@ pub fn copy_image(path: &Path) -> Result<(), String> {
     clipboard
         .set_image(arboard::ImageData { width: width as usize, height: height as usize, bytes: rgba.into_raw().into() })
         .map_err(|e| e.to_string())
+}
+
+/// Puts text on the clipboard, with Windows line breaks.
+pub fn copy_text(text: &str) -> Result<(), String> {
+    let text = text.replace("\r\n", "\n").replace('\n', "\r\n");
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+    clipboard.set_text(text).map_err(|e| e.to_string())
 }

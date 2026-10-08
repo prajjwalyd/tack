@@ -1,6 +1,8 @@
 //! Tack: a corkboard for your recent screenshots that slides down from the
 //! top edge of the screen. Each new screenshot is pinned to it, and a print
-//! can be copied, opened, edited or dragged out as a file.
+//! can be copied, opened, edited or dragged out as a file. Text and links
+//! can be pinned too, on purpose: the selection with Win+Alt+C, or anything
+//! dropped on the board.
 //!
 //! The board lives in a transparent, never-focused window that covers the top
 //! of one monitor. The UI (`ui/`) draws and animates it; this binary wires
@@ -26,9 +28,12 @@ mod captures;
 mod context_menu;
 mod drag;
 mod ipc;
+mod keyboard;
+mod notes;
 mod prints;
 mod reveal;
 mod screenshot_files;
+mod shortcuts;
 mod state;
 #[cfg(debug_assertions)]
 mod stress;
@@ -40,14 +45,22 @@ mod webview_privacy;
 
 use std::sync::Mutex;
 
-use tack_core::capture;
-use tack_windows::{autostart, edge_reveal, hotkey, screenshots, single_instance};
+use tack_core::{capture, note};
+use tack_windows::{autostart, edge_reveal, sandbox, screenshots, single_instance};
 use tauri::RunEvent;
 
 use crate::ipc::commands;
 use crate::state::AppState;
 
 fn main() {
+    // Started under another app's MSIX container (a terminal or coding tool
+    // hosted by one, say): run as a normal app instead. See
+    // tack-windows/src/sandbox.rs.
+    if let Some(host) = sandbox::host_package() {
+        if sandbox::relaunch_outside(&host) {
+            return;
+        }
+    }
     // One board is plenty: a second copy would pin every screenshot twice.
     if single_instance::already_running() {
         return;
@@ -70,6 +83,16 @@ fn main() {
                 commands::context_menu,
                 commands::set_hovering,
                 commands::set_kept,
+                commands::set_tip,
+                commands::pin_text,
+                commands::pin_image,
+                commands::take_focus,
+                commands::release_focus,
+                commands::hide_board,
+                commands::shortcuts_state,
+                commands::set_shortcuts,
+                commands::pause_shortcuts,
+                commands::close_shortcuts,
                 $($extra),*
             ]
         };
@@ -92,6 +115,9 @@ fn main() {
         .setup(|app| {
             let handle = app.handle().clone();
             reveal::init_window(&handle);
+            // Registered before the tray is built, so its menu can say if
+            // another app has one of them.
+            shortcuts::start(&handle);
             tray::build(&handle)?;
             // Keep the Run entry pointing at this exe if it was moved.
             if autostart::enabled() {
@@ -101,10 +127,11 @@ fn main() {
             prints::age_out_hourly(handle.clone());
             screenshot_files::watch(handle.clone(), screenshots::folder());
             screenshot_files::watch(handle.clone(), capture::captures_folder());
+            screenshot_files::watch(handle.clone(), note::notes_folder());
             captures::start(handle.clone());
             edge_reveal::start(reveal::EdgeGlue(handle.clone()));
-            let toggle = handle;
-            hotkey::start(move || reveal::toggle(&toggle, tack_core::RevealReason::Hotkey));
+            #[cfg(debug_assertions)]
+            notes::debug::start(&handle);
             Ok(())
         })
         .build(tauri::generate_context!())

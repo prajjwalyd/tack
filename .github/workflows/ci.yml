@@ -34,6 +34,9 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+      - name: Clippy (release, where debug-only code is compiled out)
+        run: cargo clippy --workspace --release -- -D warnings
+
       - name: Test
         run: cargo test --workspace
 

@@ -2,10 +2,19 @@
 //! edge and when it should go back up, and flips the window's click-through
 //! as the pointer crosses the board's border.
 //!
+//! The edge also opens for a drag: something (text, a link, a picture,
+//! files) carried from another app to the top edge with the button held,
+//! to be dropped on the board. [`DragGate`] tells that from a press at the
+//! top (a title bar, a tab) and from a window being moved there to snap:
+//! the press must start well below the edge and arrive quickly, the pointer
+//! must show one of Windows' drag cursors (not the arrow, text or resize
+//! cursor), and the window in front must not be in a move or size.
+//!
 //! A plain polling thread: global mouse hooks would cost every app on the
 //! system a little latency. The poller reads and updates the shared
 //! [`View`] through an [`EdgeHost`], which also carries out what it decides.
 
+use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 use tack_core::view::STRIP_H;
@@ -22,6 +31,10 @@ const POLL_HIDDEN: Duration = Duration::from_millis(40);
 const EDGE_DWELL: Duration = Duration::from_millis(400);
 /// Movement that still counts as resting, px.
 const EDGE_JITTER: i32 = 3;
+/// The same two for a drag held at the edge: the user is waiting for the
+/// board with something in hand, and a hand holding a button wobbles more.
+const DRAG_DWELL: Duration = Duration::from_millis(220);
+const DRAG_JITTER: i32 = 8;
 /// How far below the monitor top still counts as "the very top", px.
 const EDGE_BAND: i32 = 2;
 /// Grace period once the pointer is outside the board's zone, so a brief
@@ -63,6 +76,7 @@ struct Poller {
     /// under it.
     press_inside: bool,
     last_fullscreen_check: Option<Instant>,
+    drag: DragGate,
 }
 
 /// Starts the poller on a thread of its own.
@@ -77,6 +91,7 @@ pub fn start<H: EdgeHost>(host: H) {
                 prev_right: false,
                 press_inside: false,
                 last_fullscreen_check: None,
+                drag: DragGate::default(),
             };
             loop {
                 let shown = host.with_view(|v, _| v.shown);
@@ -120,21 +135,29 @@ impl Poller {
             if !v.shown {
                 self.away_since = None;
                 self.press_inside = false;
+                v.drag_in = false;
                 let mon = overlay::monitor_at(pt);
                 let at_top = pt.y < mon.monitor.top + EDGE_BAND;
                 if !at_top {
                     v.edge_armed = true;
                 }
-                if !settings.edge_reveal || !at_top || !v.edge_armed || left || right || v.fullscreen {
+                // Something carried here from another app, held over the edge.
+                let dragging = self.drag.sample(now, pt.y - mon.monitor.top, left && !right, at_top)
+                    && pointer::cursor_kind().may_be_dragging()
+                    && !pointer::window_moving();
+                let buttons_ok = (!left && !right) || dragging;
+                let (dwell, jitter) = if dragging { (DRAG_DWELL, DRAG_JITTER) } else { (EDGE_DWELL, EDGE_JITTER) };
+                if !settings.edge_reveal || !at_top || !v.edge_armed || !buttons_ok || v.fullscreen {
                     self.hot_since = None;
                     Action::None
                 } else {
                     match self.hot_since {
                         Some((since, anchor))
-                            if (pt.x - anchor.x).abs() < EDGE_JITTER && (pt.y - anchor.y).abs() < EDGE_JITTER =>
+                            if (pt.x - anchor.x).abs() < jitter && (pt.y - anchor.y).abs() < jitter =>
                         {
-                            if now - since >= EDGE_DWELL {
+                            if now - since >= dwell {
                                 self.hot_since = None;
+                                v.drag_in = dragging;
                                 Action::Reveal
                             } else {
                                 Action::None
@@ -148,12 +171,17 @@ impl Poller {
                 }
             } else {
                 self.hot_since = None;
+                self.drag.sample(now, 0, false, false);
+                if !left {
+                    // Dropped (or let go elsewhere): from now on it leaves
+                    // like any reveal from the edge.
+                    v.drag_in = false;
+                }
                 let scale = v.scale;
-                let board = v.board_on_screen();
-                let over_board = board
-                    // The UI already adds a small margin around the board.
-                    .map(|r| r.contains(pt.x, pt.y))
-                    .unwrap_or(false);
+                // The board, and the one-time tip under it while that shows.
+                let board = v.zone_on_screen();
+                // The UI already adds a small margin around the board.
+                let over_board = v.hit(pt.x, pt.y);
 
                 // Above the board counts as inside: the zone stretches from the
                 // board's margin to the monitor's top edge, because the pointer
@@ -169,9 +197,10 @@ impl Poller {
                     v.entered = true;
                     // Visited: from now on it leaves like any other reveal.
                     v.stay_open = false;
-                } else if !v.entered && v.reason == RevealReason::Edge {
+                } else if (!v.entered && v.reason == RevealReason::Edge) || v.drag_in {
                     // Fresh from the edge the pointer may be anywhere along
-                    // the top; the whole strip counts until it finds the board.
+                    // the top; the whole strip counts until it finds the
+                    // board, and for as long as something is carried to it.
                     let strip = Rect {
                         x: v.window_pos.0,
                         y: v.monitor_top,
@@ -209,6 +238,14 @@ impl Poller {
                         RevealReason::Hotkey | RevealReason::Tray => false,
                     };
                 if (!held && clicked_outside) || (!held && fullscreen_tucks) {
+                    if cfg!(debug_assertions) {
+                        eprintln!(
+                            "tack: tuck: {} (left {left_pressed}, right {right_pressed}, at {}, {})",
+                            if clicked_outside { "a click outside" } else { "full screen" },
+                            pt.x,
+                            pt.y
+                        );
+                    }
                     Action::Tuck
                 } else if in_zone || busy {
                     self.away_since = None;
@@ -240,5 +277,102 @@ impl Poller {
                 host.tuck();
             }
         }
+    }
+}
+
+/// How far below the top edge a drag must have started, px.
+const DRAG_PRESS_DEPTH: i32 = 48;
+/// A drag must arrive at the edge from at least this far below it...
+const DRAG_APPROACH_DEPTH: i32 = 40;
+/// ...within this long before touching it.
+const DRAG_APPROACH: Duration = Duration::from_millis(700);
+
+/// Tells a drag carried up to the top edge from presses that merely happen
+/// to be held there. Fed every tick with how far the pointer is below the
+/// top of its monitor (px), whether the left button alone is held, and
+/// whether the pointer is at the very top. Pure, so it is tested without a
+/// mouse; the cursor and window-move checks are the poller's.
+#[derive(Debug, Default)]
+pub struct DragGate {
+    /// How far below the top the button was first seen held.
+    press_depth: Option<i32>,
+    /// Recent depths while held, newest last.
+    trail: VecDeque<(Instant, i32)>,
+    /// The verdict for this visit to the edge, decided on arrival.
+    arrived: Option<bool>,
+}
+
+impl DragGate {
+    /// Takes one reading; true while a drag that came up from below is held
+    /// at the edge.
+    pub fn sample(&mut self, now: Instant, depth: i32, held: bool, at_top: bool) -> bool {
+        if !held {
+            *self = DragGate::default();
+            return false;
+        }
+        let press_depth = *self.press_depth.get_or_insert(depth);
+        self.trail.push_back((now, depth));
+        while self.trail.front().is_some_and(|(t, _)| now.saturating_duration_since(*t) > DRAG_APPROACH) {
+            self.trail.pop_front();
+        }
+        if !at_top {
+            self.arrived = None;
+            return false;
+        }
+        *self.arrived.get_or_insert_with(|| {
+            press_depth >= DRAG_PRESS_DEPTH && self.trail.iter().any(|&(_, d)| d >= DRAG_APPROACH_DEPTH)
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ms(n: u64) -> Duration {
+        Duration::from_millis(n)
+    }
+
+    /// Feeds (ms, depth) readings with the button held; returns the last answer.
+    fn drag(gate: &mut DragGate, t0: Instant, path: &[(u64, i32)]) -> bool {
+        path.iter().map(|&(t, d)| gate.sample(t0 + ms(t), d, true, d < 2)).last().unwrap()
+    }
+
+    #[test]
+    fn a_drag_brought_up_from_below_opens_the_edge() {
+        let t0 = Instant::now();
+        let mut gate = DragGate::default();
+        assert!(drag(&mut gate, t0, &[(0, 500), (100, 300), (200, 120), (260, 30), (300, 0)]));
+        // It stays open while held at the edge, however long.
+        assert!(gate.sample(t0 + ms(2000), 0, true, true));
+    }
+
+    #[test]
+    fn a_press_at_the_top_never_does() {
+        // A title bar or a browser tab, pressed and held against the edge.
+        let t0 = Instant::now();
+        let mut gate = DragGate::default();
+        assert!(!drag(&mut gate, t0, &[(0, 20), (100, 60), (200, 0)]));
+        assert!(!drag(&mut gate, t0, &[(300, 0), (900, 0)]));
+    }
+
+    #[test]
+    fn creeping_up_slowly_does_not_count_until_it_comes_up_again() {
+        let t0 = Instant::now();
+        let mut gate = DragGate::default();
+        // Pressed low, but the last 700 ms were spent in the top few pixels.
+        assert!(!drag(&mut gate, t0, &[(0, 400), (100, 30), (500, 20), (900, 10), (1000, 0)]));
+        // Down and quickly back up: now it is a drag to the edge.
+        assert!(drag(&mut gate, t0, &[(1100, 90), (1250, 0)]));
+    }
+
+    #[test]
+    fn letting_go_starts_over() {
+        let t0 = Instant::now();
+        let mut gate = DragGate::default();
+        assert!(drag(&mut gate, t0, &[(0, 300), (150, 0)]));
+        assert!(!gate.sample(t0 + ms(200), 0, false, true));
+        // The next press starts at the top: no drag.
+        assert!(!drag(&mut gate, t0, &[(300, 0), (400, 0)]));
     }
 }

@@ -1,0 +1,129 @@
+/* A Windows 11-like taskbar for the README scenes (taskbar.js builds it).
+   Measured against Windows 11 at 100% scale: a 48 px bar; 40 x 40 buttons,
+   4 px apart, holding 24 px app icons; a short running pill under open apps
+   (wider and in the accent colour for the active one); the search box after
+   Start; on the right the overflow chevron, the tray icons, Wi-Fi, volume
+   and battery in one pill, the time over the date (12 px, right-aligned) and
+   the bell. The bar is translucent over the wallpaper, like Mica Alt. */
+
+.taskbar {
+  --tb-bg: rgba(238, 240, 245, .80);
+  --tb-edge: rgba(0, 0, 0, .085);
+  --tb-ink: #1b1b1b;
+  --tb-ink-2: rgba(0, 0, 0, .62);
+  --tb-hover: rgba(255, 255, 255, .62);
+  --tb-hover-edge: rgba(0, 0, 0, .055);
+  --tb-pill: rgba(0, 0, 0, .42);
+  --tb-accent: #005fb8;
+  --tb-search: rgba(255, 255, 255, .72);
+  --tb-search-edge: rgba(0, 0, 0, .07);
+  --tb-start: linear-gradient(140deg, #4cb0ff, #1a73e8);
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  height: 48px;
+  box-sizing: border-box;
+  border-top: 1px solid var(--tb-edge);
+  background: var(--tb-bg);
+  -webkit-backdrop-filter: blur(40px) saturate(1.9);
+  backdrop-filter: blur(40px) saturate(1.9);
+  color: var(--tb-ink);
+  font: 12px/16px "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  pointer-events: none;
+  user-select: none;
+}
+.taskbar.tb-dark,
+:root[data-theme="dark"] .taskbar:not(.tb-light) {
+  --tb-bg: rgba(30, 31, 36, .84);
+  --tb-edge: rgba(255, 255, 255, .075);
+  --tb-ink: #ffffff;
+  --tb-ink-2: rgba(255, 255, 255, .72);
+  --tb-hover: rgba(255, 255, 255, .07);
+  --tb-hover-edge: rgba(255, 255, 255, .05);
+  --tb-pill: rgba(255, 255, 255, .55);
+  --tb-accent: #4cc2ff;
+  --tb-search: rgba(255, 255, 255, .065);
+  --tb-search-edge: rgba(255, 255, 255, .075);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .taskbar:not(.tb-light) {
+    --tb-bg: rgba(30, 31, 36, .84);
+    --tb-edge: rgba(255, 255, 255, .075);
+    --tb-ink: #ffffff;
+    --tb-ink-2: rgba(255, 255, 255, .72);
+    --tb-hover: rgba(255, 255, 255, .07);
+    --tb-hover-edge: rgba(255, 255, 255, .05);
+    --tb-pill: rgba(255, 255, 255, .55);
+    --tb-accent: #4cc2ff;
+    --tb-search: rgba(255, 255, 255, .065);
+    --tb-search-edge: rgba(255, 255, 255, .075);
+  }
+}
+
+.taskbar .g { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; display: block; }
+
+/* ---- the centre group ---- */
+.tb-center {
+  position: absolute; left: 50%; top: 0; bottom: 0; translate: -50% 0;
+  display: flex; align-items: center; gap: 4px;
+}
+.tb-btn {
+  position: relative; height: 40px; min-width: 40px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px; border: 1px solid transparent;
+}
+.tb-app img { width: 24px; height: 24px; display: block; }
+.tb-app.active { background: var(--tb-hover); border-color: var(--tb-hover-edge); }
+.tb-pill {
+  position: absolute; left: 50%; bottom: 1px; translate: -50% 0;
+  width: 6px; height: 3px; border-radius: 1.5px;
+  background: var(--tb-pill);
+  opacity: 0;
+}
+.tb-app.running .tb-pill { opacity: 1; }
+.tb-app.active .tb-pill { opacity: 1; width: 16px; background: var(--tb-accent); }
+
+/* Start: four soft rounded squares in one blue (generic, not a logo). */
+.tb-start { display: grid; grid-template-columns: 10px 10px; grid-auto-rows: 10px; gap: 2px; place-content: center; }
+.tb-start i { width: 10px; height: 10px; border-radius: 3px; background: var(--tb-start); box-shadow: inset 0 .5px 0 rgba(255, 255, 255, .45); }
+
+.tb-search {
+  height: 32px; width: 186px; box-sizing: border-box;
+  display: flex; align-items: center; gap: 10px; padding: 0 14px;
+  margin: 0 2px;
+  border-radius: 16px;
+  background: var(--tb-search);
+  border: 1px solid var(--tb-search-edge);
+  color: var(--tb-ink-2);
+  font-size: 13px;
+}
+.tb-search .g { color: var(--tb-ink); opacity: .85; }
+.tb-search-icon .g { width: 20px; height: 20px; stroke-width: .8; }
+
+/* ---- the right side ---- */
+.tb-right {
+  position: absolute; right: 0; top: 0; bottom: 0;
+  display: flex; align-items: center; gap: 0;
+}
+.tb-chev { min-width: 24px; width: 24px; }
+.tb-tray { min-width: 28px; width: 28px; }
+.tb-tray img { width: 16px; height: 16px; display: block; }
+.tb-sys { gap: 8px; padding: 0 8px; margin-left: 2px; }
+.tb-clock {
+  flex-direction: column; align-items: flex-end; justify-content: center;
+  padding: 0 8px; min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.tb-clock b { font-weight: 400; }
+.tb-bell { min-width: 32px; width: 32px; }
+.tb-desk { width: 10px; height: 48px; }
+
+/* The tray icon drawn for the bar's theme. */
+.tb-on-dark { display: none !important; }
+.taskbar.tb-dark .tb-on-dark,
+:root[data-theme="dark"] .taskbar:not(.tb-light) .tb-on-dark { display: block !important; }
+.taskbar.tb-dark .tb-on-light,
+:root[data-theme="dark"] .taskbar:not(.tb-light) .tb-on-light { display: none !important; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .taskbar:not(.tb-light) .tb-on-dark { display: block !important; }
+  :root:not([data-theme]) .taskbar:not(.tb-light) .tb-on-light { display: none !important; }
+}

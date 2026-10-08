@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- docs/screenshots/icon-sizes.png is rendered from this page at 100%
+       (device pixel ratio 1, so every icon shows at its real size): the
+       master and the hand-tuned sizes at 1x and zoomed, on a light and a dark
+       Windows 11-like taskbar, in a Start-like grid beside generic icons, and
+       the tray icon at each notification-area scale. It reads the icons from
+       crates/tack-app/icons, so serve the repository root, not ui/:
+       python -m http.server 5191, then /ui/dev/icon-sheet.html. -->
+  <title>Tack icon sheet</title>
+  <link rel="stylesheet" href="taskbar.css">
+  <style>
+    :root { --ic: ../../crates/tack-app/icons/; }
+    * { box-sizing: border-box; }
+    body { margin: 0; width: 1600px; background: #e9ebef; font: 13px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: #1b1b1f; -webkit-font-smoothing: antialiased; }
+    h1 { font: 600 22px/1 "Segoe UI Variable Display", "Segoe UI", sans-serif; margin: 0 0 4px; letter-spacing: -.2px; }
+    h2 { font: 600 13px/1 "Segoe UI Variable Text", "Segoe UI", sans-serif; margin: 0 0 12px; color: rgba(0, 0, 0, .62); text-transform: none; }
+    .wrap { padding: 28px 32px 32px; display: grid; gap: 22px; }
+    .lede { color: rgba(0, 0, 0, .6); margin: 0; }
+    .row { display: grid; gap: 16px; }
+    .panel { border-radius: 10px; padding: 20px; position: relative; overflow: hidden; }
+    .light { background: #f7f7f8; color: #1b1b1f; box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); }
+    .dark { background: #202020; color: #f3f3f3; box-shadow: 0 0 0 1px rgba(0, 0, 0, .2); }
+    .dark h2 { color: rgba(255, 255, 255, .6); }
+    .sizes { display: flex; align-items: flex-end; gap: 30px; }
+    .sizes figure { margin: 0; display: grid; justify-items: center; gap: 8px; }
+    .sizes figcaption { font-size: 11px; opacity: .55; font-variant-numeric: tabular-nums; }
+    .px { image-rendering: pixelated; display: block; }
+    .zooms { display: flex; align-items: flex-end; gap: 22px; }
+    .zooms figure { margin: 0; display: grid; justify-items: center; gap: 6px; }
+
+    .two { grid-template-columns: 1fr 1fr; }
+    .scene { position: relative; height: 120px; border-radius: 10px; overflow: hidden; }
+    .scene .taskbar { position: absolute; }
+    .scene.l { background: linear-gradient(160deg, #dfe8f7, #ece4f6 55%, #f4eef3); }
+    .scene.d { background: linear-gradient(160deg, #0d1630, #1a1440 55%, #0b1024); }
+    .scene .tag { position: absolute; left: 16px; top: 14px; font-weight: 600; font-size: 12px; opacity: .6; }
+    .scene.d .tag { color: #fff; }
+    /* a Start-like flyout */
+    .start { width: 100%; border-radius: 8px; padding: 26px 28px 22px; }
+    .start.l { background: rgba(243, 243, 243, .96); box-shadow: 0 0 0 1px rgba(0, 0, 0, .08), 0 16px 40px rgba(0, 0, 0, .14); }
+    .start.d { background: #2b2b2b; color: #fff; box-shadow: 0 0 0 1px rgba(255, 255, 255, .06), 0 16px 40px rgba(0, 0, 0, .4); }
+    .start .hd { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; margin: 0 6px 18px; }
+    .start .hd span { font-weight: 400; font-size: 12px; opacity: .7; }
+    .grid { display: grid; grid-template-columns: repeat(6, 1fr); row-gap: 14px; }
+    .grid div { display: grid; justify-items: center; gap: 7px; padding: 8px 0 6px; border-radius: 4px; font-size: 12px; }
+    .grid img { width: 32px; height: 32px; display: block; }
+    .grid .me { background: rgba(255, 255, 255, .6); box-shadow: 0 0 0 1px rgba(0, 0, 0, .05); }
+    .start.d .grid .me { background: rgba(255, 255, 255, .06); box-shadow: none; }
+    .trays { display: flex; gap: 28px; align-items: center; }
+    .tray { display: flex; align-items: center; gap: 0; border-radius: 6px; }
+    .tray figure { margin: 0; display: grid; justify-items: center; gap: 8px; }
+    .note { font-size: 11px; opacity: .55; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <h1>Tack app icon</h1>
+    <p class="lede">A framed felt board, the board’s green felt in a brushed-aluminium frame, with a brass push-pin driven in diagonally, its flat bevelled cap over the tile’s top-right corner. Master at 256 px; 48 px is the master with the tile on whole pixels; 32, 24, 20 and 16 px are drawn by hand, pixel by pixel (scripts/icon). Everything on this sheet is shown at 100% scale unless marked zoomed.</p>
+  </div>
+
+  <div class="row two" id="sizes"></div>
+  <div class="row two" id="zooms"></div>
+
+  <div class="row">
+    <div class="scene l"><span class="tag">Light taskbar, 100%: Tack pinned and running (24 px), tray icon (16 px)</span>
+      <div class="taskbar tb-light" data-apps="folder browser ../../crates/tack-app/icons/icon-24.svg mail chat code" data-running="folder" data-active="../../crates/tack-app/icons/icon-24.svg"
+           data-tray="../../crates/tack-app/icons/tray-light-16.svg ../../crates/tack-app/icons/tray-dark-16.svg"></div></div>
+    <div class="scene d"><span class="tag">Dark taskbar, 100%</span>
+      <div class="taskbar tb-dark" data-apps="folder browser ../../crates/tack-app/icons/icon-24.svg mail chat code" data-running="browser ../../crates/tack-app/icons/icon-24.svg" data-active="chat"
+           data-tray="../../crates/tack-app/icons/tray-light-16.svg ../../crates/tack-app/icons/tray-dark-16.svg"></div></div>
+  </div>
+
+  <div class="row two" id="starts"></div>
+  <div class="row two" id="trays"></div>
+</div>
+<script type="module">
+  const IC = "../../crates/tack-app/icons/";
+  const D = "desktop/";
+  const sizes = [256, 48, 32, 24, 20, 16];
+  const src = (n) => IC + (n === 256 ? "icon.svg" : `icon-${n}.svg`);
+  const zoom = { 48: 3, 32: 4, 24: 5, 20: 6, 16: 8 };
+  for (const t of ["light", "dark"]) {
+    document.getElementById("sizes").insertAdjacentHTML("beforeend", `
+      <div class="panel ${t}"><h2>All sizes at 1x, ${t} background</h2><div class="sizes">
+        ${sizes.map((n) => `<figure><img src="${src(n)}" width="${n}" height="${n}" class="px"><figcaption>${n}</figcaption></figure>`).join("")}
+      </div></div>`);
+    document.getElementById("zooms").insertAdjacentHTML("beforeend", `
+      <div class="panel ${t}"><h2>Zoomed (nearest neighbour)</h2><div class="zooms">
+        ${[48, 32, 24, 20, 16].map((n) => `<figure><img src="${src(n)}" width="${n * zoom[n]}" height="${n * zoom[n]}" class="px" data-n="${n}"><figcaption class="note">${n} px x${zoom[n]}</figcaption></figure>`).join("")}
+      </div></div>`);
+    const apps = [["folder", "Files"], ["browser", "Browser"], ["mail", "Mail"], ["chat", "Chat"], ["calendar", "Calendar"], ["photos", "Photos"],
+      ["code", "Code"], [null, "Tack"], ["music", "Music"], ["notes", "Notes"], ["insights", "Insights"], ["settings", "Settings"]];
+    document.getElementById("starts").insertAdjacentHTML("beforeend", `
+      <div class="start ${t === "light" ? "l" : "d"}"><div class="hd">Pinned<span>Start-like grid, 32 px icons</span></div><div class="grid">
+        ${apps.map(([n, label]) => `<div class="${n ? "" : "me"}"><img src="${n ? D + n + ".svg" : IC + "icon-32.svg"}" alt="">${label}</div>`).join("")}
+      </div></div>`);
+    const scales = [[16, "100%"], [20, "125%"], [24, "150%"], [32, "200%"], [64, "above 200%"]];
+    document.getElementById("trays").insertAdjacentHTML("beforeend", `
+      <div class="panel ${t}"><h2>Tray icon on a ${t} taskbar, at each scale (1x, then x4; 64 px x2)</h2><div class="trays">
+        ${scales.map(([n, pct]) => `<figure style="margin:0;display:grid;justify-items:center;gap:8px">
+            <img src="${IC}tray-${t}-${n}.svg" width="${n}" height="${n}" class="px">
+            <img src="${IC}tray-${t}-${n}.svg" width="${n * (n > 32 ? 2 : 4)}" height="${n * (n > 32 ? 2 : 4)}" class="px" data-n="${n}">
+            <span class="note">${n} px (${pct})</span></figure>`).join("")}
+      </div></div>`);
+  }
+  // Rasterise each small SVG at its own size first, so the zoomed views show
+  // the real pixels (an <img> of an SVG would be redrawn as vectors).
+  const raster = (url, n) => new Promise((res) => {
+    const im = new Image();
+    im.onload = () => { const c = document.createElement("canvas"); c.width = c.height = n; c.getContext("2d").drawImage(im, 0, 0, n, n); res(c.toDataURL()); };
+    im.src = url;
+  });
+  const jobs = [];
+  for (const img of document.querySelectorAll("img.px")) {
+    const n = +(img.dataset.n || img.getAttribute("width"));
+    const w = +img.getAttribute("width");
+    if (w !== n || n <= 48) jobs.push(raster(img.src, img.dataset.n ? n : w).then((u) => { img.src = u; }));
+  }
+  Promise.all(jobs).then(() => import("./taskbar.js")).then(() => { document.body.dataset.ready = "1"; });
+</script>
+</body>
+</html>

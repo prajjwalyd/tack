@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- An analytics app (the loop's window): bars on a violet tile. Made for Tack's README scenes; not a real product's icon. -->
+  <defs>
+    <linearGradient id="b" x1="0" y1="0" x2=".3" y2="1"><stop offset="0" stop-color="#9b8cff"/><stop offset="1" stop-color="#5b3fe0"/></linearGradient>
+    <filter id="s" x="-30%" y="-30%" width="160%" height="180%"><feGaussianBlur stdDeviation="1.2"/></filter>
+  </defs>
+  <path d="M8 41h32" stroke="#1d1060" stroke-opacity=".3" stroke-width="3" stroke-linecap="round" filter="url(#s)"/>
+  <rect x="5" y="6" width="38" height="34" rx="7" fill="url(#b)"/>
+  <path d="M11 6.7H37" stroke="#fff" stroke-opacity=".4" stroke-width="1"/>
+  <g fill="#fff"><rect x="12" y="24" width="5" height="9" rx="1.5" opacity=".7"/><rect x="21.5" y="18" width="5" height="15" rx="1.5" opacity=".85"/><rect x="31" y="13" width="5" height="20" rx="1.5"/></g>
+</svg>

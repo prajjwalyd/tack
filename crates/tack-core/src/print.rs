@@ -1,15 +1,17 @@
-//! A print: one screenshot pinned to the board, and where its file came from.
+//! A print: one thing pinned to the board, and where its file came from.
+//! Most prints are screenshots; a **note** is a short text or a link the user
+//! pinned on purpose (Win+Alt+C on a selection, or dropped on the board).
 //! Tack points at screenshot files where they already are and leaves them
-//! there. Captures are different: Tack wrote those files itself, so it is
-//! also responsible for deleting them.
+//! there. Captures and notes are different: Tack wrote those files itself, so
+//! it is also responsible for cleaning them up.
 
 use std::path::PathBuf;
 use std::time::{Instant, SystemTime};
 
 use serde::Serialize;
 
-/// One screenshot pinned to the board. Serialises as the IPC's `Print` (see
-/// docs/ipc.md); the fields marked `skip` stay on this side.
+/// One screenshot or note pinned to the board. Serialises as the IPC's
+/// `Print` (see docs/ipc.md); the fields marked `skip` stay on this side.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Print {
@@ -17,9 +19,11 @@ pub struct Print {
     pub id: String,
     /// The file name, e.g. "Screenshot 2026-10-07 231455.png".
     pub name: String,
-    /// A `data:image/jpeg` URL, long side at most 360 px.
+    /// A screenshot or a note.
+    pub kind: Kind,
+    /// A `data:image/jpeg` URL, long side at most 360 px. Empty for a note.
     pub thumb: String,
-    /// The original size in pixels.
+    /// The original size in pixels; 0 for a note.
     pub width: u32,
     pub height: u32,
     /// When it was first pinned, ms since the Unix epoch. Survives restarts;
@@ -30,6 +34,8 @@ pub struct Print {
     pub kept: bool,
     /// When it was kept, ms since the Unix epoch.
     pub kept_at: Option<u64>,
+    /// A note's text and link; `None` for a screenshot.
+    pub note: Option<NoteBody>,
     #[serde(skip)]
     pub path: PathBuf,
     /// Modification time and size when the thumbnail was made, so an edit
@@ -44,6 +50,43 @@ pub struct Print {
     pub arrived: Option<Instant>,
 }
 
+impl Print {
+    pub fn is_note(&self) -> bool {
+        self.kind == Kind::Note
+    }
+
+    /// Tack wrote this print's file (a capture, a dropped image or a note),
+    /// so Tack recycles it when the print leaves the board.
+    pub fn owned(&self) -> bool {
+        self.origin == Origin::Capture
+    }
+}
+
+/// What a print shows. Serialised as `"image"` or `"note"`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Kind {
+    /// A screenshot (or another picture) as a photo print.
+    #[default]
+    Image,
+    /// A short text or a link, on a small paper note.
+    Note,
+}
+
+/// A note's contents, as the UI gets them (see [`crate::note`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct NoteBody {
+    /// The text, at most [`crate::note::MAX_NOTE_BYTES`] of UTF-8, with
+    /// `\n` line breaks.
+    pub text: String,
+    /// The URL, when the whole note is one web link (http or https).
+    pub link: Option<String>,
+    /// That link's host without "www.", for the note's caption.
+    pub domain: Option<String>,
+    /// The text was longer than the limit and was cut there.
+    pub truncated: bool,
+}
+
 /// Where a print's file came from. Tack wrote a capture's file itself, so it
 /// also cleans it up: nobody else knows it is there.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -51,7 +94,9 @@ pub enum Origin {
     /// A screenshot file in the Screenshots folder (or anywhere else the user
     /// keeps it).
     Folder,
-    /// A Snipping Tool image from the clipboard, saved in
-    /// [`crate::capture::captures_folder`].
+    /// A file Tack wrote itself: a Snipping Tool image from the clipboard
+    /// or a picture dropped on the board, saved in
+    /// [`crate::capture::captures_folder`], or a note's text file in
+    /// [`crate::note::notes_folder`].
     Capture,
 }

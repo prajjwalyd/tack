@@ -1,0 +1,85 @@
+/* Passing cues: the notice under the board (scripts/notice.js) and the drop
+   affordance on the felt while something pinnable is dragged over it
+   (scripts/drop.js). Both quiet, both gone in a moment, opacity and
+   transform only.
+
+   #notice      a frosted pill centred under the board, in the overhang.
+                Outside #board (it never swings with it), so it carries the
+                board's colour scheme itself, like .flight.
+   .drop-cue    a soft wash of light over the felt, a light rim, and a small
+                "Drop to pin" label in the middle. No backdrop filter: the
+                board may still be swinging down when a drag arrives. */
+
+#notice {
+  position: fixed;
+  left: 50%;
+  top: calc(var(--board-h) + 14px);
+  translate: -50% 0;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 6px 14px 7px;
+  border-radius: 999px;
+  background: var(--cue-bg);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow: 0 0 0 .5px var(--cue-edge), var(--cue-shadow);
+  color: var(--cue-ink);
+  font: 500 12.5px/16px var(--font-ui);
+  letter-spacing: .1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  z-index: 60;
+  display: none;
+  color-scheme: light dark;
+}
+#notice.show { display: block; }
+:root[data-theme="light"] #notice { color-scheme: light; }
+:root[data-theme="dark"] #notice { color-scheme: dark; }
+
+/* ---------------------------------------------------------------- drop */
+.drop-cue {
+  position: absolute;
+  left: var(--frame-w);
+  right: var(--frame-w);
+  top: var(--top-hidden);
+  bottom: var(--frame-w);
+  border-radius: 0 0 calc(var(--board-radius) - var(--frame-w)) calc(var(--board-radius) - var(--frame-w));
+  background: radial-gradient(90% 120% at 50% 35%, var(--drop-wash), transparent 85%);
+  box-shadow: inset 0 0 0 1.5px var(--drop-rim), inset 0 0 22px var(--drop-wash);
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 160ms ease, visibility 0s linear 160ms;
+  pointer-events: none;
+  z-index: 35;
+}
+#board.drop-over .drop-cue {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 160ms ease, visibility 0s;
+}
+.drop-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px 7px 11px;
+  border-radius: 999px;
+  background: var(--cue-bg);
+  box-shadow: 0 0 0 .5px var(--cue-edge), var(--cue-shadow);
+  color: var(--cue-ink);
+  font: 600 12.5px/16px var(--font-ui);
+  letter-spacing: .1px;
+  transform: translateY(3px) scale(.97);
+  transition: transform 200ms var(--ease-out);
+}
+.drop-label svg { width: 12px; height: 12px; }
+#board.drop-over .drop-label { transform: none; }
+/* The prints step back a little, so the wash reads as "here". */
+#prints { transition: opacity 160ms ease; }
+#board.drop-over #prints { opacity: .8; }
+
+@media (prefers-reduced-motion: reduce) {
+  .drop-label, #board.drop-over .drop-label { transform: none; transition: none; }
+}

@@ -1,9 +1,12 @@
-/* The board: a panel of fine cork that slides out from under the top edge of
-   the screen, plus the page itself (transparent, never selectable).
+/* The board: a panel of green felt in a slim aluminium frame, hinged at the
+   top edge of the screen, plus the page itself (transparent, never
+   selectable).
 
-   #board          slides (transform), sized by layout.js
-     .cork         the material: grain, hairline edge, inner top shade, drop
-                   shadow. Width changes play as a scaleX FLIP (layout.js).
+   #board          swings down on its hinge (transform), sized by layout.js
+     .cork         the material: felt, frame and corner caps, the shade where
+                   it tucks under the screen edge, the drop shadow. (Named
+                   for the cork it once was.) Width changes play as a scaleX
+                   FLIP (layout.js).
      #rail         the row's viewport: clips sideways and fades its edges
                    only while the row scrolls; runs down into the overhang so
                    a falling print stays visible
@@ -34,6 +37,12 @@ img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
 :root[data-theme="light"] #board { color-scheme: light; }
 :root[data-theme="dark"] #board { color-scheme: dark; }
 
+/* Reveal: the board hangs folded up under the screen edge, nearly edge-on,
+   and swings down on its hinge (the screen edge, --top-hidden into the
+   board) on a damped spring: past flat by a few degrees, then back. Tuck is
+   the quick reverse. The eye sits in front of the hinge; the perspective is
+   part of the transform, so at rest (none) nothing on the page is 3D and the
+   compositor is exactly as it was before the board moved. */
 #board {
   position: absolute;
   top: calc(-1 * var(--top-hidden));
@@ -42,44 +51,118 @@ img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
   width: 360px;
   height: calc(var(--top-hidden) + var(--board-h));
   transform: none;
+  transform-origin: 50% var(--top-hidden);
   transition: transform var(--dur-reveal) var(--ease-reveal);
 }
 #board.tucked {
-  transform: translateY(calc(-100% - 24px));   /* just clear of the screen, shadow included */
+  transform: perspective(var(--board-perspective)) rotateX(var(--hinge-from));
   transition: transform var(--dur-tuck) var(--ease-tuck);
 }
 /* Once tucked the board leaves the render tree, so its layers and textures go. */
 #board.gone { display: none; }
 
-/* ---------------------------------------------------------------- cork */
-/* Grain: two fine noise fields (dark and light specks) and a slightly
-   coarser, very faint one, all neutral alpha over the theme's cork colour.
-   Rasterised once per tile and repeated; nothing here repaints in motion. */
-.cork {
+/* Folded up, the board faces the floor, away from the light: it is unlit,
+   and brightens as it turns to face the room. Same spring as the swing, so
+   the light follows the angle. */
+#board::after {
+  content: "";
   position: absolute;
   inset: 0;
   border-radius: 0 0 var(--board-radius) var(--board-radius);
+  background: var(--board-unlit);
+  opacity: 0;
+  transition: opacity var(--dur-reveal) var(--ease-reveal);
+  pointer-events: none;
+  z-index: 40;
+}
+#board.tucked::after {
+  opacity: 1;
+  transition: opacity var(--dur-tuck) var(--ease-tuck);
+}
+
+/* ---------------------------------------------------------------- felt */
+/* The material, from the top layer down:
+     the bottom-corner caps (--cap-l/r, below), a hair proud of the frame;
+     the light from above: a soft wash at the top, a vignette below;
+     the felt: a fine plain weave (a 2 px check), warp and weft (noise
+       stretched across and down), a slow mottling, over --felt;
+     the frame: side rails brushed down, the bottom rail brushed across,
+       each a gradient lit from above with a crisp light edge at the felt.
+   The frame is the element's border, with none at the top, where the
+   board hangs from the screen edge; the felt is its padding box. All
+   static images and gradients, rasterised once: nothing here repaints in
+   motion. */
+.cork {
+  --weave-size: 128px;
+  position: absolute;
+  inset: 0;
+  border: var(--frame-w) solid transparent;
+  border-top: 0;
+  border-radius: 0 0 var(--board-radius) var(--board-radius);
   background:
-    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='a' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.92' numOctaves='2' seed='7' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.22  0 0 0 0 0.13  0 0 0 0 0.05  0.75 0 0 0 -0.36'/></filter><rect width='100%25' height='100%25' filter='url(%23a)'/></svg>"),
-    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='b' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' seed='19' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 0.96  0 0 0 0 0.88  0 0.6 0 0 -0.31'/></filter><rect width='100%25' height='100%25' filter='url(%23b)'/></svg>"),
-    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='c' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.38' numOctaves='2' seed='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.25  0 0 0 0 0.15  0 0 0 0 0.06  0 0 0.5 0 -0.23'/></filter><rect width='100%25' height='100%25' filter='url(%23c)'/></svg>"),
-    var(--cork);
+    var(--cap-l) left bottom / var(--cap-size) var(--cap-size) no-repeat border-box,
+    var(--cap-r) right bottom / var(--cap-size) var(--cap-size) no-repeat border-box,
+    radial-gradient(120% 95% at 50% 0, var(--felt-light), transparent 72%) padding-box,
+    radial-gradient(140% 120% at 50% 15%, transparent 52%, var(--felt-vignette)) padding-box,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4' shape-rendering='crispEdges'><path d='M0 0h2v2H0zM2 2h2v2H2z' fill='%23eafff2' fill-opacity='.035'/><path d='M2 0h2v2H2zM0 2h2v2H0z' fill='%23001a0c' fill-opacity='.07'/></svg>") 0 0 / 2px 2px padding-box,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.36 0.07' numOctaves='2' seed='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0.03  0 0 0 0 0.015  0.75 0 0 0 -0.31'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/></svg>") 0 0 / var(--weave-size) var(--weave-size) padding-box,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.07 0.36' numOctaves='2' seed='11' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.86  0 0 0 0 1  0 0 0 0 0.93  0.32 0 0 0 -0.14'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.07 0.36' numOctaves='2' seed='31' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0.03  0 0 0 0 0.015  0.62 0 0 0 -0.26'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>") 0 0 / var(--weave-size) var(--weave-size) padding-box,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='3' seed='23' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0.02  0 0 0 0 0.01  0 0.6 0 0 -0.24'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/></svg>") 0 0 / 400px 400px padding-box,
+    linear-gradient(var(--felt), var(--felt)) padding-box,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='1024'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.45 0.0025' numOctaves='3' seed='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.6 0 0 0 -0.28'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.5 0.003' numOctaves='3' seed='9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.5 0 0 0 -0.24'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>") left top / var(--frame-w) 512px repeat-y border-box,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='1024'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.45 0.0025' numOctaves='3' seed='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.6 0 0 0 -0.28'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.5 0.003' numOctaves='3' seed='9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.5 0 0 0 -0.24'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>") right top / var(--frame-w) 512px repeat-y border-box,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='1024' height='12'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.0025 0.45' numOctaves='3' seed='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.6 0 0 0 -0.28'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.003 0.5' numOctaves='3' seed='9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.5 0 0 0 -0.24'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>") left bottom / 512px var(--frame-w) repeat-x border-box,
+    var(--rail-side-l) left top / var(--frame-w) 100% no-repeat border-box,
+    var(--rail-side-r) right top / var(--frame-w) 100% no-repeat border-box,
+    var(--rail-sheen) left bottom / 100% var(--frame-w) no-repeat border-box,
+    var(--rail-bottom) left bottom / 100% var(--frame-w) no-repeat border-box;
   box-shadow:
-    inset 0 0 0 1px var(--edge-inner),
     0 0 0 1px var(--edge-outer),
     var(--shadow-board);
   transform-origin: 50% 0;
 }
-/* The soft shade where the board tucks under the screen edge. */
+/* The corner caps: small, flat aluminium corner pieces, a pixel proud of
+   the rails, with a light edge toward the felt and a hairline seam where
+   they meet the rails. A picture can't follow light-dark(), so the dark
+   theme swaps them. */
+.cork {
+  --cap-l: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'><defs><linearGradient id='m' x1='0' y1='0' x2='.45' y2='1'><stop offset='0' stop-color='%23eef0f3'/><stop offset='1' stop-color='%23b3b9c0'/></linearGradient><filter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'><feGaussianBlur stdDeviation='.45'/></filter></defs><path d='M7 0V2A5 5 0 0 0 12 7H14' fill='none' stroke='%23001a0c' stroke-opacity='.45' stroke-width='1.1' transform='translate(0 .55)' filter='url(%23b)'/><path d='M0 0V2A12 12 0 0 0 12 14H14V7H12A5 5 0 0 1 7 2V0Z' fill='url(%23m)'/><path d='M6.75 0V2A5.25 5.25 0 0 0 12 7.25H14' fill='none' stroke='%23ffffff' stroke-width='.5'/><path d='M.25 0V2A11.75 11.75 0 0 0 12 13.75H14' fill='none' stroke='%23767c85' stroke-width='.5'/><path d='M0 .25H7M13.75 7V14' stroke='%23000' stroke-opacity='.2' stroke-width='.5'/></svg>");
+  --cap-r: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'><defs><linearGradient id='m' x1='0' y1='0' x2='.45' y2='1'><stop offset='0' stop-color='%23eef0f3'/><stop offset='1' stop-color='%23b3b9c0'/></linearGradient><filter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'><feGaussianBlur stdDeviation='.45'/></filter></defs><g transform='translate(14 0) scale(-1 1)'><path d='M7 0V2A5 5 0 0 0 12 7H14' fill='none' stroke='%23001a0c' stroke-opacity='.45' stroke-width='1.1' transform='translate(0 .55)' filter='url(%23b)'/><path d='M0 0V2A12 12 0 0 0 12 14H14V7H12A5 5 0 0 1 7 2V0Z' fill='url(%23m)'/><path d='M6.75 0V2A5.25 5.25 0 0 0 12 7.25H14' fill='none' stroke='%23ffffff' stroke-width='.5'/><path d='M.25 0V2A11.75 11.75 0 0 0 12 13.75H14' fill='none' stroke='%23767c85' stroke-width='.5'/><path d='M0 .25H7M13.75 7V14' stroke='%23000' stroke-opacity='.2' stroke-width='.5'/></g></svg>");
+  --cap-l-dark: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'><defs><linearGradient id='m' x1='0' y1='0' x2='.45' y2='1'><stop offset='0' stop-color='%23c6cbd0'/><stop offset='1' stop-color='%23858b93'/></linearGradient><filter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'><feGaussianBlur stdDeviation='.45'/></filter></defs><path d='M7 0V2A5 5 0 0 0 12 7H14' fill='none' stroke='%23000' stroke-opacity='.55' stroke-width='1.1' transform='translate(0 .55)' filter='url(%23b)'/><path d='M0 0V2A12 12 0 0 0 12 14H14V7H12A5 5 0 0 1 7 2V0Z' fill='url(%23m)'/><path d='M6.75 0V2A5.25 5.25 0 0 0 12 7.25H14' fill='none' stroke='%23eef0f2' stroke-width='.5'/><path d='M.25 0V2A11.75 11.75 0 0 0 12 13.75H14' fill='none' stroke='%234d5259' stroke-width='.5'/><path d='M0 .25H7M13.75 7V14' stroke='%23000' stroke-opacity='.28' stroke-width='.5'/></svg>");
+  --cap-r-dark: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'><defs><linearGradient id='m' x1='0' y1='0' x2='.45' y2='1'><stop offset='0' stop-color='%23c6cbd0'/><stop offset='1' stop-color='%23858b93'/></linearGradient><filter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'><feGaussianBlur stdDeviation='.45'/></filter></defs><g transform='translate(14 0) scale(-1 1)'><path d='M7 0V2A5 5 0 0 0 12 7H14' fill='none' stroke='%23000' stroke-opacity='.55' stroke-width='1.1' transform='translate(0 .55)' filter='url(%23b)'/><path d='M0 0V2A12 12 0 0 0 12 14H14V7H12A5 5 0 0 1 7 2V0Z' fill='url(%23m)'/><path d='M6.75 0V2A5.25 5.25 0 0 0 12 7.25H14' fill='none' stroke='%23eef0f2' stroke-width='.5'/><path d='M.25 0V2A11.75 11.75 0 0 0 12 13.75H14' fill='none' stroke='%234d5259' stroke-width='.5'/><path d='M0 .25H7M13.75 7V14' stroke='%23000' stroke-opacity='.28' stroke-width='.5'/></g></svg>");
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .cork { --cap-l: var(--cap-l-dark); --cap-r: var(--cap-r-dark); }
+}
+:root[data-theme="dark"] .cork { --cap-l: var(--cap-l-dark); --cap-r: var(--cap-r-dark); }
+
+/* The felt sits a hair below the frame: a fine shade along the rails' inner edge. */
+.cork::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 0 0 calc(var(--board-radius) - var(--frame-w)) calc(var(--board-radius) - var(--frame-w));
+  box-shadow:
+    inset 0 0 0 .5px var(--felt-inner-shade),
+    inset 1px 0 1.5px -.5px var(--felt-inner-shade),
+    inset -1px 0 1.5px -.5px var(--felt-inner-shade),
+    inset 0 -1px 2px -.5px var(--felt-inner-shade);
+  pointer-events: none;
+}
+/* The soft shade where the board tucks under the screen edge, across the
+   felt and the rails. */
 .cork::before {
   content: "";
   position: absolute;
-  left: 0; right: 0; top: 0;
+  left: calc(-1 * var(--frame-w));
+  right: calc(-1 * var(--frame-w));
+  top: 0;
   height: calc(var(--top-hidden) + 14px);
   background: linear-gradient(180deg, var(--tuck-shade) 0, var(--tuck-shade) var(--top-hidden), transparent);
   -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 14px), rgba(0, 0, 0, .55) calc(100% - 11px), rgba(0, 0, 0, .18) calc(100% - 6px), transparent);
   mask-image: linear-gradient(180deg, #000 calc(100% - 14px), rgba(0, 0, 0, .55) calc(100% - 11px), rgba(0, 0, 0, .18) calc(100% - 6px), transparent);
   pointer-events: none;
+  z-index: 1;
 }
 
 /* ---------------------------------------------------------------- the row */

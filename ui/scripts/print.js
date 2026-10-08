@@ -1,22 +1,28 @@
 // A print on the board: creating its element, pinning it on, keeping it,
 // reordering the row, updating its picture, the copied check, its age
-// caption, and taking it down.
+// caption, and taking it down. A paper note (text or a link) is a print too,
+// with the same layers and motion; only its paper differs (note.js).
 //
 // Each print is a stack of layers, outermost first:
 //   .slot   placed in the row by layout.js (translate); holds the pin and caption
 //   .drop   arrival, keep press, reorder lift and fall animations
 //   .swing  the pendulum motion around the pin (motion/swing.js)
 //   .card   the resting tilt, hover lift and press; holds the lift .shade, the
-//           .paper (border, rest shadow, .photo > img), the copied .badge and
-//           the Keep and × buttons
+//           .paper (border, rest shadow, .photo > img, or a note's text), the
+//           copied .badge and the Keep and × buttons
 // `print` objects hold those elements and the backend's data (`print.data`,
-// an IPC Print).
+// an IPC Print). For screen readers each .slot is an option of the board's
+// listbox, labelled in words (announce.js); its layers are hidden from them.
 
 import * as ipc from "./ipc.js";
+import { announce, labelFor } from "./announce.js";
+import { abortFlight, launch, prepareFlight, restingBox, showTip } from "./flight.js";
 import { clearHover, endPress, forgetPendingClick, rehover, wireGestures } from "./gestures.js";
+import { itemRemoved } from "./keyboard.js";
 import { colorFor, layout, measure, showPrint } from "./layout.js";
 import { LAYOUT_MS } from "./motion/spring.js";
 import { swing } from "./motion/swing.js";
+import { fillNote, fold, isNote, isUnfolded } from "./note.js";
 import { playPop, playTock } from "./sound.js";
 import { cancel, dom, later, rand, state } from "./state.js";
 
@@ -29,9 +35,10 @@ const KEEP_SVG = `<svg viewBox="0 0 18 18" aria-hidden="true"><path class="fill"
 const CHECK_SVG = `<svg viewBox="0 0 28 28" aria-hidden="true"><path d="M9.6 14.4l3 3 5.9-6.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
 
 function createPrint(data) {
+  const note = isNote(data);
   const print = {
     id: data.id,
-    data: { ...data },
+    data: { kind: "image", note: null, ...data },
     addedAt: Date.now(),
     tilt: (Math.random() < 0.5 ? -1 : 1) * rand(0.3, MAX_TILT),
     color: colorFor(data.id),
@@ -39,29 +46,36 @@ function createPrint(data) {
     w: 0, h: 0, x: 0, y: 0, t: "",
     sw: null, swAnim: null,
     leaving: false,
+    flight: null,     // a new capture's way in, see flight.js
     badgeTimer: 0,
     captionTimer: 0,
+    captionAge: null, // a link note's caption keeps its age in a span of its own (note.js)
   };
 
   const slot = document.createElement("div");
   slot.className = "slot placing";
   slot.dataset.id = data.id;
+  slot.tabIndex = -1;                       // roving focus, see keyboard.js
+  slot.setAttribute("role", "option");
+  slot.setAttribute("aria-selected", "false");
+  const paper = note ? "" : `<div class="photo"><img alt="" draggable="false" decoding="async"></div>`;
   slot.innerHTML = `
-    <div class="drop"><div class="swing"><div class="card">
+    <div class="drop" aria-hidden="true"><div class="swing"><div class="card">
       <div class="shade"></div>
-      <div class="paper"><div class="photo"><img alt="" draggable="false" decoding="async"></div></div>
+      <div class="paper">${paper}</div>
       <div class="badge">${CHECK_SVG}</div>
       <button class="btn keep" tabindex="-1" aria-label="Keep">${KEEP_SVG}</button>
       <button class="btn x" tabindex="-1" aria-label="Unpin">${X_SVG}</button>
     </div></div></div>
-    <span class="pin" data-c="${print.color}"><span class="pin-head"></span><span class="pin-brass"></span></span>
-    <div class="caption"></div>`;
+    <span class="pin" data-c="${print.color}" aria-hidden="true"><span class="pin-head"></span><span class="pin-brass"></span></span>
+    <div class="caption" aria-hidden="true"></div>`;
   print.slot = slot;
   print.drop = slot.querySelector(".drop");
   print.swingLayer = slot.querySelector(".swing");
   print.el = slot.querySelector(".card");
   print.shade = slot.querySelector(".shade");
-  print.img = slot.querySelector("img");
+  print.paper = slot.querySelector(".paper");
+  print.img = slot.querySelector("img");    // null for a note
   print.badge = slot.querySelector(".badge");
   print.keepButton = slot.querySelector(".keep");
   print.discardButton = slot.querySelector(".x");
@@ -69,16 +83,21 @@ function createPrint(data) {
   print.caption = slot.querySelector(".caption");
   print.el.style.setProperty("--tilt", `${print.tilt.toFixed(2)}deg`);
   setKeptClass(print, !!data.kept);
-  print.img.addEventListener("load", () => {
-    // Fall back to the decoded size when the backend sent no dimensions.
-    if (!(print.data.width > 0 && print.data.height > 0)) {
-      print.data.width = print.img.naturalWidth;
-      print.data.height = print.img.naturalHeight;
-      measure(print);
-      layout();
-    }
-  });
-  print.img.src = data.thumb;
+  if (note) {
+    fillNote(print);
+  } else {
+    print.img.addEventListener("load", () => {
+      // Fall back to the decoded size when the backend sent no dimensions.
+      if (!(print.data.width > 0 && print.data.height > 0)) {
+        print.data.width = print.img.naturalWidth;
+        print.data.height = print.img.naturalHeight;
+        measure(print);
+        layout();
+      }
+    });
+    print.img.src = data.thumb;
+  }
+  refreshLabel(print);
   measure(print);
   wireGestures(print);
   return print;
@@ -87,15 +106,17 @@ function createPrint(data) {
 export function printById(id) { return state.prints.get(id); }
 
 /**
- * Puts a print on the board; `animate` pins it on (now, or once revealed).
+ * Puts a print on the board; `animate` pins it on (now, or once revealed),
+ * or with a `flight` (a new capture) flies it in from where it was taken.
  * Initial prints arrive in display order and are appended (`append`); a new
  * one goes where the backend's order puts it: at the end of the kept group
  * if kept, else first among the recent prints.
  */
-export function addPrint(data, animate, append = false) {
+export function addPrint(data, animate, append = false, flight = null) {
   if (!data || !data.id) return;
   if (state.prints.has(data.id)) { updatePrint(data); return; }
   const print = createPrint(data);
+  if (animate) print.flight = prepareFlight(flight);
   state.prints.set(data.id, print);
   const keptCount = state.order.filter((id) => state.prints.get(id)?.data.kept).length;
   if (append) state.order.push(data.id);
@@ -111,6 +132,7 @@ export function addPrint(data, animate, append = false) {
   // If the board has to grow, or the row to scroll, to make room, pin on
   // once there is cork under the print.
   const moved = showPrint(print);
+  if (print.flight) { flyIn(print); return; }
   if ((state.boardW > widthBefore || moved) && !state.reduced) {
     print.slot.classList.add("awaiting");
     later(() => { if (print.leaving) return; print.slot.classList.remove("awaiting"); pinOn(print); }, LAYOUT_MS * 0.4);
@@ -123,13 +145,17 @@ export function addPrint(data, animate, append = false) {
 export function removePrint(id, how) {
   const print = printById(id);
   if (!print) return;
+  const index = state.order.indexOf(id);
   state.prints.delete(id);
   state.order = state.order.filter((x) => x !== id);
   state.awaiting = state.awaiting.filter((c) => c !== print);
   if (state.hovered === print) clearHover();
   if (state.press?.print === print) endPress();
+  abortFlight(print);
   forgetPendingClick(id);
   if (state.draggingId === id) state.draggingId = null;
+  if (isUnfolded(print)) fold(true);
+  itemRemoved(print, index);
   detach(print, how);
   // Let the print start to go before the row closes the gap.
   if (state.revealed && !state.reduced && how === "fall") later(layout, 120);
@@ -142,7 +168,16 @@ export function updatePrint(data) {
   if (!print) return;
   const before = print.data;
   print.data = { ...before, ...data };
-  if (data.thumb && data.thumb !== before.thumb) {
+  if (isNote(print.data)) {
+    // An edit (in Notepad) changed the text.
+    if (data.note && JSON.stringify(data.note) !== JSON.stringify(before.note)) {
+      if (isUnfolded(print)) fold(true);
+      fillNote(print);
+      if (state.revealed && !state.reduced) {
+        print.paper.animate([{ opacity: 0.4 }, { opacity: 1 }], { duration: 360, easing: "ease-out" });
+      }
+    }
+  } else if (print.img && data.thumb && data.thumb !== before.thumb) {
     print.img.src = data.thumb;
     if (state.revealed && !state.reduced) {
       print.img.animate([{ opacity: 0.3 }, { opacity: 1 }], { duration: 360, easing: "ease-out" });
@@ -153,9 +188,34 @@ export function updatePrint(data) {
   }
   if (data.width !== before.width || data.height !== before.height) { measure(print); layout(); }
   if (state.hovered === print) showCaption(print);
+  refreshLabel(print);
 }
 
 // ---------------------------------------------------------------- pin on
+
+/**
+ * A new capture flies in from where it was taken (flight.js), then lands
+ * with the pin-on's press. `rest`: where it lands, if already measured.
+ * Under reduced motion it simply pins on, quietly.
+ */
+export function flyIn(print, rest = null) {
+  const flight = print.flight;
+  print.flight = null;
+  if (!flight || state.reduced) {
+    print.slot.classList.remove("awaiting");
+    pinOn(print);
+    if (flight?.tip) later(showTip, 500);
+    return;
+  }
+  print.slot.classList.add("awaiting");
+  ipc.debugAck("pin-on", { id: print.id });
+  launch(print, flight, rest || restingBox(print), {
+    pin: () => { playTock(); ipc.debugAck("tock", { id: print.id }); },
+    settled: () => swing(print, -Math.sign(print.tilt || 1) * 0.6),
+    // Never took off: pins on now, or at the next reveal if tucked meanwhile.
+    skipped: () => { if (state.revealed && !print.leaving) { print.slot.classList.remove("awaiting"); pinOn(print); } },
+  });
+}
 
 /** The arrival: held just above the cork, pressed down, then the pin goes in. */
 export function pinOn(print) {
@@ -197,6 +257,7 @@ export function pinOn(print) {
 function setKeptClass(print, kept) {
   print.slot.classList.toggle("kept", kept);
   print.keepButton.setAttribute("aria-label", kept ? "Stop keeping" : "Keep");
+  refreshLabel(print);
 }
 
 /** Shows a print as kept or not; `animate` plays the pin's little press. */
@@ -204,6 +265,7 @@ function setKept(print, kept, animate) {
   print.data.kept = kept;
   if (kept && print.data.keptAt == null) print.data.keptAt = Date.now();
   if (!kept) print.data.keptAt = null;
+  if (state.revealed) announce(kept ? "Kept" : "No longer kept");
   if (!animate || state.reduced || !state.revealed) { setKeptClass(print, kept); return; }
   // The pin is pressed in, turns brass at the bottom of the press, and springs back.
   print.pin.animate([
@@ -393,10 +455,18 @@ export function showCaption(print) {
   cancel(print.captionTimer);
   const t = print.data.pinnedAt ?? print.addedAt;
   const text = ageText(t);
-  if (print.caption.textContent !== text) print.caption.textContent = text;
+  const target = print.captionAge || print.caption;
+  if (target.textContent !== text) target.textContent = text;
+  refreshLabel(print);   // its spoken age, kept current the same way
   const age = Date.now() - t;
   const next = age < 3600e3 ? 60e3 - (age % 60e3) + 50 : 5 * 60e3;
   print.captionTimer = later(() => { if (state.hovered === print) showCaption(print); }, next);
+}
+
+/** The print's label for screen readers: what it is, its age, kept. */
+export function refreshLabel(print) {
+  const label = labelFor(print.data, print.data.pinnedAt ?? print.addedAt);
+  if (print.slot.getAttribute("aria-label") !== label) print.slot.setAttribute("aria-label", label);
 }
 
 export function hideCaption(print) {

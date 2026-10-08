@@ -1,5 +1,5 @@
 // Spring easings. A damped spring's step response, sampled into a CSS
-// linear() easing, drives the reveal, the row's slides and the hover settle.
+// linear() easing, drives the reveal swing, the row's slides and the hover settle.
 // Importing this module publishes them as CSS custom properties (tokens.css
 // holds cubic-bezier fallbacks for webviews without linear()).
 
@@ -22,9 +22,10 @@ export function spring(response, damping, settle = 0.003, v0 = 0) {
 }
 
 const hasLinear = typeof CSS !== "undefined" && CSS.supports("transition-timing-function", "linear(0, 1)");
-// Reveal: about 400 ms, leaving with a little speed, with a hint (~1.5%, a
-// couple of px) of overshoot.
-const REVEAL = spring(0.36, 0.8, 0.003, 5);
+// Reveal: the board's swing down on its hinge (board.css), as a fraction of
+// the angle. Flat after about 190 ms, about 7 degrees past flat at 260 ms,
+// then back; the faint second swing (well under a degree) is cut at ~480 ms.
+const REVEAL = spring(0.42, 0.62, 0.012, 1.5);
 // Sliding along the row (gaps closing, reorders): no visible overshoot.
 const LAYOUT = spring(0.44, 0.9);
 // A print settling back after hover: a whisper of bounce.
@@ -44,5 +45,10 @@ if (hasLinear) {
 export const LAYOUT_MS = hasLinear ? LAYOUT.ms : 480;
 /** The row's slide easing, for WAAPI animations that must match CSS ones. */
 export const LAYOUT_EASING = hasLinear ? LAYOUT.easing : "cubic-bezier(.22, 1, .36, 1)";
-/** How long the reveal slide takes, ms. */
-export const REVEAL_MS = hasLinear ? REVEAL.ms : 400;
+/**
+ * How long after a reveal the board is at rest (the swing plus a couple of
+ * frames), ms. A print is pinned on only then: a board still swinging is
+ * no place to push a pin into, and pinning mid-swing would make the
+ * compositor build the print's new layers inside a 3D-turned board.
+ */
+export const REVEAL_MS = (hasLinear ? REVEAL.ms : 520) + 40;

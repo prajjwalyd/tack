@@ -1,7 +1,10 @@
-/* Pins: small matte heads with one soft highlight and a precise little cast
-   shadow, in a muted palette (terracotta, sage, ink, sand, graphite) that
-   never repeats between neighbours. A kept print's pin is brass: the brass
-   head sits on top and fades in, so the change never repaints the head. */
+/* Pins: small domed heads lit from above, with one crisp specular point, a
+   soft sheen below it and a precise little shadow falling straight down, in a
+   muted palette keyed to the green felt (coral, slate, ink, cream, dark
+   slate; see tokens.css) that never repeats between neighbours. As a pin drives in, its contact shadow spreads.
+   A kept print's pin is brass: the brass head sits on top and fades in, so
+   the change never repaints the head, and a glint crosses the brass as it
+   turns (and each time the board swings into the light). */
 
 .pin {
   --c: var(--pin-graphite);
@@ -12,6 +15,25 @@
   z-index: 4;
   pointer-events: none;
 }
+/* The pin's soft contact shadow, where its head meets the paper. */
+.pin::before {
+  content: "";
+  position: absolute;
+  inset: -2.5px -2.5px -3.5px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side at 50% 58%, var(--pin-cast) 0, transparent 100%);
+  opacity: .9;
+}
+/* Pin-on: as the pin drives in (print.js lands it ~250 ms into the arrival,
+   its squash peaks ~100 ms later) the contact shadow spreads and settles. */
+.slot.arriving .pin::before {
+  animation: pin-dimple 300ms cubic-bezier(.2, .7, .3, 1) 330ms backwards;
+}
+@keyframes pin-dimple {
+  0%   { opacity: .3; scale: .55; }
+  45%  { opacity: 1; scale: 1.12; }
+  100% { opacity: .9; scale: 1; }
+}
 .pin-head, .pin-brass {
   position: absolute;
   inset: 0;
@@ -19,26 +41,46 @@
 }
 .pin-head {
   background:
-    radial-gradient(circle at 36% 30%, var(--pin-highlight) 0, rgba(255, 255, 255, 0) 3px),
-    radial-gradient(circle at 46% 38%, var(--c) 0, var(--c) 42%, var(--cd) 100%);
+    radial-gradient(circle at 38% 26%, rgba(255, 255, 255, .92) 0, rgba(255, 255, 255, .55) .7px, rgba(255, 255, 255, 0) 1.9px),
+    radial-gradient(70% 55% at 50% 30%, var(--pin-highlight), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(circle at 50% 40%, var(--c) 0, var(--c) 40%, var(--cd) 100%);
   box-shadow:
     inset 0 0 0 .5px rgba(0, 0, 0, .14),
-    inset 0 -.5px 1px rgba(0, 0, 0, .22),
+    inset 0 -.8px 1.2px rgba(0, 0, 0, .25),
+    inset 0 .5px .5px rgba(255, 255, 255, .25),
     0 1px 1px var(--pin-cast),
-    .4px 2px 2.5px -.5px var(--pin-cast);
+    0 2.2px 2.6px -.6px var(--pin-cast);
 }
 .pin-brass {
+  overflow: hidden;
   background:
-    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, .9) 0, rgba(255, 255, 255, 0) 2.6px),
-    radial-gradient(circle at 40% 34%, var(--brass-hi) 0, var(--brass) 52%, var(--brass-d) 100%);
+    radial-gradient(circle at 37% 25%, rgba(255, 255, 255, .98) 0, rgba(255, 255, 255, .7) .7px, rgba(255, 255, 255, 0) 2.2px),
+    radial-gradient(circle at 42% 32%, var(--brass-hi) 0, var(--brass) 50%, var(--brass-d) 100%);
   box-shadow:
     inset 0 0 0 .5px rgba(90, 62, 18, .35),
+    inset 0 -.8px 1.2px rgba(80, 50, 6, .35),
     0 1px 1px var(--pin-cast),
-    .4px 2px 2.5px -.5px var(--pin-cast);
+    0 2.2px 2.6px -.6px var(--pin-cast);
   opacity: 0;
   transition: opacity 180ms ease;
 }
 .slot.kept .pin-brass { opacity: 1; }
+/* The glint: a narrow band of light crossing the brass once. */
+.pin-brass::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(115deg, transparent 38%, rgba(255, 252, 235, .95) 50%, transparent 62%);
+  transform: translateX(-75%);
+  opacity: 0;
+}
+#board:not(.tucked) .slot.kept .pin-brass::after {
+  animation: brass-glint 520ms cubic-bezier(.4, 0, .3, 1) 260ms backwards;
+}
+@keyframes brass-glint {
+  0%   { transform: translateX(-75%); opacity: 1; }
+  100% { transform: translateX(75%); opacity: 1; }
+}
 
 .pin[data-c="terracotta"] { --c: var(--pin-terracotta); --cd: var(--pin-terracotta-d); }
 .pin[data-c="sage"]       { --c: var(--pin-sage);       --cd: var(--pin-sage-d); }

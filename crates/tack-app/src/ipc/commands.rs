@@ -4,16 +4,14 @@
 //! slow (decoding a full image) or blocking (a popup menu) is async, so the
 //! board keeps animating meanwhile.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tack_core::{Print, Rect};
-use tack_windows::shell;
 use tauri::AppHandle;
 
-use crate::context_menu;
-use crate::drag;
 use crate::ipc::events::Removal;
-use crate::prints;
+use crate::shortcuts::{self, DialogState, Pair};
 use crate::state::lock;
+use crate::{context_menu, drag, keyboard, notes, prints, reveal};
 
 /// What `board_ready` returns.
 #[derive(Serialize)]
@@ -49,18 +47,16 @@ pub async fn copy_print(app: AppHandle, id: String) -> Result<(), String> {
     prints::copy(&app, &id)
 }
 
+/// A screenshot in its default app; a link note in the browser.
 #[tauri::command]
 pub fn open_print(app: AppHandle, id: String) {
-    if let Some(path) = prints::path_of(&app, &id) {
-        shell::open(&path);
-    }
+    prints::open(&app, &id);
 }
 
+/// Paint for a screenshot, Notepad for a note.
 #[tauri::command]
 pub fn edit_print(app: AppHandle, id: String) {
-    if let Some(path) = prints::path_of(&app, &id) {
-        shell::edit(&path);
-    }
+    prints::edit(&app, &id);
 }
 
 /// Async so the OLE drag loop starts after this call has returned.
@@ -80,14 +76,101 @@ pub fn set_kept(app: AppHandle, id: String, kept: bool) {
     prints::set_kept(&app, &id, kept);
 }
 
-/// Async: the menu is modal and this waits until it closes.
+/// A point from the UI, physical px relative to the window.
+#[derive(Deserialize)]
+pub struct UiPoint {
+    x: f64,
+    y: f64,
+}
+
+/// Async: the menu is modal and this waits until it closes. At the pointer,
+/// or `at` the focused print when the keyboard asked for it.
 #[tauri::command]
-pub async fn context_menu(app: AppHandle, id: String) -> Result<(), String> {
-    context_menu::show(&app, &id)
+pub async fn context_menu(app: AppHandle, id: String, at: Option<UiPoint>) -> Result<(), String> {
+    context_menu::show(&app, &id, at.map(|p| (p.x, p.y)))
+}
+
+/// A rectangle from the UI, physical px relative to the window.
+#[derive(Deserialize)]
+pub struct UiRect {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+}
+
+/// The one-time tip under the board is showing there, or (`null`) closed.
+#[tauri::command]
+pub fn set_tip(app: AppHandle, rect: Option<UiRect>) {
+    let rect = rect.map(|r| Rect {
+        x: r.x.round() as i32,
+        y: r.y.round() as i32,
+        w: r.w.round().max(0.0) as i32,
+        h: r.h.round().max(0.0) as i32,
+    });
+    reveal::set_tip(&app, rect);
 }
 
 /// Only a hint; the pointer poller is the authority on hovering.
 #[tauri::command]
 pub fn set_hovering(hovering: bool) {
     let _ = hovering;
+}
+
+/// Text dropped on the board: pinned as a note (a link if it is one). Async:
+/// it saves a file and may wait to reveal.
+#[tauri::command]
+pub async fn pin_text(app: AppHandle, text: String) {
+    let _line = notes::pin_text(&app, &text);
+    trace!("dropped text: {_line}");
+}
+
+/// A PNG or JPEG dropped on the board, as base64: pinned like a capture.
+#[tauri::command]
+pub async fn pin_image(app: AppHandle, name: String, data: String) {
+    let _line = notes::pin_dropped_image(&app, &name, &data);
+    trace!("dropped picture: {_line}");
+}
+
+/// The board came down for the keyboard (the shortcut) and wants focus.
+#[tauri::command]
+pub fn take_focus(app: AppHandle) -> bool {
+    keyboard::take(&app)
+}
+
+/// The board is going: the keyboard goes back where it was.
+#[tauri::command]
+pub fn release_focus(app: AppHandle) {
+    keyboard::release(&app);
+}
+
+/// Esc on the board.
+#[tauri::command]
+pub fn hide_board(app: AppHandle) {
+    keyboard::hide(&app);
+}
+
+/// The Shortcuts dialog opens: the shortcuts, how they registered, and the
+/// defaults.
+#[tauri::command]
+pub fn shortcuts_state(app: AppHandle) -> DialogState {
+    shortcuts::dialog_state(&app)
+}
+
+/// The Shortcuts dialog's Save: saved only if both work. Async: it waits
+/// for the hotkey thread.
+#[tauri::command]
+pub async fn set_shortcuts(app: AppHandle, toggle: String, pin: String) -> Pair {
+    shortcuts::set(&app, &toggle, &pin)
+}
+
+/// The Shortcuts dialog listens for a chord (shortcuts paused) or is done.
+#[tauri::command]
+pub async fn pause_shortcuts(paused: bool) {
+    shortcuts::pause(paused);
+}
+
+#[tauri::command]
+pub async fn close_shortcuts(app: AppHandle) {
+    shortcuts::close_dialog(&app);
 }

@@ -20,6 +20,7 @@ export const state = {
   press: null,          // the press in progress, see gestures.js
   pendingClick: null,   // a click waiting to see if it becomes a double click
   draggingId: null,
+  keyMenuAt: -1e9,      // when the keyboard last asked for the context menu (performance.now())
   gustTimer: 0,
   timers: new Set(),    // short-lived animation timeouts, cleared on tuck
   awaiting: [],         // prints to pin on once the board is revealed

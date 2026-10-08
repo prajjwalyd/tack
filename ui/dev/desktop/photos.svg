@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- An image viewer: a framed landscape, sun and hills. Made for Tack's README scenes; not a real product's icon. -->
+  <defs>
+    <linearGradient id="k" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7cc8ff"/><stop offset="1" stop-color="#c6e7ff"/></linearGradient>
+    <linearGradient id="m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#38c172"/><stop offset="1" stop-color="#1e8a52"/></linearGradient>
+    <clipPath id="c"><rect x="5" y="8" width="38" height="31" rx="5"/></clipPath>
+    <filter id="s" x="-30%" y="-30%" width="160%" height="180%"><feGaussianBlur stdDeviation="1.2"/></filter>
+  </defs>
+  <path d="M8 41h32" stroke="#000" stroke-opacity=".25" stroke-width="3" stroke-linecap="round" filter="url(#s)"/>
+  <g clip-path="url(#c)">
+    <rect x="5" y="8" width="38" height="31" fill="url(#k)"/>
+    <circle cx="33" cy="17" r="4" fill="#ffe08a"/>
+    <path d="M5 33l10-11 9 9 6-5 13 10v3H5Z" fill="url(#m)"/>
+  </g>
+  <rect x="5.5" y="8.5" width="37" height="30" rx="4.5" fill="none" stroke="#fff" stroke-opacity=".6"/>
+</svg>

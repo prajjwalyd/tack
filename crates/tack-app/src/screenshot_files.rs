@@ -3,14 +3,15 @@
 //! pinned file refreshes its thumbnail; if a pinned file is deleted or moved
 //! elsewhere, its print is unpinned with a short fade.
 //!
-//! The captures folder is watched too, but only for edits and removals of
-//! pinned files: new files there are Tack's own, pinned by the clipboard.
-//! Also puts last session's prints back at startup.
+//! The captures and notes folders are watched too, but only for edits and
+//! removals of pinned files: new files there are Tack's own. An edited note
+//! (Notepad saving it) shows its new text. Also puts last session's prints
+//! and notes back at startup.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use tack_core::{capture, files, thumbnail, Arrival, Origin, RevealReason};
+use tack_core::{capture, files, note, thumbnail, Arrival, Kind, Origin, RevealReason};
 use tack_windows::screenshots::{self, FolderEvent};
 use tauri::AppHandle;
 
@@ -38,12 +39,12 @@ pub fn watch(app: AppHandle, folder: PathBuf) {
 
 /// Pins a new image file and reveals the board.
 fn arrived(app: &AppHandle, path: PathBuf) {
-    if !files::is_image(&path) {
+    if lock(app).board.find_path(&path).is_some() {
+        // Saved over a pinned file (or a note).
+        changed(app, path);
         return;
     }
-    if lock(app).board.find_path(&path).is_some() {
-        // Saved over a pinned file.
-        changed(app, path);
+    if !files::is_image(&path) {
         return;
     }
     if capture::in_captures(&path) {
@@ -59,7 +60,7 @@ fn arrived(app: &AppHandle, path: PathBuf) {
         lock(&app).decoding.remove(&key);
         match result {
             Ok(t) => {
-                if let Pin::New(aged) = prints::pin(&app, path, t, Origin::Folder, prints::live()) {
+                if let Pin::New(aged) = prints::pin(&app, path, t, Origin::Folder, prints::live(), None) {
                     reveal::reveal(&app, RevealReason::New);
                     // Queued behind the reveal on the main thread, so a print
                     // ageing out falls from a board that is already down.
@@ -107,18 +108,27 @@ fn changed(app: &AppHandle, path: PathBuf) {
 }
 
 fn refresh(app: &AppHandle, path: &Path) {
-    let stamp = lock(app).board.find_path(path).map(|p| p.stamp);
-    let Some(old) = stamp else { return };
+    let found = lock(app).board.find_path(path).map(|p| (p.stamp, p.kind));
+    let Some((old, kind)) = found else { return };
     if old.is_some() && old == files::file_stamp(path) {
         return;
     }
-    if let Ok(t) = thumbnail::make_patiently(path, WRITE_PATIENCE) {
-        prints::update_thumb(app, path, t);
+    match kind {
+        Kind::Note => {
+            if let Ok(body) = note::read(path) {
+                prints::update_note(app, path, body);
+            }
+        }
+        Kind::Image => {
+            if let Ok(t) = thumbnail::make_patiently(path, WRITE_PATIENCE) {
+                prints::update_thumb(app, path, t);
+            }
+        }
     }
 }
 
-/// Re-pins last session's prints as they were (kept or not, in their old
-/// order), without animation. Prints whose files no longer exist are
+/// Re-pins last session's prints and notes as they were (kept or not, in
+/// their old order), without animation. Prints whose files no longer exist are
 /// dropped, and board.json is saved once so it stops listing them. Then
 /// checks the history once, for anything that grew too old meanwhile.
 pub fn restore(app: AppHandle) {
@@ -130,9 +140,18 @@ pub fn restore(app: AppHandle) {
                 gone += 1;
                 continue;
             }
-            let Ok(t) = thumbnail::make(&print.path) else { continue };
             let arrival = Arrival::Restored { pinned_at: print.pinned_at, kept_at: print.kept_at };
-            if let Pin::New(aged) = prints::pin(&app, print.path, t, print.origin, arrival) {
+            let pinned = match print.kind {
+                Kind::Note => {
+                    let Ok(body) = note::read(&print.path) else { continue };
+                    prints::pin_note(&app, print.path, body, arrival)
+                }
+                Kind::Image => {
+                    let Ok(t) = thumbnail::make(&print.path) else { continue };
+                    prints::pin(&app, print.path, t, print.origin, arrival, None)
+                }
+            };
+            if let Pin::New(aged) = pinned {
                 aged.announce(&app);
             }
         }

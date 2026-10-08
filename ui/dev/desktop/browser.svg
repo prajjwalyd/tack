@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- A web browser: a glossy blue globe with meridians. Made for Tack's README scenes; not a real product's icon. -->
+  <defs>
+    <radialGradient id="g" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#7fe0ff"/><stop offset=".5" stop-color="#2b9cf0"/><stop offset="1" stop-color="#1557c9"/></radialGradient>
+    <radialGradient id="h" cx=".35" cy=".22" r=".45"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <clipPath id="c"><circle cx="24" cy="23" r="18"/></clipPath>
+    <filter id="s" x="-30%" y="-30%" width="160%" height="180%"><feGaussianBlur stdDeviation="1.2"/></filter>
+  </defs>
+  <ellipse cx="24" cy="42" rx="13" ry="2.2" fill="#0a1f4a" opacity=".3" filter="url(#s)"/>
+  <circle cx="24" cy="23" r="18" fill="url(#g)"/>
+  <g clip-path="url(#c)" fill="none" stroke="#e8f8ff" stroke-opacity=".75" stroke-width="1.6">
+    <ellipse cx="24" cy="23" rx="7.5" ry="18"/>
+    <path d="M24 5v36M6 23h36M8.5 14h31M8.5 32h31"/>
+  </g>
+  <circle cx="24" cy="23" r="18" fill="url(#h)"/>
+  <circle cx="24" cy="23" r="17.4" fill="none" stroke="#0b3d99" stroke-opacity=".35" stroke-width="1.2"/>
+</svg>

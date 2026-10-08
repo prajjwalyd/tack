@@ -1,14 +1,17 @@
 //! What survives a restart: `%APPDATA%\Tack\board.json`, holding the pinned
-//! prints in row order (each with its path, whether it is a capture, when it
-//! was pinned and when it was kept) and the settings.
+//! prints in row order (each with its path, whether it is a capture or a
+//! note, when it was pinned and when it was kept) and the settings.
 //!
-//! Only paths are stored, never images: on startup each file is decoded
-//! again, and files that are gone by then are skipped.
+//! Only paths are stored, never images or text: on startup each file is
+//! decoded (or a note's text read) again, and files that are gone by then are
+//! skipped. A note's text lives only in its own file in Tack's Notes folder.
 //!
-//! The file carries a schema `version` ([`VERSION`]). Files without one are
-//! the earlier layouts, still read: the first `prints` layout, and before it
-//! bare `paths` (oldest first) and `captures`, whose prints count as unkept
-//! and pinned when their file was last modified. A file from a newer Tack
+//! The file carries a schema `version` ([`VERSION`]). Version 3 added notes
+//! (a print's `"kind": "note"`); a version 2 file has only screenshots and
+//! loads as is. Files without a version are the earlier layouts, still read:
+//! the first `prints` layout, and before it bare `paths` (oldest first) and
+//! `captures`, whose prints count as unkept and pinned when their file was
+//! last modified. A print of a kind this build does not know is skipped. A file from a newer Tack
 //! (a higher version) is read as far as it goes but never trusted for
 //! cleanup, and is backed up before this build writes over it.
 //!
@@ -25,14 +28,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::files::path_key;
 use crate::history;
-use crate::print::{Origin, Print};
+use crate::print::{Kind, Origin, Print};
 use crate::settings::Settings;
 
-/// The board.json schema this build writes and fully understands.
-pub const VERSION: u32 = 2;
+/// The board.json schema this build writes and fully understands. 3: notes.
+pub const VERSION: u32 = 3;
 
 /// The file's shape. Settings are flattened in, so the file reads
-/// `{ "version": 2, "prints": [...], "sound": true, "edgeReveal": true }`.
+/// `{ "version": 3, "prints": [...], "sound": true, "edgeReveal": true, ... }`.
 #[derive(Serialize, Deserialize, Default, Debug)]
 #[serde(default, rename_all = "camelCase")]
 struct Stored {
@@ -54,6 +57,11 @@ struct Stored {
 #[serde(rename_all = "camelCase")]
 struct StoredPrint {
     path: PathBuf,
+    /// "note" for a note; absent (before version 3, and for screenshots)
+    /// means a screenshot. Read as text, so a kind from a newer Tack skips
+    /// that print instead of failing the whole file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    kind: Option<String>,
     #[serde(default)]
     capture: bool,
     /// Ms since the Unix epoch.
@@ -70,6 +78,7 @@ struct StoredPrint {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SavedPrint {
     pub path: PathBuf,
+    pub kind: Kind,
     pub origin: Origin,
     /// Ms since the Unix epoch.
     pub pinned_at: u64,
@@ -209,16 +218,27 @@ pub fn parse(bytes: &[u8], now_ms: u64, modified: impl Fn(&Path) -> Option<u64>)
     let entries = stored.prints.unwrap_or_else(|| legacy_prints(stored.paths, &stored.captures));
     let mut prints: Vec<SavedPrint> = entries
         .into_iter()
-        .map(|p| {
+        .filter_map(|p| {
+            let kind = match p.kind.as_deref() {
+                None | Some("image") => Kind::Image,
+                Some("note") => Kind::Note,
+                Some(other) => {
+                    eprintln!("tack: skipping a pinned {other:?}, a kind of print this build does not know");
+                    return None;
+                }
+            };
             let pinned_at = p.pinned_at.or_else(|| modified(&p.path)).unwrap_or(now_ms);
             // A kept print saved without its time counts as kept when pinned.
             let kept_at = p.kept.then(|| p.kept_at.unwrap_or(pinned_at));
-            let origin = if p.capture { Origin::Capture } else { Origin::Folder };
-            SavedPrint { path: p.path, origin, pinned_at, kept_at }
+            // A note's file is always Tack's own.
+            let origin = if p.capture || kind == Kind::Note { Origin::Capture } else { Origin::Folder };
+            Some(SavedPrint { path: p.path, kind, origin, pinned_at, kept_at })
         })
         .collect();
     prints.sort_by_key(|p| history::row_key(p.kept_at, p.pinned_at));
-    (Saved { settings: stored.settings, prints }, loaded)
+    let mut settings = stored.settings;
+    settings.retire_old_defaults();
+    (Saved { settings, prints }, loaded)
 }
 
 /// The older layout as prints: unkept, with no pin time of their own.
@@ -229,6 +249,7 @@ fn legacy_prints(paths: Vec<PathBuf>, captures: &[PathBuf]) -> Vec<StoredPrint> 
         .into_iter()
         .rev()
         .map(|path| StoredPrint {
+            kind: None,
             capture: captures.contains(&path_key(&path)),
             path,
             pinned_at: None,
@@ -248,6 +269,7 @@ pub fn save(file: &Path, prints: &[Print], settings: &Settings) {
                 .iter()
                 .map(|p| StoredPrint {
                     path: p.path.clone(),
+                    kind: p.is_note().then(|| "note".to_string()),
                     capture: p.origin == Origin::Capture,
                     pinned_at: Some(p.pinned_at),
                     kept: p.kept,
@@ -300,7 +322,7 @@ mod tests {
     }
 
     fn saved(path: &str, origin: Origin, pinned_at: u64, kept_at: Option<u64>) -> SavedPrint {
-        SavedPrint { path: PathBuf::from(path), origin, pinned_at, kept_at }
+        SavedPrint { path: PathBuf::from(path), kind: Kind::Image, origin, pinned_at, kept_at }
     }
 
     /// A fresh, empty folder for one test.
@@ -312,15 +334,18 @@ mod tests {
     }
 
     fn print(dir: &Path, id: &str, name: &str, origin: Origin, pinned_at: u64, kept_at: Option<u64>) -> Print {
+        let note = name.ends_with(".txt").then(|| crate::note::body(&format!("the words of {name}")).unwrap());
         Print {
             id: id.into(),
             name: name.into(),
+            kind: if note.is_some() { Kind::Note } else { Kind::Image },
             thumb: String::new(),
             width: 1,
             height: 1,
             pinned_at,
             kept: kept_at.is_some(),
             kept_at,
+            note,
             path: dir.join(name),
             stamp: None,
             origin,
@@ -344,7 +369,7 @@ mod tests {
         };
         let (saved_board, loaded) = parse(old, NOW, modified);
         assert_eq!(loaded, Loaded::Ok);
-        assert_eq!(saved_board.settings, Settings { sound: false, edge_reveal: true });
+        assert_eq!(saved_board.settings, Settings { sound: false, edge_reveal: true, ..Settings::default() });
         assert_eq!(
             saved_board.prints,
             vec![
@@ -384,6 +409,55 @@ mod tests {
             let json = format!(r#"{{ "version": {v}, "prints": [] }}"#);
             assert_eq!(parse(json.as_bytes(), NOW, no_files).1, Loaded::Ok);
         }
+    }
+
+    #[test]
+    fn a_version_2_board_migrates_to_screenshots_and_default_shortcuts() {
+        let v2 = br#"{ "version": 2, "prints": [
+            { "path": "C:\\Cap\\a.png", "capture": true, "pinnedAt": 9, "kept": false },
+            { "path": "C:\\Pics\\b.png", "pinnedAt": 8 }
+        ], "sound": true, "edgeReveal": false, "snipTipShown": true }"#;
+        let (saved_board, loaded) = parse(v2, NOW, no_files);
+        assert_eq!(loaded, Loaded::Ok);
+        assert!(saved_board.prints.iter().all(|p| p.kind == Kind::Image));
+        assert_eq!(saved_board.prints[0], saved(r"C:\Cap\a.png", Origin::Capture, 9, None));
+        // Ctrl+Alt+T is gone: a board from before shortcuts gets the new ones.
+        assert_eq!(saved_board.settings.toggle_shortcut, "Win+Alt+S");
+        assert_eq!(saved_board.settings.pin_shortcut, "Win+Alt+C");
+        assert!(!saved_board.settings.edge_reveal);
+    }
+
+    #[test]
+    fn notes_load_as_tacks_own_files_and_unknown_kinds_are_skipped() {
+        let v3 = br#"{ "version": 3, "prints": [
+            { "path": "C:\\Notes\\Note 1.txt", "kind": "note", "pinnedAt": 9 },
+            { "path": "C:\\Pics\\b.png", "kind": "image", "pinnedAt": 8 },
+            { "path": "C:\\Else\\c.ink", "kind": "sketch", "pinnedAt": 7 }
+        ], "togglePinShortcut": "ignored", "pinShortcut": "" }"#;
+        let (saved_board, loaded) = parse(v3, NOW, no_files);
+        assert_eq!(loaded, Loaded::Ok);
+        assert_eq!(saved_board.prints.len(), 2);
+        let note = &saved_board.prints[0];
+        assert_eq!((note.kind, note.origin), (Kind::Note, Origin::Capture), "a note's file is always Tack's own");
+        assert_eq!(saved_board.prints[1].kind, Kind::Image);
+        assert_eq!(saved_board.settings.pin_shortcut, "", "a shortcut turned off stays off");
+    }
+
+    #[test]
+    fn only_notes_are_saved_with_a_kind() {
+        let dir = scratch("kinds");
+        let file = dir.join("board.json");
+        let prints = [
+            print(&dir, "1", "a.png", Origin::Folder, NOW - 1, None),
+            print(&dir, "2", "Note.txt", Origin::Capture, NOW - 2, None),
+        ];
+        save(&file, &prints, &Settings::default());
+        let text = std::fs::read_to_string(&file).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(text.matches("\"kind\"").count(), 1);
+        assert!(text.contains("\"kind\": \"note\""));
+        assert!(!text.contains("the words of"), "the note's text is never in board.json");
+        assert!(text.contains("\"toggleShortcut\": \"Win+Alt+S\""));
     }
 
     #[test]
@@ -430,9 +504,15 @@ mod tests {
         let prints = [
             print(&dir, "1", "a.png", Origin::Folder, NOW - 50, Some(NOW - 10)),
             print(&dir, "2", "b.png", Origin::Capture, NOW - 20, None),
-            print(&dir, "3", "c.png", Origin::Folder, NOW - 30, None),
+            print(&dir, "3", "c.txt", Origin::Capture, NOW - 30, None),
         ];
-        let settings = Settings { sound: false, edge_reveal: false };
+        let settings = Settings {
+            sound: false,
+            edge_reveal: false,
+            snip_tip_shown: true,
+            toggle_shortcut: "Ctrl+Alt+F9".into(),
+            pin_shortcut: String::new(),
+        };
         save(&file, &prints, &settings);
         // Saving again replaces the file rather than failing on it.
         save(&file, &prints, &settings);
@@ -450,12 +530,25 @@ mod tests {
             vec![
                 SavedPrint {
                     path: dir.join("a.png"),
+                    kind: Kind::Image,
                     origin: Origin::Folder,
                     pinned_at: NOW - 50,
                     kept_at: Some(NOW - 10)
                 },
-                SavedPrint { path: dir.join("b.png"), origin: Origin::Capture, pinned_at: NOW - 20, kept_at: None },
-                SavedPrint { path: dir.join("c.png"), origin: Origin::Folder, pinned_at: NOW - 30, kept_at: None },
+                SavedPrint {
+                    path: dir.join("b.png"),
+                    kind: Kind::Image,
+                    origin: Origin::Capture,
+                    pinned_at: NOW - 20,
+                    kept_at: None
+                },
+                SavedPrint {
+                    path: dir.join("c.txt"),
+                    kind: Kind::Note,
+                    origin: Origin::Capture,
+                    pinned_at: NOW - 30,
+                    kept_at: None
+                },
             ]
         );
     }
@@ -488,7 +581,7 @@ mod tests {
     fn an_unusable_board_json_is_backed_up_before_any_save() {
         for (name, contents) in [
             ("corrupt", &br#"{ "prints": [ { "path": "#[..]),
-            ("newer", br#"{ "version": 3, "prints": [], "layout": "whatever comes next" }"#),
+            ("newer", br#"{ "version": 4, "prints": [], "layout": "whatever comes next" }"#),
         ] {
             let dir = scratch(name);
             let file = dir.join("board.json");

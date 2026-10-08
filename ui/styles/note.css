@@ -1,30 +1,141 @@
-/* The empty state: one small blank index card pinned to the cork,
-   "Take a screenshot · Win + Shift + S", in quiet Segoe UI Variable.
-   layout.js shows it when the board has no prints. */
+/* Paper notes: text and links pinned in the row like prints (scripts/note.js).
+   A note is a print (.slot.is-note) with the same layers, pin, tilt, hover,
+   buttons, caption and motion; only its .paper differs: a small sheet of
+   very pale yellow paper with the prints' matte fibre texture (the .paper
+   rule in print.css, with --paper swapped), the same light from above
+   (brighter at the top, shadow straight down), and a free corner that
+   stands a hair proud of the felt. Its text is clamped to a few lines in
+   Segoe UI Variable Text; a link shows its address and, small at the
+   bottom, its domain.
 
-.note {
-  position: absolute;
-  left: 50%;
-  top: calc(var(--top-hidden) + var(--board-h) / 2 + 2px);
-  padding: 15px 20px 14px;
+   A text note can also be unfolded (.sheet): a bigger sheet of the same
+   paper hanging from the note's pin down into the overhang, scrollable. */
+
+.slot.is-note { --paper: var(--note-paper); }
+
+.slot.is-note .paper {
+  padding: 18px 11px 8px;            /* the top clears the pin */
   border-radius: var(--note-radius);
-  background: var(--note-paper);
-  box-shadow: var(--shadow-rest);
-  color: var(--note-ink);
-  white-space: nowrap;
-  translate: -50% -50%;
-  rotate: -1deg;
-  opacity: 0;
-  scale: .97;
-  transition: opacity 180ms ease, scale 260ms var(--ease-out);
+  box-shadow: var(--shadow-rest), var(--shadow-note-corner);
+  overflow: hidden;
+}
+/* The free corner: the faintest shade where the paper curls away from the light. */
+.slot.is-note .paper::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(70% 60% at 100% 100%, var(--note-curl), transparent 70%);
   pointer-events: none;
 }
-.note.show { opacity: 1; scale: 1; transition-delay: 120ms; }
-.note .pin { left: calc(50% - var(--pin-size) / 2); top: 3px; }
-.note p {
+
+.note-text {
   margin: 0;
-  font: 400 var(--note-size)/18px var(--font-ui);
-  letter-spacing: .1px;
+  font: 400 var(--note-size)/15px var(--font-ui);
+  letter-spacing: .05px;
+  color: var(--note-ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
 }
-.note .dot { padding: 0 7px; opacity: .55; }
-.note .keys { font-weight: 600; color: var(--note-ink-strong); }
+.slot.is-link .note-text {
+  color: var(--note-link);
+  white-space: normal;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+.note-domain {
+  position: absolute;
+  left: 11px;
+  right: 11px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font: 600 10px/12px var(--font-small);
+  letter-spacing: .3px;
+  color: var(--note-domain);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.note-domain svg { flex: none; width: 10px; height: 10px; }
+.note-domain span { overflow: hidden; text-overflow: ellipsis; }
+
+/* A link's hover caption: the full address (two lines at most) over the
+   age. Sized so all three lines stay on the felt under the note. */
+.caption.link {
+  width: max-content;
+  max-width: 184px;
+  white-space: normal;
+  text-align: center;
+  line-height: 13px;
+}
+.caption.link .cap-url {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+.caption.link .cap-age { display: block; }
+
+/* ---------------------------------------------------------------- unfolded */
+/* The unfolded note hides its own print, which it covers anyway. */
+.slot.unfolded .drop,
+.slot.unfolded > .pin,
+.slot.unfolded .caption { visibility: hidden; }
+
+.sheet {
+  --pin-y: 9px;
+  --paper: var(--note-paper);
+  position: absolute;
+  z-index: 44;
+  transform-origin: var(--pin-x, 50%) var(--pin-y);
+  pointer-events: auto;
+}
+.sheet .paper {
+  border-radius: var(--note-radius);
+  box-shadow: var(--shadow-rest), var(--shadow-lift);
+}
+.sheet-scroll {
+  position: relative;
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 22px 20px 16px;
+  outline: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--note-scroll) transparent;
+}
+.sheet-text {
+  margin: 0;
+  font: 400 var(--sheet-size)/19px var(--font-ui);
+  color: var(--note-ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sheet-foot {
+  margin: 12px 0 0;
+  font: 400 11px/14px var(--font-small);
+  color: var(--note-ink-soft);
+}
+.sheet .pin {
+  top: calc(var(--pin-y) - var(--pin-size) / 2);
+  left: calc(var(--pin-x) - var(--pin-size) / 2);
+}
+/* Keyboard focus inside the sheet (it scrolls with the arrow keys). */
+#board.kbd .sheet:focus-within::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: calc(var(--note-radius) + 4px);
+  border: 2px solid var(--focus-ring);
+  box-shadow: 0 0 0 1px var(--focus-edge), inset 0 0 0 1px var(--focus-edge);
+  pointer-events: none;
+}

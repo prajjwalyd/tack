@@ -9,6 +9,7 @@ use tack_core::thumbnail;
 use tack_windows::drag_out;
 use tauri::AppHandle;
 
+use crate::captures;
 use crate::ipc::events::{self, Removal};
 use crate::prints;
 use crate::reveal::board_hwnd;
@@ -22,6 +23,10 @@ const RECHECKS: [u64; 3] = [0, 600, 1500];
 /// `board:print-dragging` now and `board:print-drag-ended` when the drop is
 /// over.
 pub fn start(app: &AppHandle, id: String) {
+    // A capture pinned moments ago may still be being written.
+    if let Some(path) = prints::path_of(app, &id) {
+        captures::wait_saved(&path);
+    }
     let (path, thumb) = {
         let mut s = lock(app);
         let Some(print) = s.board.find(&id) else { return };

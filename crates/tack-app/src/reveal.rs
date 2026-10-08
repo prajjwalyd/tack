@@ -13,11 +13,11 @@
 
 use std::time::{Duration, Instant};
 
-use tack_core::view::{OVERHANG, STRIP_H};
-use tack_core::{RevealReason, Settings, View};
+use tack_core::{Rect, RevealReason, Settings, View};
 use tack_windows::edge_reveal::EdgeHost;
 use tack_windows::{overlay, pointer, snipping_tool, HWND};
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
+use windows::Win32::Foundation::POINT;
 
 use crate::ipc::events;
 use crate::state::lock;
@@ -27,19 +27,70 @@ use crate::{webview_power, webview_privacy};
 pub const WINDOW_LABEL: &str = "board";
 /// How long a new screenshot keeps the board down on its own.
 const PEEK: Duration = Duration::from_secs(3);
+/// The same for a capture that flies in: the flight and the pin's landing
+/// take about 0.9 s, then the board stays about 1.2 s more (this, plus the
+/// poller's 350 ms leave delay) unless the pointer is on it.
+pub const FLIGHT_PEEK: Duration = Duration::from_millis(1750);
+/// How long the one-time tip under the board keeps it down for reading,
+/// unless the pointer comes over it (and then leaves) first.
+const TIP_PEEK: Duration = Duration::from_secs(9);
 /// The UI's tuck slide; the window hides once it is over.
 const TUCK_HIDE_DELAY: Duration = Duration::from_millis(300);
 /// After the UI first says it is ready, how long the hidden board's web view
 /// stays awake to finish laying out and decoding the restored prints.
 const FIRST_SLEEP_DELAY: Duration = Duration::from_millis(1500);
-/// How long the empty window is shown once at startup (see
-/// [`sleep_once_ready`]).
-const WARM_UP: Duration = Duration::from_millis(400);
+/// How long the window is shown once at startup, the board drawn unseen
+/// (see [`sleep_once_ready`]).
+const WARM_UP: Duration = Duration::from_millis(900);
 /// How long a new screenshot waits for a full-screen reading to clear
 /// before its print is pinned without the board coming down, and how often
 /// it asks meanwhile.
 const FULLSCREEN_GRACE: Duration = Duration::from_millis(1000);
 const FULLSCREEN_RECHECK: Duration = Duration::from_millis(100);
+
+/// Where the board's window goes on a monitor: across the whole width of
+/// its work area, from the top of it to the bottom. The window is
+/// transparent and lets clicks through everywhere but the board, and being
+/// as tall as the work area lets a new capture fly in from anywhere on the
+/// monitor without the window ever changing size while it shows (a resize
+/// can flash). It stops short of the taskbar, so Windows never takes it for
+/// a full-screen app.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Placement {
+    /// Top-left and size, physical px.
+    pub pos: (i32, i32),
+    pub size: (i32, i32),
+    /// Top of the monitor (not the work area).
+    pub monitor_top: i32,
+    /// The monitor's DPI / 96.
+    pub scale: f64,
+}
+
+impl Placement {
+    /// On the monitor holding `pt` (physical px), or the nearest one.
+    pub fn at(pt: (i32, i32)) -> Placement {
+        let mon = overlay::monitor_at(POINT { x: pt.0, y: pt.1 });
+        let work = mon.work;
+        let mut height = work.bottom - work.top;
+        // Debug builds: TACK_DEBUG_WINDOW=strip gives the old 396 CSS px
+        // strip instead, to compare what the height costs.
+        if cfg!(debug_assertions) && std::env::var("TACK_DEBUG_WINDOW").as_deref() == Ok("strip") {
+            height = height.min((396.0 * mon.scale).round() as i32);
+        }
+        Placement {
+            pos: (work.left, work.top),
+            size: (work.right - work.left, height),
+            monitor_top: mon.monitor.top,
+            scale: mon.scale,
+        }
+    }
+
+    /// On the monitor under the pointer.
+    pub fn under_pointer() -> Placement {
+        let pt = pointer::cursor_pos();
+        Placement::at((pt.x, pt.y))
+    }
+}
 
 pub fn board_hwnd(app: &AppHandle) -> Option<HWND> {
     app.get_webview_window(WINDOW_LABEL)?.hwnd().ok()
@@ -87,11 +138,13 @@ fn create_window(app: &AppHandle) -> tauri::Result<()> {
 /// The window starts hidden, so its web view can sleep as soon as the UI has
 /// loaded the board. Polls only until then.
 ///
-/// Before it sleeps, the window is shown once, empty and click-through, for
-/// a moment: the very first show of a WebView2 window sets up its surfaces
-/// in the GPU process, which made the first reveal of a session take over
-/// 100 ms. Nothing is drawn (the board is still tucked above the edge), so
-/// this is invisible.
+/// Before it sleeps, the window is shown once, click-through, for a moment,
+/// and the page draws the board in it unseen (`board:warm-up`, at 1%
+/// opacity): the very first show of a WebView2 window sets up its surfaces
+/// in the GPU process, and the very first drawing of the board (its cork,
+/// shadows, swing and prints) costs the renderer about a second, during
+/// which no frame reaches the screen. Paid here, the first reveal of a
+/// session, or a new capture's flight, is seen from its first frame.
 fn sleep_once_ready(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
@@ -115,9 +168,9 @@ fn sleep_once_ready(app: &AppHandle) {
                 return;
             }
             let Some(hwnd) = board_hwnd(&handle) else { return };
-            let mon = overlay::monitor_at(pointer::cursor_pos());
-            let size = (mon.work.right - mon.work.left, ((STRIP_H + OVERHANG) * mon.scale).round() as i32);
-            overlay::show_at(hwnd, (mon.work.left, mon.work.top), size);
+            let place = Placement::under_pointer();
+            overlay::show_at(hwnd, place.pos, place.size);
+            events::warm_up(&handle);
         });
         std::thread::sleep(WARM_UP);
         let handle = app.clone();
@@ -156,8 +209,20 @@ pub fn reveal(app: &AppHandle, reason: RevealReason) {
         // The print is pinned all the same, and shows at the next reveal.
         return;
     }
-    let pt = pointer::cursor_pos();
-    let mon = overlay::monitor_at(pt);
+    show(app, reason, Placement::under_pointer(), PEEK);
+}
+
+/// Whether a new screenshot may bring the board down now, i.e. nothing full
+/// screen holds it back (see [`fullscreen_holds_back`]). May wait up to
+/// [`FULLSCREEN_GRACE`]; call it from a worker thread.
+pub fn new_may_reveal(app: &AppHandle) -> bool {
+    !fullscreen_holds_back(app)
+}
+
+/// Slides the board down at `place`, with no full-screen check. For a new
+/// screenshot, `peek` is how long it stays down on its own. A board already
+/// down on another monitor moves to `place`.
+pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Duration) {
     let now = Instant::now();
     let (generation, pos, size) = {
         let mut s = lock(app);
@@ -181,21 +246,43 @@ pub fn reveal(app: &AppHandle, reason: RevealReason) {
         }
         match reason {
             RevealReason::Hotkey | RevealReason::Tray => v.stay_open = true,
-            RevealReason::New => v.peek_until = Some(now + PEEK),
+            // Never cut short a longer peek (the tip's) already running.
+            RevealReason::New => v.peek_until = v.peek_until.max(Some(now + peek)),
             RevealReason::Edge => {}
         }
         if v.shown {
-            trace!("reveal {reason:?}: already shown");
+            if reason == RevealReason::New && (v.window_pos != place.pos || v.window_size != place.size) {
+                // Down on another monitor than the new capture's: it moves
+                // there, as it is.
+                trace!("reveal {reason:?}: already shown, moving to {:?}", place.pos);
+                v.window_pos = place.pos;
+                v.window_size = place.size;
+                v.monitor_top = place.monitor_top;
+                v.scale = place.scale;
+                v.entered = false;
+                let (generation, handle) = (v.generation, app.clone());
+                drop(s);
+                let _ = app.run_on_main_thread(move || {
+                    if lock(&handle).view.generation != generation {
+                        return;
+                    }
+                    if let Some(hwnd) = board_hwnd(&handle) {
+                        overlay::show_at(hwnd, place.pos, place.size);
+                    }
+                });
+            } else {
+                trace!("reveal {reason:?}: already shown");
+            }
             return;
         }
         v.shown = true;
         v.generation += 1;
         v.reason = reason;
         v.entered = false;
-        v.window_pos = (mon.work.left, mon.work.top);
-        v.window_size = (mon.work.right - mon.work.left, ((STRIP_H + OVERHANG) * mon.scale).round() as i32);
-        v.monitor_top = mon.monitor.top;
-        v.scale = mon.scale;
+        v.window_pos = place.pos;
+        v.window_size = place.size;
+        v.monitor_top = place.monitor_top;
+        v.scale = place.scale;
         v.ignoring = true;
         (v.generation, v.window_pos, v.window_size)
     };
@@ -289,6 +376,7 @@ pub fn tuck(app: &AppHandle) {
         v.stay_open = false;
         v.peek_until = None;
         v.edge_armed = false;
+        v.tip = None;
         v.generation
     };
     events::tuck(app);
@@ -312,6 +400,34 @@ pub fn tuck(app: &AppHandle) {
             }
         });
     });
+}
+
+/// The one-time tip under the board: showing at `rect` (physical px,
+/// relative to the window), or closed (`None`). Once it shows it never shows
+/// again, and it keeps the board down a while so it can be read; once it is
+/// closed the board goes back up as usual.
+pub fn set_tip(app: &AppHandle, rect: Option<Rect>) {
+    let mut s = lock(app);
+    if !s.view.shown {
+        return;
+    }
+    let now = Instant::now();
+    match rect {
+        Some(rect) => {
+            s.view.tip = Some(rect);
+            s.view.peek_until = s.view.peek_until.max(Some(now + TIP_PEEK));
+            if !s.settings.snip_tip_shown {
+                s.settings.snip_tip_shown = true;
+                s.save();
+            }
+        }
+        None => {
+            s.view.tip = None;
+            if s.view.peek_until.is_some() {
+                s.view.peek_until = Some(now);
+            }
+        }
+    }
 }
 
 /// The hotkey and the tray icon: down if it is up, up if it is down.

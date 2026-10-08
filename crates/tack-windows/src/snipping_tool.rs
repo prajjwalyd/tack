@@ -19,6 +19,8 @@ use std::time::Duration;
 
 use image::{DynamicImage, RgbaImage};
 use tack_core::capture::{self, Timestamp};
+
+use crate::capture_origin;
 use windows::core::{w, Error, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{CloseHandle, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::DataExchange::{
@@ -45,13 +47,22 @@ const READ_GAP: Duration = Duration::from_millis(200);
 
 /// Accepted clipboard changes, handed to the reader thread with the start of
 /// their log line.
-static ACCEPTED: OnceLock<Sender<String>> = OnceLock::new();
+static ACCEPTED: OnceLock<Sender<Accepted>> = OnceLock::new();
 
-/// Starts listening. `on_capture` gets each Snipping Tool image, in the order
-/// they came, on a thread of its own, and returns what it did with it for the
-/// log ("new", "duplicate", ...). Only the first call does anything.
-pub fn start(mut on_capture: impl FnMut(DynamicImage) -> String + Send + 'static) {
-    let (tx, rx) = mpsc::channel::<String>();
+/// A clipboard change that is a capture, as heard.
+struct Accepted {
+    line: String,
+    /// The pointer (physical px) the moment the change was heard: normally
+    /// still on the corner of the selection where the drag ended.
+    pointer: (i32, i32),
+}
+
+/// Starts listening. `on_capture` gets each Snipping Tool image, with where
+/// the pointer was (physical px) when it arrived, in the order they came, on
+/// a thread of its own, and returns what it did with it for the log ("new",
+/// "duplicate", ...). Only the first call does anything.
+pub fn start(mut on_capture: impl FnMut(DynamicImage, (i32, i32)) -> String + Send + 'static) {
+    let (tx, rx) = mpsc::channel::<Accepted>();
     if ACCEPTED.set(tx).is_err() {
         return;
     }
@@ -59,9 +70,9 @@ pub fn start(mut on_capture: impl FnMut(DynamicImage) -> String + Send + 'static
     std::thread::Builder::new()
         .name("tack-capture".into())
         .spawn(move || {
-            for line in rx {
+            for Accepted { line, pointer } in rx {
                 let decision = match read_image() {
-                    Some(img) => on_capture(img),
+                    Some(img) => on_capture(img, pointer),
                     None => "ignored (unreadable)".into(),
                 };
                 log(&line, &decision);
@@ -127,6 +138,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
 /// foreground window are only meaningful right now. Reading the image is
 /// slow and left to the reader thread.
 fn changed() {
+    let pointer = capture_origin::pointer();
     let owner = unsafe { GetClipboardOwner() }.ok().filter(|h| !h.is_invalid());
     let owner_exe = owner.and_then(window_exe);
     // Only debug builds log, so only they look at the foreground window.
@@ -142,7 +154,10 @@ fn changed() {
         String::new()
     };
     let snipper = owner_exe.is_some_and(|exe| SNIPPERS.contains(&exe.to_ascii_lowercase().as_str()));
-    let ignored = if !snipper {
+    let ignored = if crate::selection::grabbing() {
+        // Pinning the selection copies and restores the clipboard itself.
+        Some("ignored (pinning the selection)")
+    } else if !snipper {
         Some("ignored")
     } else if has_format(w!("ExcludeClipboardContentFromMonitorProcessing")) {
         // Marked private by whoever copied it.
@@ -155,7 +170,7 @@ fn changed() {
     };
     match (ignored, ACCEPTED.get()) {
         (None, Some(tx)) => {
-            let _ = tx.send(line);
+            let _ = tx.send(Accepted { line, pointer });
         }
         (decision, _) => log(&line, decision.unwrap_or("ignored")),
     }

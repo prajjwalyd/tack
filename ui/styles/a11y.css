@@ -1,0 +1,58 @@
+/* Accessibility: the visually hidden live region (scripts/announce.js) and
+   High Contrast (forced colours). In forced colours every shadow and
+   gradient is gone, so nothing may depend on them: the board, the paper
+   and the notes get plain CanvasText outlines, text is CanvasText on
+   Canvas, the buttons are drawn as buttons, and the keyboard focus is a
+   2 px Highlight outline. Loaded last. */
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (forced-colors: active) {
+  .cork { background: Canvas; border: 1px solid CanvasText; border-top: 0; }
+  .cork::before, .cork::after, #board::after { display: none; }
+
+  .paper,
+  .sheet .paper,
+  .hint-card,
+  .tip { border: 1px solid CanvasText; background: Canvas; }
+  .photo::after { box-shadow: none; outline: 1px solid CanvasText; }
+  .note-text, .sheet-text, .sheet-foot, .hint-card, .tip, .caption { color: CanvasText; text-shadow: none; }
+  .slot.is-link .note-text, .note-domain { color: LinkText; }
+  .caption { background: Canvas; padding: 0 3px; }
+
+  /* Pins are decoration: kept as they are, they still mark where things hang. */
+  .pin { forced-color-adjust: none; }
+
+  .btn, .tip-close {
+    background: ButtonFace;
+    color: ButtonText;
+    border: 1px solid ButtonText;
+    box-shadow: none;
+  }
+  /* Highlight fills keep their own system colours (no Canvas backplate). */
+  .slot.hover .btn:hover { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .badge { forced-color-adjust: none; background: Highlight; color: HighlightText; border: 1px solid HighlightText; }
+
+  #board.kbd .slot.focused .card::before,
+  #board.kbd.focused .hint-card.show::after,
+  #board.kbd .sheet:focus-within::before {
+    border: 0;
+    box-shadow: none;
+    outline: 2px solid Highlight;
+    outline-offset: 0;
+  }
+
+  #notice, .drop-label { background: Canvas; color: CanvasText; border: 1px solid CanvasText; }
+  .drop-cue { background: none; box-shadow: none; outline: 2px dashed Highlight; outline-offset: -4px; }
+}

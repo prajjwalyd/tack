@@ -1,6 +1,7 @@
 //! What can happen to a print, from the app's side: each change is made on
 //! the board model, saved, told to the UI (once it is ready) and, for a
-//! capture leaving the board, followed by moving its file to the Recycle Bin.
+//! capture or a note leaving the board, followed by moving its file to the
+//! Recycle Bin.
 //!
 //! Also the history's upkeep: unkept prints age out once they are a week old
 //! (checked after the restore at startup, then every hour) or when fifty
@@ -10,11 +11,12 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use tack_core::recycle::RecycleBin;
-use tack_core::{capture, history, Arrival, Origin, PinOutcome, Print, Thumb};
+use tack_core::{capture, history, Arrival, Board, NoteBody, Origin, PinOutcome, Print, Thumb};
 use tack_windows::shell;
 use tauri::AppHandle;
 
-use crate::ipc::events::{self, Removal};
+use crate::captures;
+use crate::ipc::events::{self, Flight, Removal};
 use crate::state::{lock, AppState};
 
 /// How often the history is checked for prints that have grown too old.
@@ -72,24 +74,29 @@ fn removal_now(s: &AppState) -> Removal {
     }
 }
 
-/// Sends the files of captures that left the board to the Recycle Bin;
-/// screenshot files stay.
+/// Sends the files of captures and notes that left the board to the Recycle
+/// Bin; screenshot files stay.
 fn discard_files(prints: &[Print]) {
-    let paths = prints.iter().filter(|p| p.origin == Origin::Capture).map(|p| p.path.clone()).collect();
+    let paths = prints.iter().filter(|p| p.owned()).map(|p| p.path.clone()).collect();
     discard_captures(paths);
 }
 
-/// Sends capture files Tack no longer needs to the Recycle Bin, never
-/// deleting them outright. Runs on a thread of its own, since the shell can
+/// Sends capture and note files Tack no longer needs to the Recycle Bin,
+/// never deleting them outright. Runs on a thread of its own, since the shell can
 /// take a moment; a file that cannot be recycled is logged and left alone.
+/// A capture still being written goes once it is written.
 pub fn discard_captures(paths: Vec<PathBuf>) {
+    let (now, later): (Vec<PathBuf>, Vec<PathBuf>) = paths.into_iter().partition(|p| !captures::is_saving(p));
+    for path in later {
+        captures::when_saved(&path, |path| discard_captures(vec![path.to_path_buf()]));
+    }
+    let paths = now;
     if paths.is_empty() {
         return;
     }
     let spawned = std::thread::Builder::new().name("tack-recycle".into()).spawn(move || {
-        let folder = capture::captures_folder();
         for path in &paths {
-            capture::discard_path(path, &folder, &RecycleBin);
+            capture::discard_owned(path, &RecycleBin);
         }
     });
     if let Err(e) = spawned {
@@ -102,12 +109,37 @@ pub fn path_of(app: &AppHandle, id: &str) -> Option<PathBuf> {
     lock(app).board.find(id).map(|p| p.path.clone())
 }
 
-/// Pins a screenshot. A live one has just arrived: it animates in, joins the
-/// front of the history and may turn out to be the other half of an
-/// auto-saved screenshot. A restored one comes back as it was saved.
-pub fn pin(app: &AppHandle, path: PathBuf, thumb: Thumb, origin: Origin, arrival: Arrival) -> Pin {
+/// Pins a screenshot. A live one has just arrived: it animates in (flying
+/// in, with a `flight`), joins the front of the history and may turn out to
+/// be the other half of an auto-saved screenshot. A restored one comes back
+/// as it was saved.
+pub fn pin(
+    app: &AppHandle,
+    path: PathBuf,
+    thumb: Thumb,
+    origin: Origin,
+    arrival: Arrival,
+    flight: Option<&Flight>,
+) -> Pin {
+    pin_with(app, arrival, flight, |board, now| board.pin(path, thumb, origin, arrival, now))
+}
+
+/// Pins a note whose text is saved at `path`, live (it animates in) or
+/// restored. A live note with the same text as one already on the board is
+/// [`Pin::Exists`].
+pub fn pin_note(app: &AppHandle, path: PathBuf, body: NoteBody, arrival: Arrival) -> Pin {
+    pin_with(app, arrival, None, |board, now| board.pin_note(path, body, arrival, now))
+}
+
+/// Makes a pin on the board with `pin` and carries out what came of it.
+fn pin_with(
+    app: &AppHandle,
+    arrival: Arrival,
+    flight: Option<&Flight>,
+    pin: impl FnOnce(&mut Board, u64) -> PinOutcome,
+) -> Pin {
     let mut s = lock(app);
-    match s.board.pin(path, thumb, origin, arrival, history::now_ms()) {
+    match pin(&mut s.board, history::now_ms()) {
         PinOutcome::Exists => Pin::Exists,
         PinOutcome::Duplicate => Pin::Duplicate,
         PinOutcome::Merged { print, capture } => {
@@ -126,7 +158,7 @@ pub fn pin(app: &AppHandle, path: PathBuf, thumb: Thumb, origin: Origin, arrival
             let (ready, order) = (s.ui_ready, s.board.order());
             drop(s);
             if ready {
-                events::print_added(app, &print, matches!(arrival, Arrival::Live(_)));
+                events::print_added(app, &print, matches!(arrival, Arrival::Live(_)), flight);
                 events::order_changed(app, &order);
                 trace!("print {} added: board:print-added and board:order-changed sent", print.id);
             }
@@ -270,12 +302,54 @@ pub fn update_thumb(app: &AppHandle, path: &Path, thumb: Thumb) {
     }
 }
 
-/// Puts the print's full image on the clipboard; the UI shows "Copied".
+/// Puts the print's full image on the clipboard, or a note's text (a link's
+/// URL); the UI shows "Copied".
 pub fn copy(app: &AppHandle, id: &str) -> Result<(), String> {
-    let path = path_of(app, id).ok_or("no such print")?;
-    shell::copy_image(&path)?;
+    let (path, note) = {
+        let s = lock(app);
+        let print = s.board.find(id).ok_or("no such print")?;
+        (print.path.clone(), print.note.clone())
+    };
+    match note {
+        Some(note) => shell::copy_text(note.link.as_deref().unwrap_or(&note.text))?,
+        None => {
+            captures::wait_saved(&path);
+            shell::copy_image(&path)?;
+        }
+    }
     events::print_copied(app, id);
     Ok(())
+}
+
+/// Opens the print: a screenshot in its default app, a link in the browser,
+/// a note's text file in its default app.
+pub fn open(app: &AppHandle, id: &str) {
+    let found = lock(app).board.find(id).map(|p| (p.path.clone(), p.note.as_ref().and_then(|n| n.link.clone())));
+    match found {
+        Some((_, Some(link))) => shell::open_url(&link),
+        Some((path, None)) => captures::when_saved(&path, shell::open),
+        None => {}
+    }
+}
+
+/// Edits the print's file: Paint for a screenshot, Notepad (or whatever
+/// edits text) for a note. An edited note is read again when it is saved.
+pub fn edit(app: &AppHandle, id: &str) {
+    if let Some(path) = path_of(app, id) {
+        captures::when_saved(&path, shell::edit);
+    }
+}
+
+/// A note's file was written to: shows its new text.
+pub fn update_note(app: &AppHandle, path: &Path, body: NoteBody) {
+    let (print, ready) = {
+        let mut s = lock(app);
+        let Some(print) = s.board.update_note(path, body) else { return };
+        (print, s.ui_ready)
+    };
+    if ready {
+        events::print_updated(app, &print);
+    }
 }
 
 /// Unpins first, so the print gets the full pop-out animation instead of the
@@ -283,7 +357,7 @@ pub fn copy(app: &AppHandle, id: &str) -> Result<(), String> {
 /// recycled too, not deleted.
 pub fn recycle(app: &AppHandle, id: &str) {
     let Some(print) = unpin(app, id, Removal::Fall) else { return };
-    shell::recycle(print.path);
+    captures::when_saved(&print.path, |path| shell::recycle(path.to_path_buf()));
 }
 
 /// A fresh screenshot, arriving now.

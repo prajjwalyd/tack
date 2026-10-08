@@ -14,7 +14,7 @@ use std::time::{Duration, Instant, SystemTime};
 use image::{DynamicImage, ImageFormat, RgbaImage};
 
 use crate::files::{is_image, path_key};
-use crate::print::{Origin, Print};
+use crate::print::Print;
 use crate::recycle::{recycle_file, Recycler};
 
 /// One copy can change the clipboard several times (OLE sets it, then
@@ -37,13 +37,26 @@ pub fn in_captures(path: &Path) -> bool {
 pub const SWEEP_GRACE: Duration = Duration::from_secs(10 * 60);
 
 /// Recycles the leftover captures in `folder`: images no print in `pinned`
-/// refers to (for example after a crash), and nothing modified within
+/// refers to (for example after a crash), half-written ones, and nothing
+/// modified within
 /// [`SWEEP_GRACE`] of `now`. Returns the files that went.
 ///
 /// Only call this when board.json was read and fully understood: if Tack
 /// cannot say for sure which captures are pinned, every one of them would
 /// look like a leftover.
 pub fn sweep(folder: &Path, pinned: &[PathBuf], now: SystemTime, bin: &dyn Recycler) -> Vec<PathBuf> {
+    sweep_where(folder, pinned, now, bin, is_image)
+}
+
+/// [`sweep`] for any folder of Tack's own files: `ours` says which files in
+/// it Tack wrote (half-written ones always count).
+pub fn sweep_where(
+    folder: &Path,
+    pinned: &[PathBuf],
+    now: SystemTime,
+    bin: &dyn Recycler,
+    ours: impl Fn(&Path) -> bool,
+) -> Vec<PathBuf> {
     let keep: HashSet<String> = pinned.iter().map(|p| path_key(p)).collect();
     let Ok(entries) = std::fs::read_dir(folder) else { return Vec::new() };
     let old_enough = |path: &Path| {
@@ -54,7 +67,10 @@ pub fn sweep(folder: &Path, pinned: &[PathBuf], now: SystemTime, bin: &dyn Recyc
     entries
         .flatten()
         .map(|e| e.path())
-        .filter(|path| path.is_file() && is_image(path) && !keep.contains(&path_key(path)) && old_enough(path))
+        .filter(|path| {
+            // A partial file left behind by a crash mid-write counts too.
+            path.is_file() && (ours(path) || is_partial(path)) && !keep.contains(&path_key(path)) && old_enough(path)
+        })
         .filter(|path| recycle_file(path, bin))
         .collect()
 }
@@ -62,8 +78,16 @@ pub fn sweep(folder: &Path, pinned: &[PathBuf], now: SystemTime, bin: &dyn Recyc
 /// Recycles a capture's file once its print has left the board. Only files
 /// in Tack's own `folder` are touched; a screenshot file never is.
 pub fn discard_file(print: &Print, folder: &Path, bin: &dyn Recycler) {
-    if print.origin == Origin::Capture {
+    if print.owned() {
         discard_path(&print.path, folder, bin);
+    }
+}
+
+/// Recycles a file Tack wrote (a capture or a note) that it no longer needs,
+/// if it lies in one of Tack's own folders; anything else is left alone.
+pub fn discard_owned(path: &Path, bin: &dyn Recycler) {
+    for folder in [captures_folder(), crate::note::notes_folder()] {
+        discard_path(path, &folder, bin);
     }
 }
 
@@ -126,28 +150,55 @@ impl Timestamp {
     /// `Screenshot YYYY-MM-DD HHMMSS`, the name Snipping Tool itself would
     /// give the file.
     pub fn file_stem(&self) -> String {
+        format!("Screenshot {}", self.stamp())
+    }
+
+    /// `YYYY-MM-DD HHMMSS`.
+    pub fn stamp(&self) -> String {
         format!(
-            "Screenshot {:04}-{:02}-{:02} {:02}{:02}{:02}",
+            "{:04}-{:02}-{:02} {:02}{:02}{:02}",
             self.year, self.month, self.day, self.hour, self.minute, self.second
         )
     }
 }
 
-/// Saves as `Screenshot YYYY-MM-DD HHMMSS.png` in `dir`, adding " (2)" and so
-/// on if that name is taken.
-pub fn save(img: &DynamicImage, dir: &Path, at: Timestamp) -> std::io::Result<PathBuf> {
-    let mut png = Vec::new();
-    img.write_to(&mut Cursor::new(&mut png), ImageFormat::Png).map_err(std::io::Error::other)?;
+/// Appended to a capture's file name while Tack is still writing it. Not an
+/// image extension, so the folder watcher and the board never mistake a
+/// half-written capture for a picture.
+pub const PARTIAL: &str = ".part";
+
+/// Where a capture is written before it is moved to `path`.
+pub fn partial_path(path: &Path) -> PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(PARTIAL);
+    PathBuf::from(name)
+}
+
+fn is_partial(path: &Path) -> bool {
+    path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.ends_with(PARTIAL))
+}
+
+/// Picks the name a capture will have, `Screenshot YYYY-MM-DD HHMMSS.png` in
+/// `dir` (adding " (2)" and so on if that name is taken), and claims it by
+/// creating its empty partial file. Fast, so a capture can be pinned before
+/// its picture is written: [`write_reserved`] does that, and only then does
+/// the file exist under its name.
+pub fn reserve(dir: &Path, at: Timestamp) -> std::io::Result<PathBuf> {
+    reserve_as(dir, &at.file_stem(), "png")
+}
+
+/// [`reserve`] for any name: `<stem>.<ext>` in `dir`, or `<stem> (2).<ext>`
+/// and so on if that is taken.
+pub fn reserve_as(dir: &Path, stem: &str, ext: &str) -> std::io::Result<PathBuf> {
     std::fs::create_dir_all(dir)?;
-    let stem = at.file_stem();
     for n in 1.. {
-        let name = if n == 1 { format!("{stem}.png") } else { format!("{stem} ({n}).png") };
+        let name = if n == 1 { format!("{stem}.{ext}") } else { format!("{stem} ({n}).{ext}") };
         let path = dir.join(name);
-        match OpenOptions::new().write(true).create_new(true).open(&path) {
-            Ok(mut file) => {
-                file.write_all(&png)?;
-                return Ok(path);
-            }
+        if path.exists() {
+            continue;
+        }
+        match OpenOptions::new().write(true).create_new(true).open(partial_path(&path)) {
+            Ok(_) => return Ok(path),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(e) => return Err(e),
         }
@@ -155,9 +206,51 @@ pub fn save(img: &DynamicImage, dir: &Path, at: Timestamp) -> std::io::Result<Pa
     unreachable!()
 }
 
+/// Writes the capture as a PNG into the partial file [`reserve`] made for
+/// `path`, then moves it into place. On failure the partial file is removed.
+pub fn write_reserved(img: &DynamicImage, path: &Path) -> std::io::Result<()> {
+    let mut png = Vec::new();
+    img.write_to(&mut Cursor::new(&mut png), ImageFormat::Png).map_err(std::io::Error::other)?;
+    write_reserved_bytes(&png, path)
+}
+
+/// Writes `bytes` into the partial file [`reserve_as`] made for `path`, then
+/// moves it into place. On failure the partial file is removed.
+pub fn write_reserved_bytes(bytes: &[u8], path: &Path) -> std::io::Result<()> {
+    let partial = partial_path(path);
+    let written = (|| {
+        let mut file = OpenOptions::new().write(true).truncate(true).open(&partial)?;
+        file.write_all(bytes)?;
+        file.flush()?;
+        drop(file);
+        std::fs::rename(&partial, path)
+    })();
+    if written.is_err() {
+        let _ = std::fs::remove_file(&partial);
+    }
+    written
+}
+
+/// Saves a picture's own bytes (a PNG or JPEG dropped on the board) as
+/// `<stem> YYYY-MM-DD HHMMSS.<ext>` in `dir`, unchanged.
+pub fn save_bytes(bytes: &[u8], dir: &Path, stem: &str, ext: &str, at: Timestamp) -> std::io::Result<PathBuf> {
+    let path = reserve_as(dir, &format!("{stem} {}", at.stamp()), ext)?;
+    write_reserved_bytes(bytes, &path)?;
+    Ok(path)
+}
+
+/// Saves as `Screenshot YYYY-MM-DD HHMMSS.png` in `dir`, adding " (2)" and so
+/// on if that name is taken: [`reserve`] and [`write_reserved`] in one go.
+pub fn save(img: &DynamicImage, dir: &Path, at: Timestamp) -> std::io::Result<PathBuf> {
+    let path = reserve(dir, at)?;
+    write_reserved(img, &path)?;
+    Ok(path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::print::{Kind, Origin};
     use crate::recycle::testing::NotingBin;
     use image::Rgba;
 
@@ -213,6 +306,23 @@ mod tests {
     }
 
     #[test]
+    fn a_reserved_name_is_taken_until_written_and_then_moved_into_place() {
+        let dir = std::env::temp_dir().join(format!("tack-reserve-test-{}", std::process::id()));
+        let at = Timestamp { year: 2026, month: 1, day: 2, hour: 3, minute: 4, second: 5 };
+        let first = reserve(&dir, at).unwrap();
+        let second = reserve(&dir, at).unwrap();
+        let (first_exists, partial_exists) = (first.exists(), partial_path(&first).exists());
+        write_reserved(&image(1), &first).unwrap();
+        let written = first.is_file() && !partial_path(&first).exists();
+        let third = reserve(&dir, at).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(!first_exists && partial_exists, "only the partial file exists before the write");
+        assert_eq!(second.file_name().unwrap(), "Screenshot 2026-01-02 030405 (2).png");
+        assert!(written);
+        assert_eq!(third.file_name().unwrap(), "Screenshot 2026-01-02 030405 (3).png");
+    }
+
+    #[test]
     fn the_sweep_takes_only_old_unpinned_images() {
         let dir = std::env::temp_dir().join(format!("tack-sweep-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -223,6 +333,7 @@ mod tests {
         };
         let pinned = file("Pinned.png");
         let leftover = file("Leftover.png");
+        let partial = file("Crashed.png.part");
         // Not an image, so not a capture Tack wrote.
         file("notes.txt");
         // Judged an hour from now, every file above is past the grace period.
@@ -237,8 +348,10 @@ mod tests {
         let swept_now = sweep(&dir, &[pinned_upper], SystemTime::now(), &young);
         let _ = std::fs::remove_dir_all(&dir);
 
-        assert_eq!(swept, vec![leftover.clone()]);
-        assert_eq!(*bin.taken.borrow(), vec![leftover]);
+        let mut swept = swept;
+        swept.sort();
+        assert_eq!(swept, vec![partial.clone(), leftover.clone()]);
+        assert_eq!(bin.taken.borrow().len(), 2);
         assert!(swept_now.is_empty(), "a capture saved in the last ten minutes is never swept");
         assert!(young.taken.borrow().is_empty());
     }
@@ -258,12 +371,14 @@ mod tests {
         let print = |path: &Path, origin| Print {
             id: "1".into(),
             name: String::new(),
+            kind: Kind::Image,
             thumb: String::new(),
             width: 1,
             height: 1,
             pinned_at: 0,
             kept: false,
             kept_at: None,
+            note: None,
             path: path.to_path_buf(),
             stamp: None,
             origin,

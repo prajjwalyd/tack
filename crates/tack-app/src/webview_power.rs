@@ -14,7 +14,8 @@
 //! 3. asks for a suspend (`TrySuspend`), which stops the page's timers and
 //!    script until it is needed again,
 //!
-//! and once the suspend has gone through, trims tack.exe's own working set.
+//! and once the suspend has gone through, trims the working sets of tack.exe
+//! and of the WebView2 processes (see [`trim_web_view_processes`]).
 //!
 //! [`wake`] undoes all three, and only once the page is running again does
 //! it hand over to the caller, which then shows the window and tells the
@@ -34,17 +35,22 @@
 //! reveal and tuck code already runs window work there).
 
 use std::cell::{Cell, RefCell};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use tauri::{AppHandle, Manager};
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    ICoreWebView2, ICoreWebView2Controller, ICoreWebView2_19, ICoreWebView2_3, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL,
-    COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL,
+    ICoreWebView2, ICoreWebView2Controller, ICoreWebView2Environment8, ICoreWebView2_19, ICoreWebView2_2,
+    ICoreWebView2_3, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW,
+    COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL,
 };
 use webview2_com::TrySuspendCompletedHandler;
 use windows::core::{Interface, BOOL};
+use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::System::Memory::SetProcessWorkingSetSizeEx;
-use windows::Win32::System::Threading::GetCurrentProcess;
+use windows::Win32::System::Threading::{
+    GetCurrentProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_QUOTA,
+};
 
 use crate::reveal::WINDOW_LABEL;
 
@@ -145,6 +151,11 @@ fn request_suspend(h: &Handles, mode: Mode) {
         } else if suspended {
             if mode >= Mode::Full {
                 trim_own_working_set();
+                HANDLES.with(|h| {
+                    if let Some(h) = h.borrow().as_ref() {
+                        trim_web_view_processes(&h.webview);
+                    }
+                });
             }
         } else if interrupted {
             // A wake made the page visible mid-suspend, which spoiled it, and
@@ -168,14 +179,16 @@ fn request_suspend(h: &Handles, mode: Mode) {
     }));
     SUSPENDING.set(true);
     trace!("web view invisible, TrySuspend requested");
-    if let Err(e) = unsafe { webview3.TrySuspend(&handler) } {
+    let requested = unsafe { webview3.TrySuspend(&handler) };
+    if let Err(e) = &requested {
         SUSPENDING.set(false);
         debug_log(format_args!("suspending the web view failed: {e}"));
         run_on_awake();
-        return;
     }
     #[cfg(debug_assertions)]
-    debug::suspend_requested();
+    if requested.is_ok() {
+        debug::suspend_requested();
+    }
 }
 
 /// Wakes the web view, then runs `then` once its page is running again:
@@ -183,6 +196,7 @@ fn request_suspend(h: &Handles, mode: Mode) {
 /// as it has completed and been undone. Main thread only.
 pub fn wake(app: &AppHandle, then: impl FnOnce() + 'static) {
     WANT_ASLEEP.set(false);
+    WAKES.fetch_add(1, Ordering::SeqCst);
     HANDLES.with(|h| {
         let h = h.borrow();
         let Some(h) = h.as_ref() else { return };
@@ -252,6 +266,89 @@ fn set_memory_target(webview: &ICoreWebView2, level: COREWEBVIEW2_MEMORY_USAGE_T
 fn trim_own_working_set() {
     // Both sizes at usize::MAX means "remove as many pages as possible".
     let _ = unsafe { SetProcessWorkingSetSizeEx(GetCurrentProcess(), usize::MAX, usize::MAX, Default::default()) };
+}
+
+/// Trims the WebView2 processes' working sets, now and once more after
+/// [`SECOND_TRIM`], unless the board is revealed meanwhile.
+///
+/// Left to itself the runtime pages a sleeping web view out only about 30 s
+/// after the suspend: until then the GPU, renderer and browser processes
+/// keep 50 to 120 MB in RAM, so Tack looks far bigger than it is to anyone
+/// who glances at Task Manager after a tuck. Trimming them at once does
+/// what that does, sooner. The GPU and browser processes are still tidying
+/// up for a few seconds after the page went to sleep and touch some of it
+/// again, hence the second pass. Only RAM is handed back (the pages go to
+/// the standby list, from where a reveal takes them straight back); private
+/// bytes do not change. See docs/performance.md, "Paging out at once".
+fn trim_web_view_processes(webview: &ICoreWebView2) {
+    // Debug builds: TACK_DEBUG_TRIM=off leaves it to the runtime, to compare.
+    if cfg!(debug_assertions) && std::env::var("TACK_DEBUG_TRIM").as_deref() == Ok("off") {
+        return;
+    }
+    let processes = web_view_processes(webview);
+    for p in &processes {
+        p.trim();
+    }
+    let wakes = WAKES.load(Ordering::SeqCst);
+    std::thread::spawn(move || {
+        std::thread::sleep(SECOND_TRIM);
+        if WAKES.load(Ordering::SeqCst) == wakes {
+            for p in &processes {
+                p.trim();
+            }
+            trace!("web view processes trimmed again");
+        }
+    });
+}
+
+/// How long after the suspend the WebView2 processes are trimmed again.
+const SECOND_TRIM: Duration = Duration::from_secs(4);
+
+/// Counts wakes, so a delayed trim can tell the board has been revealed
+/// since it was planned.
+static WAKES: AtomicU64 = AtomicU64::new(0);
+
+/// A WebView2 process, held open (so its id cannot be reused) until dropped.
+struct Process(HANDLE);
+
+// A process handle may be used, and closed, from any thread.
+unsafe impl Send for Process {}
+
+impl Process {
+    fn trim(&self) {
+        // Both sizes at usize::MAX means "remove as many pages as possible".
+        let _ = unsafe { SetProcessWorkingSetSizeEx(self.0, usize::MAX, usize::MAX, Default::default()) };
+    }
+}
+
+impl Drop for Process {
+    fn drop(&mut self) {
+        let _ = unsafe { CloseHandle(self.0) };
+    }
+}
+
+/// The web view's processes (browser, GPU, renderer, utilities), as the
+/// runtime lists them (`GetProcessInfos`, runtime 1.0.1072 or later).
+fn web_view_processes(webview: &ICoreWebView2) -> Vec<Process> {
+    let mut processes = Vec::new();
+    let Ok(webview2) = webview.cast::<ICoreWebView2_2>() else { return processes };
+    let Ok(env) = (unsafe { webview2.Environment() }) else { return processes };
+    let Ok(env8) = env.cast::<ICoreWebView2Environment8>() else { return processes };
+    let Ok(infos) = (unsafe { env8.GetProcessInfos() }) else { return processes };
+    let mut count = 0;
+    let _ = unsafe { infos.Count(&mut count) };
+    for i in 0..count {
+        let Ok(info) = (unsafe { infos.GetValueAtIndex(i) }) else { continue };
+        let mut pid = 0;
+        if unsafe { info.ProcessId(&mut pid) }.is_err() {
+            continue;
+        }
+        let access = PROCESS_SET_QUOTA | PROCESS_QUERY_LIMITED_INFORMATION;
+        if let Ok(handle) = unsafe { OpenProcess(access, false, pid as u32) } {
+            processes.push(Process(handle));
+        }
+    }
+    processes
 }
 
 /// How much of the sleep to do. Release builds always do all of it; debug
@@ -348,6 +445,17 @@ pub mod debug {
                 let decision = crate::captures::simulate(&app, 500 + seed);
                 trace!("simulated capture: {decision}");
             }
+            // `snip`: simulated snips of the real screen, every corner, a
+            // few sizes; `snip-fly`: one more that flies onto the board.
+            // Either may hold "x y w h [corner]" (physical px; corner br,
+            // tl, bl or tr) to snip that rectangle instead.
+            for (name, fly) in [("snip", false), ("snip-fly", true)] {
+                let path = dir.join(name);
+                let Ok(text) = std::fs::read_to_string(&path) else { continue };
+                if std::fs::remove_file(&path).is_ok() {
+                    snips(&app, text.trim(), fly);
+                }
+            }
             for (name, run) in [
                 ("stress", Run::Plain),
                 ("stress-stale", Run::StaleFullscreen),
@@ -392,6 +500,51 @@ pub mod debug {
         std::fs::remove_file(path).is_ok()
     }
 
+    /// Runs the simulated snips the `snip` and `snip-fly` files ask for.
+    fn snips(app: &AppHandle, spec: &str, fly: bool) {
+        use tack_core::origin::Corner;
+        use tack_core::Rect;
+        let corner_of = |s: &str| match s {
+            "tl" => Some(Corner::TopLeft),
+            "bl" => Some(Corner::BottomLeft),
+            "tr" => Some(Corner::TopRight),
+            "br" => Some(Corner::BottomRight),
+            _ => None,
+        };
+        let words: Vec<&str> = spec.split_whitespace().collect();
+        let nums: Vec<i32> = words.iter().filter_map(|w| w.parse().ok()).collect();
+        let corner = words.iter().find_map(|w| corner_of(w));
+        let mon = tack_windows::overlay::monitor_at(tack_windows::pointer::cursor_pos());
+        let (mw, mh) = (mon.monitor.right - mon.monitor.left, mon.monitor.bottom - mon.monitor.top);
+        let rects: Vec<Rect> = if let [x, y, w, h, ..] = nums[..] {
+            vec![Rect { x, y, w, h }]
+        } else {
+            // Small, medium and large, away from the board's strip at the top.
+            vec![
+                Rect { x: mon.monitor.left + mw * 3 / 8, y: mon.monitor.top + mh * 2 / 5, w: 240, h: 150 },
+                Rect { x: mon.monitor.left + mw / 5, y: mon.monitor.top + mh / 4, w: mw * 2 / 5, h: mh / 3 },
+                Rect { x: mon.monitor.left + mw / 10, y: mon.monitor.top + mh / 5, w: mw * 4 / 5, h: mh * 3 / 5 },
+            ]
+        };
+        let corners: Vec<Corner> = match corner {
+            Some(c) => vec![c],
+            None if fly => vec![Corner::BottomRight],
+            None => Corner::ALL.to_vec(),
+        };
+        let (mut passed, mut total) = (0, 0);
+        for (i, rect) in rects.iter().enumerate() {
+            for (j, &c) in corners.iter().enumerate() {
+                let last = i + 1 == rects.len() && j + 1 == corners.len();
+                let line = crate::captures::simulate_snip(app, *rect, c, fly && last);
+                total += 1;
+                if line.contains(": PASS") {
+                    passed += 1;
+                }
+            }
+        }
+        eprintln!("tack: simulated snips: {passed}/{total} PASS");
+    }
+
     /// Called right after the window is shown, with the moment the wake
     /// began. Logs how long the page took to run script again and to reach
     /// its next animation frame, which is when the slide starts drawing.
@@ -399,10 +552,14 @@ pub mod debug {
         if std::env::var("TACK_DEBUG_CONTROL").as_deref() != Ok("1") {
             return;
         }
+        watch_screen(app, started);
         // The page notes when the probe ran and when the next frame began,
         // both on its own clock, so only their difference is used.
-        let script = "(() => { const t = performance.now(); window.__tackProbe = { t, frame: 0 }; \
-                      requestAnimationFrame(() => { window.__tackProbe.frame = performance.now(); }); \
+        let script =
+            "(() => { const t = performance.now(); const p = window.__tackProbe = { t, frame: 0, frames: [] }; \
+                      const loop = () => { const n = performance.now() - t; p.frames.push(Math.round(n)); \
+                      if (n < 1000) requestAnimationFrame(loop); }; \
+                      requestAnimationFrame(() => { p.frame = performance.now(); loop(); }); \
                       return t; })()";
         let app = app.clone();
         HANDLES.with(|h| {
@@ -414,12 +571,42 @@ pub mod debug {
                 // Read the frame time back once it has surely happened.
                 let app2 = app.clone();
                 std::thread::spawn(move || {
-                    std::thread::sleep(Duration::from_millis(500));
+                    std::thread::sleep(Duration::from_millis(1200));
                     let _ = app2.clone().run_on_main_thread(move || read_frame(&app2, script_ms));
                 });
                 Ok(())
             }));
             let _ = unsafe { webview.ExecuteScript(&HSTRING::from(script), &handler) };
+        });
+    }
+
+    /// Watches a patch of the screen where the board comes down and logs
+    /// when it first changes: when the reveal really reached the screen,
+    /// which can be much later than the page's first animation frame after
+    /// a long sleep.
+    fn watch_screen(app: &AppHandle, started: Instant) {
+        let (pos, size, scale) = {
+            let s = crate::state::lock(app);
+            (s.view.window_pos, s.view.window_size, s.view.scale)
+        };
+        let patch = tack_core::Rect { x: pos.0 + size.0 / 2 - 20, y: pos.1 + (60.0 * scale) as i32, w: 40, h: 6 };
+        std::thread::spawn(move || {
+            let grab = || tack_windows::capture_origin::grab_picture(patch).map(|i| i.to_rgb8().into_raw());
+            let Some(before) = grab() else { return };
+            while started.elapsed() < Duration::from_millis(2500) {
+                if let Some(now) = grab() {
+                    let diff: u64 =
+                        now.iter().zip(&before).map(|(a, b)| (*a as i32 - *b as i32).unsigned_abs() as u64).sum();
+                    if diff > 40 * 6 * 3 * 12 {
+                        eprintln!(
+                            "tack: reveal probe: on screen {:.0} ms after the wake",
+                            started.elapsed().as_secs_f64() * 1000.0
+                        );
+                        return;
+                    }
+                }
+            }
+            eprintln!("tack: reveal probe: nothing on screen 2.5 s after the wake");
         });
     }
 
@@ -431,15 +618,19 @@ pub mod debug {
             let h = h.borrow();
             let Some(h) = h.as_ref() else { return };
             let handler = ExecuteScriptCompletedHandler::create(Box::new(move |_, json| {
-                let gap: f64 = json.trim().parse().unwrap_or(f64::NAN);
+                // "<gap> <frame times...>", as a JSON string.
+                let text = json.trim().trim_matches('"').to_string();
+                let mut words = text.split(' ');
+                let gap: f64 = words.next().and_then(|g| g.parse().ok()).unwrap_or(f64::NAN);
                 eprintln!(
-                    "tack: reveal probe: script ran {script_ms:.1} ms after the wake, first frame ~{:.1} ms",
-                    script_ms + gap
+                    "tack: reveal probe: script ran {script_ms:.1} ms after the wake, first frame ~{:.1} ms; frames at +{}",
+                    script_ms + gap,
+                    words.collect::<Vec<_>>().join(",")
                 );
                 Ok(())
             }));
             let js = "window.__tackProbe && window.__tackProbe.frame ? \
-                      window.__tackProbe.frame - window.__tackProbe.t : -1";
+                      (window.__tackProbe.frame - window.__tackProbe.t) + ' ' + window.__tackProbe.frames.join(' ') : '-1'";
             let _ = unsafe { h.webview.ExecuteScript(&HSTRING::from(js), &handler) };
         });
     }

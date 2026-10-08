@@ -12,7 +12,7 @@ use std::time::SystemTime;
 
 use tack_core::recycle::RecycleBin;
 use tack_core::store::{self, Loaded, SavedPrint};
-use tack_core::{capture, history, Board, Settings, View};
+use tack_core::{capture, history, note, Board, Settings, View};
 use tauri::{AppHandle, Manager};
 
 pub type Shared = Mutex<AppState>;
@@ -36,8 +36,9 @@ pub struct AppState {
 impl AppState {
     /// Reads board.json and lets the history's old prints go. If the file
     /// was understood, the captures it no longer mentions (including those
-    /// of aged-out prints) then go to the Recycle Bin; otherwise none are
-    /// touched, since any of them might still be on the board.
+    /// of aged-out prints), and the notes, then go to the Recycle Bin;
+    /// otherwise none are touched, since any of them might still be on the
+    /// board.
     pub fn load() -> AppState {
         let now = history::now_ms();
         let file = store::board_file();
@@ -87,13 +88,17 @@ impl AppState {
     }
 }
 
-/// Recycles leftover captures off the startup path: the shell can take a
-/// moment, and the board should not wait for it.
+/// Recycles leftover captures and notes off the startup path: the shell can
+/// take a moment, and the board should not wait for it.
 fn sweep_in_background(pinned: Vec<PathBuf>) {
     let spawned = std::thread::Builder::new().name("tack-sweep".into()).spawn(move || {
         let swept = capture::sweep(&capture::captures_folder(), &pinned, SystemTime::now(), &RecycleBin);
         if !swept.is_empty() {
             eprintln!("tack: moved {} leftover capture(s) to the Recycle Bin", swept.len());
+        }
+        let swept = note::sweep(&note::notes_folder(), &pinned, SystemTime::now(), &RecycleBin);
+        if !swept.is_empty() {
+            eprintln!("tack: moved {} leftover note(s) to the Recycle Bin", swept.len());
         }
     });
     if let Err(e) = spawned {

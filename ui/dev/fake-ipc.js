@@ -1,7 +1,9 @@
 // The preview harness's stand-in for the Tauri backend. Installs a fake
 // window.__TAURI__ that answers commands locally and fires events the way
-// the real backend would, draws placeholder screenshots on a canvas, and
-// wires the buttons in preview.html (also reachable as window.preview).
+// the real backend would, draws placeholder screenshots on a canvas, makes
+// paper notes (preview.html starts with a few; ?notes=0 for none), pins
+// what is dropped on the board (pin_text, pin_image), and wires the buttons
+// in preview.html (also reachable as window.preview).
 // Uses the same command and event names as the app (../scripts/ipc.js).
 
 import { COMMANDS, EVENTS } from "../scripts/ipc.js";
@@ -116,17 +118,74 @@ const make = (ago = 0) => {
   return {
     id: `print-${counter}`, name: `Screenshot ${stamp}.png`, ...shot(kind, W, H),
     pinnedAt: Date.now() - ago, kept: false, keptAt: null,
+    kind: "image", note: null,
   };
 };
+
+// ---------------------------------------------------------------- placeholder notes
+const NOTE_MAX = 20 * 1024;     // the backend keeps at most 20 KB of a note's text
+const stampOf = (d) => d.toISOString().slice(0, 19).replace("T", " ").replace(/:/g, "");
+let noteCounter = 0;
+/** A note print, as the backend would send it: a lone http(s) URL is a link note. */
+function makeNote(text, ago = 0) {
+  noteCounter++;
+  let body = String(text);
+  let truncated = false;
+  if (new TextEncoder().encode(body).length > NOTE_MAX) {
+    while (new TextEncoder().encode(body).length > NOTE_MAX) body = body.slice(0, Math.floor(body.length * 0.98));
+    truncated = true;
+  }
+  const t = body.trim();
+  let link = null, domain = null;
+  if (/^https?:\/\/\S+$/i.test(t)) {
+    try { const u = new URL(t); link = t; domain = u.hostname.replace(/^www\./i, ""); } catch {}
+  }
+  return {
+    id: `note-${noteCounter}`, name: `Note ${stampOf(new Date(Date.now() - ago))}.txt`,
+    thumb: "", width: 0, height: 0,
+    pinnedAt: Date.now() - ago, kept: false, keptAt: null,
+    kind: "note", note: { text: body, link, domain, truncated },
+  };
+}
+
+const LONG_NOTE = Array.from({ length: 160 }, (_, i) =>
+  `${i + 1}. Meeting notes, part ${i + 1}: the board should stay calm, the row should read left to right, ` +
+  "kept things first and the rest newest first. Notes are paper, prints are photos, and both hang from the same pins.").join("\n\n");
+const SAMPLE_NOTES = [
+  ["Call Sam back about the venue before 4, and ask whether the projector works with USB-C.", 5],
+  ["https://github.com/tauri-apps/tauri/releases", 40],
+  ["Release checklist\n- bump the version\n- tag v0.2.0\n- update the changelog\n- announce it", 3 * 60],
+  [LONG_NOTE, 2 * 24 * 60],
+];
+const SAMPLE_ADDS = [
+  "Remember: the Wi-Fi password is on the fridge.",
+  "Pick up the prints from the framer on Thursday\nand drop the keys at reception",
+  "Ideas for the talk: one slide per idea, no bullet points, end with a question.",
+];
+const SAMPLE_LINKS = [
+  "https://developer.mozilla.org/en-US/docs/Web/API/HTML_Drag_and_Drop_API",
+  "https://www.netbird.io/docs/how-to/getting-started",
+  "https://en.wikipedia.org/wiki/Cork_(material)",
+];
 
 // ---------------------------------------------------------------- the fake backend
 // In row order, like the backend: kept first (by keptAt), then newest first.
 const prints = [];
 const MIN = 60_000;
 for (const ago of [3 * 24 * 60, 26 * 60, 2 * 60, 15, 2]) prints.push(make(ago * MIN));
+// The preview starts with a few notes among the prints (?notes=0: none).
+// Other pages (hero.html) only with ?notes=1, for the README's notes image.
+const params = new URLSearchParams(location.search);
+const withNotes = location.pathname.endsWith("/preview.html") ? params.get("notes") !== "0" : params.get("notes") === "1";
+if (withNotes) {
+  for (const [text, ago] of SAMPLE_NOTES) prints.push(makeNote(text, ago * MIN));
+}
 // ?n=20 starts with that many prints (ages spread over the last week).
 const startN = Math.min(50, +new URLSearchParams(location.search).get("n") || 0);
 for (let i = prints.length; i < startN; i++) prints.push(make((i * 7 + 4) * 37 * MIN));
+// ?kept=2 keeps the first prints made (from three days ago on): brass pins, at the front.
+const keptN = +new URLSearchParams(location.search).get("kept") || 0;
+prints.slice(0, keptN).forEach((it, i) => Object.assign(it, { kept: true, keptAt: Date.now() - (keptN - i) * MIN }));
 const arrange = () => prints.sort((a, b) =>
   a.kept !== b.kept ? (a.kept ? -1 : 1) : a.kept ? a.keptAt - b.keptAt : b.pinnedAt - a.pinnedAt);
 const emitOrder = () => emit(EVENTS.ORDER_CHANGED, { ids: prints.map((x) => x.id) });
@@ -134,7 +193,11 @@ arrange();
 let sound = true;
 
 const commands = {
-  [COMMANDS.BOARD_READY]: () => ({ prints: prints.slice(), sound }),
+  [COMMANDS.BOARD_READY]: () => {
+    // Reveal shortly after the page is listening, like the backend would.
+    setTimeout(() => preview.reveal(), 350);
+    return { prints: prints.slice(), sound };
+  },
   [COMMANDS.SET_BOARD_RECT]: ({ x, y, w, h }) => {
     const dpr = window.devicePixelRatio || 1;
     const r = document.getElementById("rect");
@@ -142,14 +205,37 @@ const commands = {
     if (r) r.querySelector("span").textContent = `board rect ${x},${y} ${w}×${h} phys px`;
   },
   [COMMANDS.COPY_PRINT]: ({ id }) => setTimeout(() => emit(EVENTS.PRINT_COPIED, { id }), 40),
-  [COMMANDS.OPEN_PRINT]: () => {},
-  [COMMANDS.EDIT_PRINT]: () => {},
+  [COMMANDS.OPEN_PRINT]: ({ id }) => log(`(would open ${prints.find((x) => x.id === id)?.note?.link || id})`),
+  [COMMANDS.EDIT_PRINT]: ({ id }) => log(`(would edit ${prints.find((x) => x.id === id)?.name || id})`),
+  [COMMANDS.PIN_TEXT]: ({ text }) => { if (String(text || "").trim()) pin(makeNote(text)); },
+  [COMMANDS.PIN_IMAGE]: async ({ name, data }) => {
+    const type = /\.jpe?g$/i.test(name || "") ? "image/jpeg" : "image/png";
+    const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+    let bmp;
+    try { bmp = await createImageBitmap(new Blob([bytes], { type })); } catch {
+      emit(EVENTS.NOTICE, { text: "Can't pin that image" });
+      return null;
+    }
+    const { width, height } = bmp;
+    bmp.close();
+    counter++;
+    pin({
+      id: `print-${counter}`, name: name || "Image.png", thumb: `data:${type};base64,${data}`,
+      width, height, pinnedAt: Date.now(), kept: false, keptAt: null, kind: "image", note: null,
+    });
+    return null;
+  },
+  [COMMANDS.TAKE_FOCUS]: () => {},
+  [COMMANDS.RELEASE_FOCUS]: () => {},
+  [COMMANDS.HIDE_BOARD]: () => { setTimeout(() => emit(EVENTS.TUCK), 10); },
   [COMMANDS.START_DRAG]: ({ id }) => {
     setTimeout(() => emit(EVENTS.PRINT_DRAGGING, { id }), 30);
     setTimeout(() => emit(EVENTS.PRINT_DRAG_ENDED, { id }), 1600);
   },
   [COMMANDS.DISCARD_PRINT]: ({ id }) => remove(id, "fall"),
-  [COMMANDS.CONTEXT_MENU]: () => {},
+  [COMMANDS.CONTEXT_MENU]: ({ id, at }) => {
+    if (at) console.info(`[fake-ipc] context_menu ${id} at ${at.x},${at.y} physical px`);
+  },
   [COMMANDS.SET_HOVERING]: () => {},
   [COMMANDS.SET_KEPT]: ({ id, kept }) => {
     const it = prints.find((x) => x.id === id);
@@ -168,7 +254,10 @@ function remove(id, how) {
   setTimeout(() => emit(EVENTS.PRINT_REMOVED, { id, how }), 20);
 }
 function add(animate) {
-  const print = make();
+  pin(make(), animate);
+}
+/** Pins a new print or note, live, the way the backend does. */
+function pin(print, animate = true) {
   prints.unshift(print);
   arrange();
   // The history holds 50 unkept prints; the oldest ages out. Like the
@@ -184,7 +273,7 @@ function add(animate) {
 window.__TAURI__ = {
   core: {
     invoke: (cmd, args = {}) => {
-      if (cmd !== COMMANDS.SET_BOARD_RECT) log(`invoke ${cmd} ${JSON.stringify(args)}`);
+      if (cmd !== COMMANDS.SET_BOARD_RECT) log(`invoke ${cmd} ${JSON.stringify(args).slice(0, 120)}`);
       const fn = commands[cmd];
       if (!fn) return Promise.reject(new Error(`unknown command ${cmd}`));
       return Promise.resolve(fn(args) ?? null);
@@ -202,8 +291,13 @@ window.__TAURI__ = {
 // ---------------------------------------------------------------- the buttons
 const anyPrint = () => prints[Math.floor(Math.random() * prints.length)];
 const preview = {
-  emit, add, remove, prints,
-  reveal: () => emit(EVENTS.REVEAL, { reason: "hotkey" }),
+  emit, add, remove, prints, pin, makeNote,
+  // A tray reveal: no focus. The hotkey is a keyboard open (keyboard.js).
+  reveal: () => emit(EVENTS.REVEAL, { reason: "tray" }),
+  revealKeyboard: () => emit(EVENTS.REVEAL, { reason: "hotkey" }),
+  addNote: () => pin(makeNote(SAMPLE_ADDS[noteCounter % SAMPLE_ADDS.length])),
+  addLink: () => pin(makeNote(SAMPLE_LINKS[noteCounter % SAMPLE_LINKS.length])),
+  nothingSelected: () => emit(EVENTS.NOTICE, { text: "Nothing selected" }),
   tuck: () => emit(EVENTS.TUCK),
   addQuiet: () => add(false),
   fall: () => prints.length && commands[COMMANDS.DISCARD_PRINT]({ id: anyPrint().id }),
@@ -262,6 +356,3 @@ for (const button of document.querySelectorAll("#controls button")) {
     else if (toggle) button.classList.toggle("on", toggles[toggle](button));
   });
 }
-
-// Reveal shortly after load, like the backend would.
-setTimeout(() => preview.reveal(), 350);

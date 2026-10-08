@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- A settings app: a graphite cog. Made for Tack's README scenes; not a real product's icon. -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2=".4" y2="1"><stop offset="0" stop-color="#a4adb8"/><stop offset="1" stop-color="#58616c"/></linearGradient>
+    <filter id="s" x="-30%" y="-30%" width="160%" height="180%"><feGaussianBlur stdDeviation="1.2"/></filter>
+  </defs>
+  <ellipse cx="24" cy="42" rx="12" ry="2" fill="#000" opacity=".28" filter="url(#s)"/>
+  <path fill="url(#g)" fill-rule="evenodd" d="M21.2 5h5.6l1 5a14 14 0 0 1 3.6 2.1l4.8-1.7 2.8 4.8-3.8 3.4a14 14 0 0 1 0 4.2l3.8 3.4-2.8 4.8-4.8-1.7a14 14 0 0 1-3.6 2.1l-1 5h-5.6l-1-5a14 14 0 0 1-3.6-2.1l-4.8 1.7-2.8-4.8 3.8-3.4a14 14 0 0 1 0-4.2L9 15.2l2.8-4.8 4.8 1.7a14 14 0 0 1 3.6-2.1ZM24 16.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Z"/>
+</svg>

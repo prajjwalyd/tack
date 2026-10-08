@@ -45,6 +45,18 @@ pub fn apply(app: &AppHandle) {
     }
 }
 
+/// The same settings for another of Tack's windows (the Shortcuts dialog).
+pub fn apply_to(window: &tauri::WebviewWindow) {
+    let result = window.with_webview(|platform| {
+        if let Err(e) = unsafe { configure(&platform.controller()) } {
+            eprintln!("tack: cannot apply the web view's privacy settings: {e}");
+        }
+    });
+    if let Err(e) = result {
+        eprintln!("tack: cannot apply the web view's privacy settings: {e}");
+    }
+}
+
 /// Each setting needs a newer runtime than the last; on a runtime too old
 /// for one, the cast fails and that setting is skipped.
 unsafe fn configure(controller: &ICoreWebView2Controller) -> windows::core::Result<()> {

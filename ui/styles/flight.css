@@ -1,0 +1,132 @@
+/* The capture flight (scripts/flight.js): a new snip lifts off the screen
+   where it was taken and flies up into its place on the board, then the
+   one-time tip that can hang under the board afterwards.
+
+   .flight          fixed, laid out exactly where the print will rest on the
+                    board; flight.js moves it there from the snip with a
+                    transform about the pin point (50% var(--pin-y)), the
+                    same point the print's own layers turn and scale about,
+                    so it can pass through the print's "held" pose and
+                    be pressed down to the print's resting pose, where the
+                    print itself takes over.
+     .flight-shade  the lift shadow (as .shade on a print), faded in
+     .flight-paper  the paper border and rest shadow, faded in on the way
+     .flight-photo  the picture, inset by the border; it starts out exactly
+                    over the snip, so it has no rounding and no gloss. */
+
+.flight {
+  --pin-y: 7px;
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  pointer-events: none;
+  transform-origin: 50% var(--pin-y);
+  will-change: transform, opacity;
+  contain: layout style;
+  /* Outside #board, so it needs the board's colour scheme of its own. */
+  color-scheme: light dark;
+}
+:root[data-theme="light"] .flight { color-scheme: light; }
+:root[data-theme="dark"] .flight { color-scheme: dark; }
+
+.flight-shade,
+.flight-paper,
+.flight-photo {
+  position: absolute;
+  inset: 0;
+}
+.flight-shade {
+  border-radius: var(--print-radius);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(4px) scale(1.03);
+  opacity: 0;
+  will-change: opacity;
+}
+.flight-paper {
+  border-radius: var(--print-radius);
+  background: var(--paper);
+  box-shadow: var(--shadow-rest);
+  opacity: 0;
+  will-change: opacity;
+}
+.flight-photo {
+  inset: var(--print-border);
+  overflow: hidden;
+  background: var(--photo-empty);
+}
+.flight-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* Stretched to the box, never cropped: the box is scaled to the snip's
+     exact size, so the first frame is the snip itself. */
+  object-fit: fill;
+}
+
+/* While flight.js measures where the print will rest, the board is held
+   flat for a moment (within one task, never painted). */
+#board.measuring { transform: none !important; transition: none !important; }
+
+/* The landing: the class comes as the pin starts to drive in, about 100 ms
+   before the print touches the cork; the board's knock follows the touch. */
+#board:has(.slot.arriving.landing) > :is(.cork, #rail) { animation-delay: 100ms; }
+
+/* ---------------------------------------------------------------- the tip
+   A paper slip pinned to the bottom edge of the board, once, after the
+   first flight: Snipping Tool's own notification is redundant now. */
+
+.tip {
+  --pin-y: 9px;
+  position: absolute;
+  top: calc(100% - 12px);
+  left: 50%;
+  translate: -50% 0;
+  width: 312px;
+  padding: 16px 30px 12px 14px;
+  border-radius: var(--hint-radius);
+  background: var(--hint-paper);
+  box-shadow: var(--shadow-rest), var(--shadow-lift);
+  color: var(--hint-ink);
+  font: 12px/1.42 var(--font-small);
+  letter-spacing: .005em;
+  transform: rotate(-.6deg);
+  transform-origin: 50% var(--pin-y);
+  pointer-events: auto;
+  z-index: 45;
+}
+.tip p { margin: 0; }
+.tip strong { color: var(--hint-ink-strong); font-weight: 600; white-space: nowrap; }
+.tip .tip-pin {
+  position: absolute;
+  left: 50%;
+  top: var(--pin-y);
+  width: var(--pin-size);
+  height: var(--pin-size);
+  margin: calc(var(--pin-size) / -2) 0 0 calc(var(--pin-size) / -2);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--pin-highlight), transparent 45%), var(--pin-sage);
+  box-shadow: inset 0 -1px 1.5px var(--pin-sage-d), 0 1.5px 1.5px var(--pin-cast);
+}
+.tip-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: var(--button-size);
+  height: var(--button-size);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--button-bg);
+  box-shadow: inset 0 0 0 .5px var(--button-edge), var(--shadow-button);
+  color: var(--button-ink);
+  cursor: default;
+  opacity: .72;
+  transition: opacity var(--dur-buttons) ease, background-color var(--dur-buttons) ease;
+}
+.tip-close:hover { opacity: 1; background: var(--button-bg-hover); }
+.tip-close svg { display: block; width: 100%; height: 100%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tip { transform: none; }
+}

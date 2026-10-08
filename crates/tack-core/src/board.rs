@@ -1,5 +1,6 @@
-//! The board model: which prints are pinned, in what order, which of them
-//! are kept, and which have aged out of the history.
+//! The board model: which prints (screenshots and notes) are pinned, in
+//! what order, which of them are kept, and which have aged out of the
+//! history.
 //!
 //! The prints always hang in row order (see [`crate::history`]): kept prints
 //! first, then the rest newest first. A new print joins at the front of the
@@ -16,7 +17,7 @@ use std::time::{Duration, Instant};
 
 use crate::files::{file_name, file_stamp, path_key};
 use crate::history;
-use crate::print::{Origin, Print};
+use crate::print::{Kind, NoteBody, Origin, Print};
 use crate::thumbnail::Thumb;
 
 /// With auto-save on, Snipping Tool both saves the file and copies the image;
@@ -49,7 +50,7 @@ pub enum PinOutcome {
     Merged { print: Print, capture: PathBuf },
     /// A capture of a screenshot file pinned moments ago; nothing was pinned.
     Duplicate,
-    /// Already on the board.
+    /// Already on the board: the same file, or a note with the same text.
     Exists,
 }
 
@@ -102,11 +103,17 @@ impl Board {
         self.prints.iter().find(|p| path_key(&p.path) == key)
     }
 
+    /// A note already on the board with exactly this text.
+    pub fn find_note(&self, text: &str) -> Option<&Print> {
+        self.prints.iter().find(|p| p.note.as_ref().is_some_and(|n| n.text == text))
+    }
+
     /// The other half of an auto-saved screenshot: a print of the other
-    /// origin, the same size, that arrived moments ago.
+    /// origin, the same size, that arrived moments ago. Notes have no twins.
     fn twin(&self, origin: Origin, width: u32, height: u32, now: Instant) -> Option<usize> {
         self.prints.iter().position(|p| {
-            p.origin != origin
+            p.kind == Kind::Image
+                && p.origin != origin
                 && p.width == width
                 && p.height == height
                 && p.arrived.is_some_and(|t| now.saturating_duration_since(t) < TWIN_WINDOW)
@@ -134,26 +141,65 @@ impl Board {
             }
         }
 
+        let print = self.new_print(path, arrival, now_ms, |print| {
+            print.thumb = thumb.data_url;
+            print.width = thumb.width;
+            print.height = thumb.height;
+            print.origin = origin;
+        });
+        self.insert(print, arrival, now_ms)
+    }
+
+    /// Pins a note whose text is saved at `path` (one of Tack's own files).
+    /// A live note with the same text as one already on the board is not
+    /// pinned again ([`PinOutcome::Exists`]).
+    pub fn pin_note(&mut self, path: PathBuf, body: NoteBody, arrival: Arrival, now_ms: u64) -> PinOutcome {
+        if self.find_path(&path).is_some() {
+            return PinOutcome::Exists;
+        }
+        if matches!(arrival, Arrival::Live(_)) && self.find_note(&body.text).is_some() {
+            return PinOutcome::Exists;
+        }
+        let print = self.new_print(path, arrival, now_ms, |print| {
+            print.kind = Kind::Note;
+            print.origin = Origin::Capture;
+            print.note = Some(body);
+        });
+        self.insert(print, arrival, now_ms)
+    }
+
+    /// A fresh print for `path`, with a new id and the times `arrival`
+    /// gives (a live one is pinned at `now_ms`); `fill` sets what it shows.
+    fn new_print(&mut self, path: PathBuf, arrival: Arrival, now_ms: u64, fill: impl FnOnce(&mut Print)) -> Print {
         let (pinned_at, kept_at, arrived) = match arrival {
             Arrival::Live(now) => (now_ms, None, Some(now)),
             Arrival::Restored { pinned_at, kept_at } => (pinned_at, kept_at, None),
         };
         let id = self.next_id.to_string();
         self.next_id += 1;
-        let print = Print {
+        let mut print = Print {
             id,
             name: file_name(&path),
-            thumb: thumb.data_url,
-            width: thumb.width,
-            height: thumb.height,
+            kind: Kind::Image,
+            thumb: String::new(),
+            width: 0,
+            height: 0,
             pinned_at,
             kept: kept_at.is_some(),
             kept_at,
+            note: None,
             stamp: file_stamp(&path),
             path,
-            origin,
+            origin: Origin::Folder,
             arrived,
         };
+        fill(&mut print);
+        print
+    }
+
+    /// Puts a new print in its place in the row and ages out what that
+    /// pushes past the history's limits.
+    fn insert(&mut self, print: Print, arrival: Arrival, now_ms: u64) -> PinOutcome {
         // A live print goes ahead of any print pinned at the same moment; a
         // restored one comes back in the order it was saved.
         match arrival {
@@ -219,6 +265,26 @@ impl Board {
         print.origin = origin;
         print.name = file_name(&print.path);
         Some((print.clone(), old))
+    }
+
+    /// Notes the file's current modification time and size, once Tack has
+    /// finished writing a capture's file: from then on only an edit counts
+    /// as a change. False if no print shows that file (any more).
+    pub fn refresh_stamp(&mut self, path: &Path) -> bool {
+        let key = path_key(path);
+        let Some(print) = self.prints.iter_mut().find(|p| path_key(&p.path) == key) else { return false };
+        print.stamp = file_stamp(path);
+        true
+    }
+
+    /// Swaps in a note's text after its file was edited on disk. `None` if
+    /// no note shows that file.
+    pub fn update_note(&mut self, path: &Path, body: NoteBody) -> Option<Print> {
+        let key = path_key(path);
+        let print = self.prints.iter_mut().find(|p| p.is_note() && path_key(&p.path) == key)?;
+        print.note = Some(body);
+        print.stamp = file_stamp(path);
+        Some(print.clone())
     }
 
     /// Swaps in a fresh thumbnail after the file was edited on disk.
@@ -490,5 +556,89 @@ mod tests {
         assert_eq!(print.name, "saved.png");
         assert_eq!(board.find("1").unwrap().origin, Origin::Folder);
         assert!(board.repoint("nope", path("x"), Origin::Folder).is_none());
+    }
+
+    fn note(text: &str) -> NoteBody {
+        crate::note::body(text).unwrap()
+    }
+
+    fn note_path(name: &str) -> PathBuf {
+        PathBuf::from(format!(r"C:\nowhere\Notes\{name}.txt"))
+    }
+
+    fn live_note(board: &mut Board, name: &str, text: &str, n: u64) -> PinOutcome {
+        let at = Instant::now() + Duration::from_secs(60 * n);
+        board.pin_note(note_path(name), note(text), Arrival::Live(at), NOW + n * MIN)
+    }
+
+    #[test]
+    fn notes_join_the_same_row_as_prints() {
+        let mut board = Board::new();
+        live(&mut board, "shot", Origin::Folder, 0);
+        let PinOutcome::New { print, aged } = live_note(&mut board, "note", "Call Sam back", 1) else {
+            panic!("expected a new note");
+        };
+        assert!(aged.is_empty());
+        assert_eq!(print.kind, Kind::Note);
+        assert!(print.owned(), "Tack wrote the note's file, so it cleans it up");
+        assert_eq!(print.note.as_ref().unwrap().text, "Call Sam back");
+        assert_eq!((print.thumb.as_str(), print.width, print.height), ("", 0, 0));
+        assert_eq!(print.name, "note.txt");
+        assert_eq!(ids(&board), ["2", "1"]);
+        // Kept like any print.
+        board.set_kept("2", true, NOW + 5 * MIN);
+        live(&mut board, "later", Origin::Folder, 6);
+        assert_eq!(ids(&board), ["2", "3", "1"]);
+    }
+
+    #[test]
+    fn the_same_text_is_pinned_once() {
+        let mut board = Board::new();
+        live_note(&mut board, "a", "https://example.org", 0);
+        assert!(matches!(live_note(&mut board, "b", "https://example.org", 1), PinOutcome::Exists));
+        assert!(matches!(live_note(&mut board, "c", "https://example.org/other", 2), PinOutcome::New { .. }));
+        // A restored note never counts as a repeat: board.json said it was there.
+        let restored = Arrival::Restored { pinned_at: NOW, kept_at: None };
+        let again = board.pin_note(note_path("d"), note("https://example.org"), restored, NOW);
+        assert!(matches!(again, PinOutcome::New { .. }));
+        assert_eq!(board.find_note("https://example.org").unwrap().id, "1");
+    }
+
+    #[test]
+    fn notes_age_out_like_prints() {
+        let mut board = Board::new();
+        live_note(&mut board, "old", "old news", 0);
+        live_note(&mut board, "kept", "keep me", 1);
+        board.set_kept("2", true, NOW + 2 * MIN);
+        let aged = board.age_out(NOW + MAX_AGE_MS + MIN);
+        assert_eq!(id_list(&aged), ["1"]);
+        assert_eq!(ids(&board), ["2"]);
+        // They count toward the history's fifty, too.
+        pin_many(&mut board, 10, MAX_UNKEPT as u64);
+        let PinOutcome::New { aged, .. } = live_note(&mut board, "new", "one more", 100) else {
+            panic!("expected a new note");
+        };
+        assert_eq!(aged.len(), 1);
+        assert_eq!(board.prints().iter().filter(|p| !p.kept).count(), MAX_UNKEPT);
+    }
+
+    #[test]
+    fn a_note_never_merges_with_a_screenshot() {
+        let mut board = Board::new();
+        let at = Instant::now();
+        board.pin_note(note_path("n"), note("text"), Arrival::Live(at), NOW);
+        // A screenshot file "of the same size" (0 x 0) right after it.
+        let outcome = board.pin(path("file"), thumb(0, 0), Origin::Folder, Arrival::Live(at), NOW);
+        assert!(matches!(outcome, PinOutcome::New { .. }));
+        assert_eq!(board.prints().len(), 2);
+    }
+
+    #[test]
+    fn an_edited_note_file_updates_its_text() {
+        let mut board = Board::new();
+        live_note(&mut board, "n", "draft", 0);
+        let print = board.update_note(&note_path("n"), note("final")).unwrap();
+        assert_eq!(print.note.unwrap().text, "final");
+        assert!(board.update_note(&path("n"), note("x")).is_none(), "only a note's own file");
     }
 }

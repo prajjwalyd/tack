@@ -11,9 +11,11 @@
 
 :root {
   /* ---- geometry ---- */
-  --top-hidden: 24px;        /* cork kept above the screen edge: room for the reveal overshoot */
+  --top-hidden: 24px;        /* board kept above the screen edge; the reveal's hinge is at the edge */
   --board-h: 150px;          /* visible board height */
-  --board-radius: 12px;      /* bottom corners */
+  --board-radius: 12px;      /* bottom corners, outside the frame */
+  --frame-w: 6px;            /* the aluminium frame: sides and bottom, no top rail */
+  --cap-size: 14px;          /* the bottom-corner caps, a hair proud of the frame */
   --print-border: 4px;       /* even paper border around the photo */
   --print-radius: 3px;
   --photo-radius: 1px;
@@ -22,74 +24,149 @@
   --button-inset: 6px;       /* × and Keep, from the photo's corners */
   --caption-gap: 5px;        /* print bottom to caption */
   --badge-size: 28px;        /* the copied check */
-  --note-radius: 2px;
+  --hint-radius: 2px;        /* the empty-board card and the tip */
+  --note-radius: 2px;        /* a paper note (layout.js sizes it: NOTE_W x NOTE_H) */
+  --note-pad: 10px;          /* text inset on a note; the top clears the pin */
 
-  /* ---- colour: board ---- */
-  --cork: light-dark(#c9a57a, #7a5a3c);
-  --edge-outer: light-dark(rgba(84, 56, 26, .42), rgba(0, 0, 0, .6));
-  --edge-inner: light-dark(rgba(255, 246, 228, .34), rgba(255, 226, 190, .09));
-  --tuck-shade: light-dark(rgba(66, 40, 14, .30), rgba(0, 0, 0, .42));
+  /* ---- light ----
+     One light, above the screen and slightly in front of it: every shadow
+     falls straight down, every highlight sits at the top. */
+  --hinge-from: -88deg;      /* the board's angle while tucked: folded up under the screen edge */
+  --board-perspective: 1100px;
+  --print-perspective: 520px; /* a print peeling off as a drag starts */
+
+  /* ---- colour: board ----
+     Forest-green felt (a fine plain weave, warp and weft, a little mottling)
+     in a brushed-aluminium frame. The board hangs from the screen edge, so
+     the frame has no top rail. (The element is still called .cork.) */
+  --felt: light-dark(#24503f, #1c4234);
+  --felt-light: light-dark(rgba(214, 255, 232, .13), rgba(200, 255, 225, .07));
+  --felt-vignette: light-dark(rgba(0, 14, 6, .30), rgba(0, 0, 0, .36));
+  --felt-inner-shade: rgba(0, 10, 4, .45);   /* where the felt meets the frame */
+  --edge-outer: light-dark(rgba(20, 28, 34, .38), rgba(0, 0, 0, .65));
+  --tuck-shade: light-dark(rgba(2, 18, 10, .38), rgba(0, 0, 0, .48));
+  --board-unlit: rgba(0, 8, 4, .6);          /* facing away from the light */
   --shadow-board:
-    0 1px 2px light-dark(rgba(30, 18, 6, .22), rgba(0, 0, 0, .45)),
-    0 14px 34px -6px light-dark(rgba(30, 18, 6, .26), rgba(0, 0, 0, .5));
+    0 1px 2px light-dark(rgba(10, 20, 16, .25), rgba(0, 0, 0, .5)),
+    0 14px 34px -6px light-dark(rgba(10, 24, 18, .30), rgba(0, 0, 0, .55));
+
+  /* ---- colour: the frame ----
+     Brushed aluminium, lit from above: the bottom rail's top face catches
+     the light (a white hairline), each side rail is brightest at its inner
+     edge. Dimmer in the dark theme, so it never glares on a dark desktop
+     but keeps a crisp silver edge. */
+  --rail-bottom: linear-gradient(180deg,
+    light-dark(#ffffff, #e8ebee) 0, light-dark(#ffffff, #e8ebee) .5px,
+    light-dark(#e4e7eb, #b9bec4) .5px, light-dark(#d2d6db, #a8aeb5) 1.5px,
+    light-dark(#bcc1c7, #92989f) 55%, light-dark(#a6acb3, #7c828a) calc(100% - 1px),
+    light-dark(#7b818a, #50555c) calc(100% - .5px));
+  --rail-side-l: linear-gradient(90deg,
+    light-dark(#7f858e, #565b62) 0, light-dark(#7f858e, #565b62) .5px,
+    light-dark(#aab0b7, #80868d) 1px, light-dark(#c3c8ce, #969ca3) 45%,
+    light-dark(#d8dce1, #aab0b6) calc(100% - 1px), light-dark(#ffffff, #e0e3e6) calc(100% - .5px));
+  --rail-side-r: linear-gradient(270deg,
+    light-dark(#7f858e, #565b62) 0, light-dark(#7f858e, #565b62) .5px,
+    light-dark(#aab0b7, #80868d) 1px, light-dark(#c3c8ce, #969ca3) 45%,
+    light-dark(#d8dce1, #aab0b6) calc(100% - 1px), light-dark(#ffffff, #e0e3e6) calc(100% - .5px));
+  --rail-sheen: linear-gradient(90deg,
+    light-dark(rgba(0, 0, 0, .08), rgba(0, 0, 0, .14)),
+    light-dark(rgba(255, 255, 255, .18), rgba(255, 255, 255, .14)) 18%, rgba(255, 255, 255, 0) 34%,
+    light-dark(rgba(255, 255, 255, .30), rgba(255, 255, 255, .18)) 52%, rgba(255, 255, 255, 0) 70%,
+    light-dark(rgba(255, 255, 255, .12), rgba(255, 255, 255, .06)) 86%,
+    light-dark(rgba(0, 0, 0, .08), rgba(0, 0, 0, .14)));
 
   /* ---- colour: prints ---- */
   --paper: light-dark(#fbfaf7, #ebe8e2);
   --photo-empty: light-dark(#dcd8d0, #b9b4ab);
   --photo-edge: rgba(0, 0, 0, .14);
-  --caption-ink: light-dark(rgba(52, 33, 14, .74), rgba(255, 243, 226, .80));
-  --caption-emboss: light-dark(rgba(255, 238, 210, .40), rgba(0, 0, 0, .35));
+  --photo-glare: rgba(255, 255, 255, .26);   /* the hover sheen at its brightest */
+  --caption-ink: light-dark(rgba(236, 246, 239, .86), rgba(226, 240, 231, .80));  /* light on the felt */
+  --caption-emboss: rgba(0, 10, 4, .45);
   --button-bg: light-dark(rgba(255, 255, 255, .66), rgba(250, 248, 244, .58));
   --button-bg-hover: rgba(255, 255, 255, .88);
   --button-edge: rgba(0, 0, 0, .10);
   --button-ink: #2b2620;
   --button-ink-danger: #a8362a;
   --button-ink-kept: #8a6420;
-  --badge-bg: rgba(24, 22, 20, .58);
+  --badge-bg: rgba(24, 22, 20, .68);
   --badge-ink: #ffffff;
 
-  /* ---- colour: empty-state card ---- */
-  --note-paper: light-dark(#fbfaf7, #e9e6df);
-  --note-ink: rgba(44, 34, 24, .62);
-  --note-ink-strong: rgba(44, 34, 24, .82);
+  /* ---- colour: empty-state card (and the one-time tip) ---- */
+  --hint-paper: light-dark(#fbfaf7, #e9e6df);
+  --hint-ink: rgba(44, 34, 24, .62);
+  --hint-ink-strong: rgba(44, 34, 24, .82);
 
-  /* ---- colour: pins (body, shade) ---- a muted, matte palette */
-  --pin-terracotta: #b8674b;  --pin-terracotta-d: #8a4430;
-  --pin-sage: #8b9c7a;        --pin-sage-d: #62735a;
-  --pin-ink: #4d5f7f;         --pin-ink-d: #33425c;
-  --pin-sand: #e4dccb;        --pin-sand-d: #b5a88e;
-  --pin-graphite: #5d5f63;    --pin-graphite-d: #3c3e42;
+  /* ---- colour: paper notes ----
+     A pale warm yellow, so a note never reads as a print's border, and clear
+     enough of the green that it stays paper, never khaki, on the felt. Like
+     the prints' paper it stays light in the dark theme, only a little dimmer
+     (a lamp-lit room), so its ink never changes. */
+  --note-paper: light-dark(#fdf6d6, #f0e5ba);
+  --note-ink: rgba(46, 37, 22, .86);
+  --note-ink-soft: rgba(46, 37, 22, .56);
+  --note-link: #34507a;                      /* a muted ink blue */
+  --note-domain: rgba(52, 80, 122, .78);
+  --note-curl: rgba(120, 92, 34, .07);       /* the free corner, lifting a hair off the felt */
+  --note-scroll: rgba(70, 54, 26, .30);      /* the unfolded sheet's thin scrollbar */
+
+  /* ---- colour: keyboard focus ----
+     A light ring with a dark hairline either side, so it reads on felt and
+     on paper in both themes. */
+  --focus-ring: rgba(255, 255, 255, .96);
+  --focus-edge: light-dark(rgba(0, 20, 10, .66), rgba(0, 0, 0, .72));
+
+  /* ---- colour: cues (the notice under the board, the drop affordance) ---- */
+  --cue-bg: light-dark(rgba(253, 252, 250, .84), rgba(30, 34, 32, .82));
+  --cue-ink: light-dark(rgba(28, 32, 30, .88), rgba(242, 246, 243, .92));
+  --cue-edge: light-dark(rgba(0, 0, 0, .08), rgba(255, 255, 255, .10));
+  --cue-shadow: 0 1px 2px rgba(0, 0, 0, .12), 0 6px 18px -4px rgba(0, 0, 0, .26);
+  --drop-wash: light-dark(rgba(255, 255, 255, .16), rgba(255, 255, 255, .09));
+  --drop-rim: light-dark(rgba(255, 255, 255, .62), rgba(225, 255, 238, .36));
+
+  /* ---- colour: pins (body, shade) ----
+     A muted, matte palette keyed to the green: the five slots keep their
+     names (layout.js) but are coral, slate, ink, cream and dark slate here.
+     A green pin would vanish into the felt, so there is none. */
+  --pin-terracotta: #d9785f;  --pin-terracotta-d: #a14e39;   /* coral */
+  --pin-sage: #8794a3;        --pin-sage-d: #5b6676;         /* slate */
+  --pin-ink: #3f5376;         --pin-ink-d: #27344d;          /* ink */
+  --pin-sand: #f1e8d4;        --pin-sand-d: #bfb08f;         /* cream */
+  --pin-graphite: #6d7680;    --pin-graphite-d: #444b54;     /* dark slate */
   --brass-hi: #fff0c2;
   --brass: #d9ab45;
   --brass-d: #8f6516;
   --pin-highlight: rgba(255, 255, 255, .55);
-  --pin-cast: light-dark(rgba(46, 26, 6, .42), rgba(0, 0, 0, .55));
+  --pin-cast: light-dark(rgba(0, 12, 6, .55), rgba(0, 0, 0, .6));
 
   /* ---- shadows ---- */
   /* A print at rest: tight contact under the pin side, a softer one lower down. */
   --shadow-rest:
-    0 .5px 1px light-dark(rgba(46, 28, 8, .30), rgba(0, 0, 0, .45)),
-    0 2px 3px -1px light-dark(rgba(46, 28, 8, .20), rgba(0, 0, 0, .30)),
-    0 8px 9px -6px light-dark(rgba(46, 28, 8, .34), rgba(0, 0, 0, .48));
+    0 .5px 1px light-dark(rgba(0, 14, 6, .38), rgba(0, 0, 0, .5)),
+    0 2px 3px -1px light-dark(rgba(0, 14, 6, .26), rgba(0, 0, 0, .34)),
+    0 8px 9px -6px light-dark(rgba(0, 14, 6, .42), rgba(0, 0, 0, .52));
   /* Added on hover (and while held above the board), cross-faded with opacity. */
   --shadow-lift:
-    0 3px 6px -1px light-dark(rgba(40, 24, 6, .16), rgba(0, 0, 0, .28)),
-    0 16px 22px -10px light-dark(rgba(40, 24, 6, .40), rgba(0, 0, 0, .55));
+    0 3px 6px -1px light-dark(rgba(0, 12, 6, .22), rgba(0, 0, 0, .3)),
+    0 16px 22px -10px light-dark(rgba(0, 12, 6, .5), rgba(0, 0, 0, .6));
+  /* A note's free corner stands a hair proud of the felt: a little more shadow under it. */
+  --shadow-note-corner: 5px 7px 7px -7px light-dark(rgba(0, 14, 6, .40), rgba(0, 0, 0, .5));
   --shadow-button: 0 .5px 1.5px rgba(0, 0, 0, .18), 0 2px 6px -1px rgba(0, 0, 0, .16);
 
   /* ---- type ---- */
   --font-ui: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-small: "Segoe UI Variable Small", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --caption-size: 11px;
-  --note-size: 13px;
+  --hint-size: 13px;
+  --note-size: 12px;         /* a note's text on the board */
+  --sheet-size: 13px;        /* an unfolded note */
 
   /* ---- motion ---- */
   --ease-out: cubic-bezier(.2, .8, .25, 1);
   --ease-in: cubic-bezier(.45, 0, .85, .4);
-  --ease-reveal: cubic-bezier(.24, 1.12, .4, 1);   /* spring with a hint of overshoot */
-  --dur-reveal: 400ms;
-  --ease-tuck: cubic-bezier(.4, 0, .9, .45);
-  --dur-tuck: 200ms;
+  --ease-reveal: cubic-bezier(.3, 1.25, .45, 1);  /* a swing a little past flat */
+  --dur-reveal: 520ms;
+  --ease-tuck: cubic-bezier(.5, 0, .85, .35);     /* folds away, gathering speed */
+  --dur-tuck: 190ms;                              /* inside reveal.js's TUCK_MS */
   --ease-layout: cubic-bezier(.22, 1, .36, 1);
   --dur-layout: 480ms;
   --ease-settle: cubic-bezier(.22, 1.2, .4, 1);
