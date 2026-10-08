@@ -2,9 +2,13 @@
 //! what is selected, reads the copy, and puts the user's clipboard back as
 //! it was. Before sending Ctrl+C it waits for the shortcut's own keys to be
 //! let go, so the app does not read Win+Alt+Ctrl+C.
+//!
+//! The keys go only to the window that was in front when the shortcut
+//! fired ([`Target`]), only that app's copy is read, and the user's
+//! clipboard is put back only if nobody else wrote to it meanwhile.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use image::DynamicImage;
@@ -12,15 +16,16 @@ use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_C,
-    VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
+    MapVirtualKeyW, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_EXTENDEDKEY,
+    KEYEVENTF_KEYUP, MAPVK_VK_TO_VSC, VIRTUAL_KEY, VK_C, VK_CONTROL, VK_INSERT, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, RegisterClassW, HWND_MESSAGE, WINDOW_EX_STYLE, WINDOW_STYLE,
-    WNDCLASSW,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, FindWindowExW, GetForegroundWindow, RegisterClassW, HWND_MESSAGE,
+    WINDOW_EX_STYLE, WINDOW_STYLE, WNDCLASSW,
 };
 
-use crate::clipboard::{self, Content};
+use crate::clipboard::{self, Content, Restored};
+use crate::focus::{class_name, window_process};
 use crate::pointer;
 
 /// How long the app in front gets to copy after Ctrl+C.
@@ -33,14 +38,106 @@ const RELEASE_SETTLE: Duration = Duration::from_millis(30);
 /// but it counts as "another key" while Alt or Win is down.
 const MASK_KEY: u16 = 0xE8;
 const POLL: Duration = Duration::from_millis(10);
+/// How long the snipping listener goes on ignoring the clipboard after a
+/// grab: a last clipboard event may still be on its way to it.
+const GRAB_TAIL: Duration = Duration::from_millis(250);
 
-/// True while a grab runs, so the snipping listener ignores the clipboard
-/// changes it causes.
-static GRABBING: AtomicBool = AtomicBool::new(false);
+/// Terminals, by window class. Ctrl+C there interrupts the running command,
+/// so they get Ctrl+Insert, which copies the selection in all of them.
+const TERMINALS: [&str; 6] = [
+    "ConsoleWindowClass",            // the console (conhost)
+    "CASCADIA_HOSTING_WINDOW_CLASS", // Windows Terminal
+    "mintty",                        // Git Bash, Cygwin, MSYS2
+    "VirtualConsoleClass",           // ConEmu, Cmder
+    "PuTTY",
+    "org.wezfurlong.wezterm",
+];
+
+/// How many grabs (and their tails) are running, so the snipping listener
+/// ignores the clipboard changes they cause.
+static GRABBING: AtomicUsize = AtomicUsize::new(0);
 
 /// Whether a grab is changing the clipboard right now.
 pub(crate) fn grabbing() -> bool {
-    GRABBING.load(Ordering::SeqCst)
+    GRABBING.load(Ordering::SeqCst) > 0
+}
+
+/// One running grab in [`GRABBING`]. It counts until [`GRAB_TAIL`] after
+/// it is dropped, and only for itself, so an earlier grab's tail never
+/// ends a later grab's count.
+struct Grabbing;
+
+impl Grabbing {
+    fn start() -> Grabbing {
+        GRABBING.fetch_add(1, Ordering::SeqCst);
+        Grabbing
+    }
+}
+
+impl Drop for Grabbing {
+    fn drop(&mut self) {
+        let tail = std::thread::Builder::new().name("tack-grab-tail".into()).spawn(|| {
+            std::thread::sleep(GRAB_TAIL);
+            GRABBING.fetch_sub(1, Ordering::SeqCst);
+        });
+        if tail.is_err() {
+            GRABBING.fetch_sub(1, Ordering::SeqCst);
+        }
+    }
+}
+
+/// The window the pin shortcut was pressed over, taken the moment it fired.
+#[derive(Clone, Copy, Debug)]
+pub struct Target {
+    /// Its handle, as a number so a target can cross threads.
+    hwnd: isize,
+    pid: u32,
+    /// For a Store app's frame (ApplicationFrameHost), the process of the
+    /// app inside it, which is the one that copies.
+    hosted: Option<u32>,
+    terminal: bool,
+}
+
+impl Target {
+    /// The window in front now; call on the hotkey thread as the shortcut
+    /// fires, before the user can switch away.
+    pub fn in_front() -> Option<Target> {
+        let hwnd = unsafe { GetForegroundWindow() };
+        let pid = window_process(hwnd)?;
+        let class = class_name(hwnd);
+        let hosted = (class == "ApplicationFrameWindow")
+            .then(|| unsafe { FindWindowExW(Some(hwnd), None, w!("Windows.UI.Core.CoreWindow"), PCWSTR::null()) })
+            .and_then(|core| core.ok())
+            .and_then(window_process);
+        Some(Target { hwnd: hwnd.0 as isize, pid, hosted, terminal: TERMINALS.contains(&class.as_str()) })
+    }
+
+    /// The process the window belongs to.
+    pub fn pid(&self) -> u32 {
+        self.pid
+    }
+
+    fn hwnd(&self) -> HWND {
+        HWND(self.hwnd as *mut _)
+    }
+
+    /// Still the window in front.
+    fn still_in_front(&self) -> bool {
+        (unsafe { GetForegroundWindow() }) == self.hwnd()
+    }
+
+    /// Whether the clipboard's latest write is this app's. An app that wrote
+    /// without naming a window counts if the target is still in front, as
+    /// the keys went to it a moment ago.
+    fn wrote_clipboard(&self) -> bool {
+        match clipboard::owner() {
+            Some(owner) => {
+                owner == self.hwnd()
+                    || window_process(owner).is_some_and(|pid| pid == self.pid || Some(pid) == self.hosted)
+            }
+            None => self.still_in_front(),
+        }
+    }
 }
 
 /// What the selection turned out to be.
@@ -57,11 +154,28 @@ pub enum Grabbed {
     KeysHeld,
 }
 
+/// What became of the user's clipboard.
+pub enum Clipboard {
+    /// Never changed by the grab: nothing to put back.
+    Untouched,
+    /// Put back as it was.
+    Restored,
+    /// Another app wrote to it after the copy: theirs stays.
+    LeftNewer,
+    /// Not put back, or only in part.
+    Failed(String),
+}
+
 /// A grab, and what became of the user's clipboard.
 pub struct Grab {
     pub what: Grabbed,
-    /// `None`: the clipboard never changed, so there was nothing to restore.
-    pub restored: Option<Result<(), String>>,
+    pub clipboard: Clipboard,
+}
+
+impl Grab {
+    fn nothing() -> Grab {
+        Grab { what: Grabbed::Nothing, clipboard: Clipboard::Untouched }
+    }
 }
 
 /// Call the moment the shortcut fires (on the hotkey thread): while Alt or
@@ -74,49 +188,60 @@ pub fn mask_menu() {
     }
 }
 
-/// Waits for the shortcut's keys to be let go, then copies the selection,
-/// reads it and restores the clipboard. Blocks for up to about two seconds;
-/// call it on a thread of its own, never the UI thread. With `only`, Ctrl+C is sent only if the
-/// window in front belongs to that process (for tests: never anyone else's).
-pub fn grab(only: Option<u32>) -> Grab {
+/// Waits for the shortcut's keys to be let go, then copies the selection in
+/// `target` (the window in front when the shortcut fired), reads it and
+/// restores the clipboard. Nothing is sent if another window has come to
+/// the front meanwhile. Blocks for up to about two seconds; call it on a
+/// thread of its own, never the UI thread.
+pub fn grab(target: Option<Target>) -> Grab {
     let mut wait = ReleaseWait::new(Instant::now());
     loop {
         match wait.step(modifiers_down(), Instant::now()) {
             Release::Ready => break,
             Release::Wait => std::thread::sleep(POLL),
-            Release::TimedOut => return Grab { what: Grabbed::KeysHeld, restored: None },
+            Release::TimedOut => return Grab { what: Grabbed::KeysHeld, clipboard: Clipboard::Untouched },
         }
     }
-    let Some(owner) = Owner::new() else {
-        return Grab { what: Grabbed::Nothing, restored: None };
+    let Some(target) = target else {
+        log("no window was in front");
+        return Grab::nothing();
     };
-    GRABBING.store(true, Ordering::SeqCst);
-    let grab = copy_and_read(owner.0, only);
-    // A last clipboard event may still be on its way to the listener.
-    std::thread::spawn(|| {
-        std::thread::sleep(Duration::from_millis(250));
-        GRABBING.store(false, Ordering::SeqCst);
-    });
-    grab
+    let Some(owner) = Owner::new() else { return Grab::nothing() };
+    let _grabbing = Grabbing::start();
+    copy_and_read(owner.0, target)
 }
 
-fn copy_and_read(owner: HWND, only: Option<u32>) -> Grab {
+fn copy_and_read(owner: HWND, target: Target) -> Grab {
     let before = clipboard::snapshot(owner);
-    let sequence = clipboard::sequence();
-    if only.is_some_and(|pid| crate::focus::foreground_process() != Some(pid)) {
-        log("the expected window is not in front; no keys sent");
-        return Grab { what: Grabbed::Nothing, restored: None };
+    let mut sequence = clipboard::sequence();
+    if !target.still_in_front() {
+        log("another window came to the front; no keys sent");
+        return Grab::nothing();
     }
-    let sent = send(&[key(VK_CONTROL.0, false), key(VK_C.0, false), key(VK_C.0, true), key(VK_CONTROL.0, true)]);
-    if !sent {
+    let copy = if target.terminal {
+        // Ctrl+Insert: Insert is an extended key, told apart from the
+        // keypad's 0 by its flag.
+        [key(VK_CONTROL.0, false), extended(VK_INSERT.0, false), extended(VK_INSERT.0, true), key(VK_CONTROL.0, true)]
+    } else {
+        [key(VK_CONTROL.0, false), key(VK_C.0, false), key(VK_C.0, true), key(VK_CONTROL.0, true)]
+    };
+    if !send(&copy) {
         log("SendInput refused the keys");
-        return Grab { what: Grabbed::Nothing, restored: None };
+        return Grab::nothing();
     }
     let give_up = Instant::now() + COPY_PATIENCE;
-    while clipboard::sequence() == sequence {
+    loop {
+        let now = clipboard::sequence();
+        if now != sequence {
+            sequence = now;
+            if target.wrote_clipboard() {
+                break;
+            }
+            log("another app wrote to the clipboard; still waiting for the copy");
+        }
         if Instant::now() >= give_up {
-            log("the clipboard did not change after Ctrl+C");
-            return Grab { what: Grabbed::Nothing, restored: None };
+            log("the app in front did not copy anything");
+            return Grab::nothing();
         }
         std::thread::sleep(POLL);
     }
@@ -129,11 +254,21 @@ fn copy_and_read(owner: HWND, only: Option<u32>) -> Grab {
         Content::Private => Grabbed::Private,
         Content::Empty => Grabbed::Nothing,
     };
-    let restored = Some(match &before {
-        Some(snapshot) => clipboard::restore(owner, snapshot),
-        None => Err("the clipboard could not be read before the copy".into()),
-    });
-    Grab { what, restored }
+    let read = clipboard::sequence();
+    if read != sequence && !target.wrote_clipboard() {
+        // What was read may be another app's; the clipboard is theirs now.
+        log("another app wrote to the clipboard while the copy was read");
+        return Grab { what: Grabbed::Nothing, clipboard: Clipboard::LeftNewer };
+    }
+    let clipboard = match &before {
+        Some(snapshot) => match clipboard::restore(owner, snapshot, read) {
+            Ok(Restored::Done) => Clipboard::Restored,
+            Ok(Restored::Superseded) => Clipboard::LeftNewer,
+            Err(e) => Clipboard::Failed(e),
+        },
+        None => Clipboard::Failed("the clipboard could not be read before the copy".into()),
+    };
+    Grab { what, clipboard }
 }
 
 /// Debug builds say why a grab found nothing.
@@ -161,6 +296,16 @@ fn key(vk: u16, up: bool) -> INPUT {
             },
         },
     }
+}
+
+/// An extended key (Insert, the arrows...), with its scan code, which some
+/// terminals read instead of the key code.
+fn extended(vk: u16, up: bool) -> INPUT {
+    let mut input = key(vk, up);
+    let ki = unsafe { &mut input.Anonymous.ki };
+    ki.wScan = unsafe { MapVirtualKeyW(vk as u32, MAPVK_VK_TO_VSC) } as u16;
+    ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
+    input
 }
 
 /// Sends the key events; false if Windows refused some (another desktop,

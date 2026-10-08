@@ -3,7 +3,7 @@
 // board. It holds the on/off switch, the QR code and address, the "pixel
 // wants to use your board" prompt, and the list of allowed devices.
 //
-// Everything renders from one PhoneState (docs/ipc.md), sent on phone:state and
+// Everything renders from one PhoneState, sent on phone:state and
 // returned by every command. Each part is rebuilt only when its own slice
 // changes, so keyboard focus is never pulled away.
 //
@@ -11,10 +11,11 @@
 // focus, Enter acts only on the focused button, and Esc closes without allowing.
 
 import * as ipc from "./ipc.js";
+import { $, WARN_SVG, blockBrowserKeys, backendReady } from "./dialog.js";
 
 /**
  * @typedef {{ key: string, name: string, approvedAt: number }} Device
- * @typedef {{ key: string, name: string }} Asking
+ * @typedef {{ key: string, name: string, fqdn: string, ip: string, code: string }} Asking
  * @typedef {{ on: boolean, netbird: "missing" | "disconnected" | "connected",
  *             serving: boolean, address: string | null, qr: string | null,
  *             error: string | null, pc: string | null,
@@ -29,7 +30,6 @@ const { phoneState, setPhone, answerDevice, forgetDevice, openNetbirdDownload, c
 const ICONS = {
   phone: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.75" y="2.75" width="10.5" height="18.5" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.75 18h2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
   ask: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l7 2.6v5.6c0 4.4-2.8 8-7 10-4.2-2-7-5.6-7-10V5.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 11.8l2.2 2.2L15.2 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-  warn: `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8l6.4 11.4H1.6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M8 6.2v3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="11.6" r=".8" fill="currentColor"/></svg>`,
 };
 
 /** @type {PhoneState} */
@@ -62,11 +62,9 @@ document.body.innerHTML = `
   </main>
   <footer>
     <p class="privacy">Your board stays on this PC.</p>
-    <button type="button" class="std" id="close">Close</button>
   </footer>
   <div class="visually-hidden" id="live" role="status" aria-live="polite"></div>`;
 
-const $ = (sel) => document.querySelector(sel);
 const el = { asks: $("#asks"), body: $("#body"), devices: $("#devices"), sw: $("#switch"), live: $("#live"), title: $("#title") };
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -111,29 +109,32 @@ function renderAsks(s) {
   const hadFocus = el.asks.contains(document.activeElement);
   const before = new Set((sigs.asks ? JSON.parse(sigs.asks) : []).map((p) => p.key));
   const changed = rebuild("asks", el.asks, s.pending, () => s.pending.map((p, i) => `
-    <div class="ask" role="group" aria-labelledby="ask-${i}" data-key="${esc(p.key)}">
+    <div class="ask" role="group" aria-labelledby="ask-${i}" aria-describedby="ask-${i}-who ask-${i}-code" data-key="${esc(p.key)}">
       <div class="ask-head">
         <span class="ask-icon">${ICONS.ask}</span>
         <div>
-          <h2 class="ask-title" id="ask-${i}">${esc(p.name)} wants to use your board</h2>
-          <p class="ask-sub">It's a device on your NetBird network.</p>
+          <h2 class="ask-title" id="ask-${i}" tabindex="-1">${esc(p.name)} wants to use your board</h2>
+          <p class="ask-sub" id="ask-${i}-who">${esc(p.fqdn)} · ${esc(p.ip)}</p>
         </div>
       </div>
+      <p class="ask-code" id="ask-${i}-code">Allow only if your phone shows <b>${esc(p.code)}</b></p>
       <div class="ask-actions">
         <button type="button" class="std" data-act="deny" aria-label="Don't allow ${esc(p.name)}">Don't allow</button>
-        <button type="button" class="std accent" data-act="allow" aria-label="Allow ${esc(p.name)}">Allow</button>
+        <button type="button" class="std accent" data-act="allow" aria-label="Allow ${esc(p.name)}" disabled>Allow</button>
       </div>
     </div>`).join(""));
   if (!changed) return;
+  // Allow wakes up a moment after the question appears, and never takes the
+  // focus: a click or key meant for something else must not answer it.
+  setTimeout(() => el.asks.querySelectorAll('[data-act="allow"]').forEach((b) => { b.disabled = false; }), 1000);
   const fresh = s.pending.filter((p) => !before.has(p.key));
   if (!s.pending.length) {
     if (hadFocus) el.title.focus();   // the focused button just went away
     return;
   }
-  // Scroll to it; focus Allow when the request is new or the focused one went away.
   el.asks.parentElement.scrollTop = 0;
   if (fresh.length && loaded) announce(`${fresh.map((p) => p.name).join(" and ")} ${fresh.length > 1 ? "are" : "is"} asking to use your board`);
-  if (fresh.length || hadFocus) el.asks.querySelector('[data-act="allow"]').focus();
+  if (hadFocus) el.asks.querySelector(".ask-title").focus();
 }
 
 /** The body under the switch. */
@@ -165,7 +166,7 @@ function bodyHtml(s) {
       </div>`;
   }
   if (s.error) {
-    return `<div class="card problem" role="alert">${ICONS.warn}<span>${esc(s.error)}</span></div>`;
+    return `<div class="card problem" role="alert">${WARN_SVG}<span>${esc(s.error)}</span></div>`;
   }
   return `<p class="quiet">Getting ready…</p>`;
 }
@@ -277,14 +278,11 @@ document.addEventListener("click", (e) => {
     case "get-netbird": openNetbirdDownload(); break;
   }
 });
-$("#close").addEventListener("click", closePhoneLink);
 
 document.addEventListener("keydown", (e) => {
   // Esc only closes, it never allows a device.
   if (e.key === "Escape") { e.preventDefault(); closePhoneLink(); return; }
-  // Block browser shortcuts (reload, print, zoom...) in a dialog window.
-  const k = e.key.toLowerCase();
-  if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && ["r", "p", "f", "g", "u", "s", "o", "n", "j", "h", "+", "-", "=", "0"].includes(k))) e.preventDefault();
+  blockBrowserKeys(e);
 }, true);
 document.addEventListener("contextmenu", (e) => {
   // The address is selectable, so right-click works only there.
@@ -292,7 +290,7 @@ document.addEventListener("contextmenu", (e) => {
 });
 
 async function load() {
-  if (!ipc.available()) { console.error("[tack] window.__TAURI__ is not available"); return; }
+  if (!backendReady()) return;
   await ipc.on(ipc.EVENTS.PHONE_STATE, apply);
   const st = await phoneState();
   if (st) apply(st);

@@ -8,7 +8,7 @@ import { later, rand, state } from "../state.js";
 const SW_W = (2 * Math.PI) / 1.3;   // ~1.3 s period: paper on a pin, not a pendulum clock
 const SW_A = 1.7;                   // decay rate (1/s)
 
-const BREEZE_MIN_MS = 12000;        // design.md: every 12-25 s while revealed
+const BREEZE_MIN_MS = 12000;        // every 12-25 s while revealed
 const BREEZE_MAX_MS = 25000;
 const BREEZE_MAX_DEG = 0.8;
 const RIPPLE_MS = 55;               // delay from one print to the next

@@ -1,4 +1,4 @@
-// The UI's side of the IPC contract (docs/ipc.md). The only module that
+// The UI's side of the IPC contract. The only module that
 // touches window.__TAURI__: commands go out through the wrappers below,
 // events come in through `on`. The Rust side is crates/tack-app/src/ipc/.
 // Every webview uses it: the board (main.js), the shortcuts dialog

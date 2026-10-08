@@ -2,9 +2,13 @@
 //! and when it tucks away, and flips the window's click-through as the
 //! pointer crosses the board. A drag carried from another app to the edge
 //! opens it too ([`DragGate`]). A polling thread rather than a global mouse
-//! hook, which would add latency to every app on the system.
+//! hook, which would add latency to every app on the system. Tucked, it
+//! polls less the less can happen: slower far from the top, and hardly at
+//! all with edge reveal off.
 
 use std::collections::VecDeque;
+use std::sync::OnceLock;
+use std::thread::Thread;
 use std::time::{Duration, Instant};
 
 use tack_core::view::STRIP_H;
@@ -15,7 +19,16 @@ use crate::pointer::{self, VK_LBUTTON, VK_RBUTTON};
 use crate::{overlay, snipping_tool};
 
 const POLL_SHOWN: Duration = Duration::from_millis(25);
+/// Tucked, with the pointer near the top.
 const POLL_HIDDEN: Duration = Duration::from_millis(40);
+/// Tucked, with the pointer far from the top: getting to the edge takes a
+/// moment, and resting there 400 ms more.
+const POLL_FAR: Duration = Duration::from_millis(100);
+/// How far below the monitor top counts as near it, px.
+const NEAR_TOP: i32 = 200;
+/// Tucked with edge reveal off: nothing to watch for but the setting coming
+/// back on, as a reveal wakes the poller ([`wake`]).
+const POLL_IDLE: Duration = Duration::from_millis(500);
 /// Dwell time at the top edge before revealing. Reaching for a title bar or a
 /// browser tab passes through the edge too, and should not count.
 const EDGE_DWELL: Duration = Duration::from_millis(400);
@@ -67,13 +80,19 @@ struct Poller {
     press_inside: bool,
     last_fullscreen_check: Option<Instant>,
     drag: DragGate,
+    /// The last tick was an idle one: the buttons were not watched.
+    idle: bool,
 }
+
+/// The poller's thread, for [`wake`].
+static POLLER: OnceLock<Thread> = OnceLock::new();
 
 /// Starts the poller on a thread of its own.
 pub fn start<H: EdgeHost>(host: H) {
     std::thread::Builder::new()
         .name("tack-pointer".into())
         .spawn(move || {
+            let _ = POLLER.set(std::thread::current());
             let mut p = Poller {
                 hot_since: None,
                 away_since: None,
@@ -82,22 +101,54 @@ pub fn start<H: EdgeHost>(host: H) {
                 press_inside: false,
                 last_fullscreen_check: None,
                 drag: DragGate::default(),
+                idle: false,
             };
             loop {
-                let shown = host.with_view(|v, _| v.shown);
-                std::thread::sleep(if shown { POLL_SHOWN } else { POLL_HIDDEN });
-                p.tick(&host);
+                let pause = p.tick(&host);
+                std::thread::park_timeout(pause);
             }
         })
         .expect("pointer thread");
 }
 
+/// The board just came down: the poller looks at once rather than at its
+/// next (perhaps idle) tick, so click-through follows the pointer from the
+/// start.
+pub fn wake() {
+    if let Some(poller) = POLLER.get() {
+        poller.unpark();
+    }
+}
+
 impl Poller {
-    fn tick(&mut self, host: &impl EdgeHost) {
+    /// One look at the pointer; returns how long to wait for the next.
+    fn tick(&mut self, host: &impl EdgeHost) -> Duration {
         let now = Instant::now();
+        let (shown, edge_reveal) = host.with_view(|v, settings| {
+            if !v.shown {
+                v.drag_in = false;
+            }
+            (v.shown, settings.edge_reveal)
+        });
+        if !shown && !edge_reveal {
+            self.hot_since = None;
+            self.away_since = None;
+            self.press_inside = false;
+            self.drag.sample(now, 0, false, false);
+            // Asked afresh when there is a reason to again.
+            self.last_fullscreen_check = None;
+            self.idle = true;
+            return POLL_IDLE;
+        }
+
         let pt = pointer::cursor_pos();
         let left = pointer::key_down(VK_LBUTTON.0);
         let right = pointer::key_down(VK_RBUTTON.0);
+        if std::mem::take(&mut self.idle) {
+            // Buttons held since an idle stretch were not pressed just now.
+            self.prev_left = left;
+            self.prev_right = right;
+        }
         let left_pressed = left && !self.prev_left;
         let right_pressed = right && !self.prev_right;
         self.prev_left = left;
@@ -106,8 +157,20 @@ impl Poller {
             self.press_inside = false;
         }
 
-        // (full screen, and it is Snipping Tool's own overlay)
-        let fullscreen = if self.last_fullscreen_check.is_none_or(|t| now - t >= FULLSCREEN_CHECK) {
+        // Not under the board lock: WindowFromPoint may send the window
+        // under the pointer a message and wait for its answer.
+        let on_taskbar = (left_pressed || right_pressed) && pointer::on_taskbar(pt);
+        let top = (!shown).then(|| overlay::monitor_at(pt).monitor.top);
+
+        // (full screen, and it is Snipping Tool's own overlay.) Only a board
+        // that is down (a full-screen app tucks it) or the pointer at the
+        // edge (where it would reveal) needs to know.
+        let wanted = shown || top.is_some_and(|top| pt.y < top + EDGE_BAND);
+        let fullscreen = if !wanted {
+            // So the edge asks at once when the pointer gets there.
+            self.last_fullscreen_check = None;
+            None
+        } else if self.last_fullscreen_check.is_none_or(|t| now - t >= FULLSCREEN_CHECK) {
             self.last_fullscreen_check = Some(now);
             let fs = overlay::fullscreen_app_in_front();
             Some((fs, fs && snipping_tool::in_front()))
@@ -116,6 +179,7 @@ impl Poller {
         };
 
         let mut click_through = None;
+        let mut pause = POLL_SHOWN;
         let action = host.with_view(|v, settings| {
             if let Some((fs, snipping)) = fullscreen {
                 v.fullscreen = fs;
@@ -126,13 +190,14 @@ impl Poller {
                 self.away_since = None;
                 self.press_inside = false;
                 v.drag_in = false;
-                let mon = overlay::monitor_at(pt);
-                let at_top = pt.y < mon.monitor.top + EDGE_BAND;
+                let top = top.unwrap_or_else(|| overlay::monitor_at(pt).monitor.top);
+                let at_top = pt.y < top + EDGE_BAND;
                 if !at_top {
                     v.edge_armed = true;
                 }
+                pause = if pt.y - top < NEAR_TOP { POLL_HIDDEN } else { POLL_FAR };
                 // Something carried here from another app, held over the edge.
-                let dragging = self.drag.sample(now, pt.y - mon.monitor.top, left && !right, at_top)
+                let dragging = self.drag.sample(now, pt.y - top, left && !right, at_top)
                     && pointer::cursor_kind().may_be_dragging()
                     && !pointer::window_moving();
                 let buttons_ok = (!left && !right) || dragging;
@@ -207,7 +272,7 @@ impl Poller {
                 // Not the taskbar: a click on the tray icon toggles the board
                 // itself when the button comes up, and tucking here on the way
                 // down would make it bounce straight back.
-                let clicked_outside = (left_pressed || right_pressed) && !over_board && !pointer::on_taskbar(pt);
+                let clicked_outside = (left_pressed || right_pressed) && !over_board && !on_taskbar;
 
                 if !held && !self.press_inside && over_board == v.ignoring {
                     v.ignoring = !over_board;
@@ -258,11 +323,15 @@ impl Poller {
             }
         }
         match action {
-            Action::None => {}
-            Action::Reveal => host.reveal(),
+            Action::None => pause,
+            Action::Reveal => {
+                host.reveal();
+                POLL_SHOWN
+            }
             Action::Tuck => {
                 self.away_since = None;
                 host.tuck();
+                pause
             }
         }
     }

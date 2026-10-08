@@ -1,7 +1,7 @@
 //! Tack: a corkboard for your recent screenshots that slides down from the
 //! top edge of the screen. This binary wires the board model (`tack-core`)
 //! to the Windows integrations (`tack-windows`) and to the UI (`ui/`,
-//! through the IPC in docs/ipc.md). docs/architecture.md has the overview.
+//! through the IPC in `ipc/`).
 
 // No console window in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -48,6 +48,8 @@ use crate::ipc::commands;
 use crate::state::AppState;
 
 fn main() {
+    // Before anything can load a DLL by name.
+    sandbox::safe_dll_search();
     // Started inside another app's MSIX container: run as a normal app
     // instead (see tack-windows/src/sandbox.rs).
     if let Some(host) = sandbox::host_package() {
@@ -141,8 +143,11 @@ fn main() {
     app.run(|_app, event| {
         // The board window never closes, but if it ever did the app would
         // quit with it; only Quit in the tray ends Tack.
-        if let RunEvent::ExitRequested { api, code: None, .. } = event {
-            api.prevent_exit();
+        match event {
+            RunEvent::ExitRequested { api, code: None, .. } => api.prevent_exit(),
+            // However Tack ends, the last change to the board is written.
+            RunEvent::Exit => state::flush_saves(),
+            _ => {}
         }
     });
 }

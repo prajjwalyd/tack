@@ -27,50 +27,82 @@ Who gets in, layer by layer:
 2. **Tack listens only on the PC's NetBird address** (100.x.y.z, port
    7717): never on your Wi-Fi, office network or the internet.
 3. **Every request must come from a device NetBird lists**, which Tack reads
-   from NetBird's own client (`netbird status`, run from NetBird's install
-   folder only). WireGuard ties each address to a device's key, so the
-   sender is who NetBird says it is.
+   from NetBird's own client (`netbird status`, run from NetBird's folder
+   in Program Files only, which Windows names, and given 5 seconds to
+   answer). A connection from anything else is closed before Tack reads a
+   byte of it. WireGuard ties each address to a device's key, so the sender
+   is who NetBird says it is, and Tack checks that again, against a list at
+   most 10 seconds old, before it answers an API request.
 4. **Nothing of the board reaches a device you have not allowed.** The first
-   time a device asks, the PC shows "Let pixel use your board?". Tack
-   remembers the answer by the device's WireGuard key, not its name or
-   address, so another device cannot pass for it. Remove a device in the
-   same window and it has to ask again. A device you turn down can ask again
-   no more than every 30 seconds, and no more than three can wait at once.
+   time a device asks, the PC shows "pixel wants to use your board" with
+   the device's name and address in NetBird and a four-digit code, and the
+   phone shows the same code, so you can tell your phone from a look-alike.
+   The prompt never takes the keyboard (its window flashes in the taskbar
+   instead) and Allow only works after a second, so a key you were pressing
+   cannot answer it. Tack remembers the answer by the device's WireGuard
+   key, not its name or address, so another device cannot pass for it.
+   Remove a device in the same window and it has to ask again. A device you
+   turn down can ask again no sooner than 30 seconds later, twice as long
+   after each further refusal (an hour at most), even if you switch the
+   feature off and on; no more than three can wait at once.
 5. **Other websites on your phone cannot use it.** Requests must name your
-   PC in the Host header (which defeats DNS rebinding) and, when the browser
-   says where they come from (Fetch Metadata, Origin), come from Tack's own
-   page. The page itself loads nothing but its own files.
-6. **What a device can send is limited:** JPEG, PNG or text only, 40 MB at
-   most, and 30 pins a minute.
+   PC in the Host header (which defeats DNS rebinding), and one that says
+   it comes from another site (Origin) is refused. Browsers do not send
+   Fetch Metadata over plain HTTP, so Tack does not rely on it. Instead,
+   anything that acts or may ask you a question must carry a header
+   (`X-Tack`) that Tack's own page adds and another site's page cannot add
+   to a request without a permission check this server never grants.
+   Without it, a request is served only to a device you already allowed and
+   never asks. The page itself loads nothing but its own files.
+6. **What a device can send is limited:** JPEG, PNG or text only, 20 MB at
+   most, 30 pins a minute per device, two at once. The server is strict
+   about the rest as well: a request's head is at most 16 KB, a body is read
+   only for a pin and only up to its limit, every read and write has a time
+   limit, a connection carries one request, at most 16 are open at once, and
+   a picture that claims to be huge is refused before it is decoded.
 
 The connection is plain HTTP inside NetBird's tunnel. WireGuard encrypts it
 from your phone to your PC, so your carrier or a café's Wi-Fi sees only
 encrypted traffic; the browser still says "Not secure", because it cannot
 see the tunnel. Your board never leaves your PC except to be shown on your
 allowed devices, and photos you pin from the phone are saved on the PC like
-any capture. Turn the switch off and the port closes.
+any capture. Your phone's browser keeps the pictures of your prints it has
+fetched (marked private to that browser, and named by their content), as it
+would any page's images; the board's list and the page are not kept. Turn
+the switch off and the port closes.
 
 ## Text, the clipboard and notes
 
 Text reaches the board only when you put it there: **Win+Alt+C** on a
 selection, or text or a link dropped on the board. Tack never reads text
 off the clipboard on its own. Its clipboard listener only looks at
-pictures Snipping Tool puts there (see the README), and it ignores the
-clipboard altogether while Win+Alt+C runs.
+pictures Snipping Tool puts there (see the README), recognised by its
+Windows package or by its program's full path in Windows' own folders, never
+by name alone, and skips any copy marked private. It ignores the clipboard
+altogether while Win+Alt+C runs.
 
 What Win+Alt+C does with the clipboard:
 
-- It asks the app in front to copy the selection (it sends that app
-  Ctrl+C), reads that copy once, and then puts back what you had on the
-  clipboard before, so a paste still pastes what it did. The copy put back
-  is marked to stay out of Windows' clipboard history and cloud clipboard,
-  which already hold the original, so it does not show up twice.
+- It asks the app that was in front when you pressed the shortcut to copy
+  the selection (it sends that window Ctrl+C, or Ctrl+Insert in a terminal,
+  where Ctrl+C would interrupt the running command), and sends nothing if
+  another window has come to the front meanwhile. It takes the copy only
+  if that app wrote it, reads it once, and then puts back what you had on
+  the clipboard before, so a paste still pastes what it did. The copy put
+  back is marked to stay out of Windows' clipboard history and cloud
+  clipboard, which already hold the original, so it does not show up twice.
+  If another app wrote to the clipboard in the meantime, Tack leaves that
+  alone instead of putting your old content over it; if putting yours back
+  fails, the board says "Couldn't restore your clipboard".
 - The app's own copy is an ordinary copy: if clipboard history (Win+V) is
-  on, the selection appears there, as it would after Ctrl+C.
+  on, the selection appears there, as it would after Ctrl+C, and if you
+  turned on clipboard sync across your devices, Windows may send it to the
+  cloud clipboard too. Tack's code cannot prevent that.
 - What comes back is every part of the clipboard that is plain data: text,
-  pictures, HTML and rich text, copied files, and any privacy markers. A
-  live object copied from Office as an embedded object comes back as its
-  text, rich text and picture, but no longer as an object.
+  pictures, HTML and rich text, copied files, and any privacy markers (if
+  what you had carried any of the four, all four come back). A live object
+  copied from Office as an embedded object comes back as its text, rich
+  text and picture, but no longer as an object.
 - Content the copying app marked private is never pinned: password
   managers mark their copies with `ExcludeClipboardContentFromMonitorProcessing`,
   `CanIncludeInClipboardHistory` set to 0, or `Clipboard Viewer Ignore`, and
@@ -78,12 +110,40 @@ What Win+Alt+C does with the clipboard:
   the clipboard before was marked private, it goes back with its marks.
 - If nothing was selected, nothing is read and the clipboard is left as it
   was.
+- Copied files are pinned only if they are PNG or JPEG files on a drive
+  letter. A network path is never opened: Windows would connect to that
+  server and offer it your sign-in.
 
 Notes are plain UTF-8 text files, at most 20 KB each, in
 `%LOCALAPPDATA%\Tack\Notes`; board.json holds only their paths, never their
 text. Like captures, they leave with their print: unpinned, cleared, or
 aged out after a week unless kept, a note's file goes to the Recycle Bin,
 never deleted outright.
+
+Tack's files stay on this PC, and Tack only ever cleans up its own:
+
+- A capture or note goes to the Recycle Bin when its print leaves the board.
+  Nothing is deleted outright, with two exceptions, both for a file Tack
+  wrote a moment ago and never showed: the copy of a snip whose pixels match
+  the auto-saved screenshot file pinned in its place, and a note whose text
+  is already on the board.
+- At startup, captures and notes that board.json no longer lists (left
+  behind when a move to the Recycle Bin failed) go to the Recycle Bin too,
+  but only if all of these hold: board.json was read and understood and has
+  a list of prints; every backup of it (`board.json.bad-*`) could be read,
+  and none of them names the file either; the file was last changed more
+  than 8 days ago, and before board.json was last saved; and it is a plain
+  file, not a link, in a folder that is not a link.
+- "Save to Pictures" moves a capture into your Screenshots folder under a
+  free name; it never replaces a file that is already there. From then on
+  Tack never touches it.
+- board.json is written to a temporary file, flushed to disk and swapped in,
+  so a crash leaves the old one whole, by a thread of its own (a few times a
+  second at most) and once more when Tack quits. One that Tack cannot read
+  is copied to `board.json.bad-*` before anything is written over it. When
+  Tack starts, a print whose file cannot be read yet stays listed for next
+  time, and only files Tack could have written (pictures; `.txt` notes in
+  its notes folder) are put back on the board.
 
 Links are never fetched: no page title, no preview, no icon. The domain a
 link note shows is read from the link itself. Opening one (double-click,

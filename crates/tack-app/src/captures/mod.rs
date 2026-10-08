@@ -23,7 +23,7 @@ use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 use image::DynamicImage;
-use tack_core::capture::RepeatFilter;
+use tack_core::capture::{self, RepeatFilter};
 use tack_core::{files, thumbnail, Origin, RevealReason, Thumb};
 use tack_windows::capture_origin::{self, Lookup};
 use tack_windows::{screenshots, snipping_tool};
@@ -98,7 +98,9 @@ enum Show {
 /// Pins the capture, flying it in from `pointer`'s snip if there is one.
 /// Returns the log's decision.
 fn pin_capture(app: &AppHandle, repeats: &mut RepeatFilter, img: DynamicImage, pointer: Option<(i32, i32)>) -> String {
-    if repeats.is_repeat(&img, Instant::now()) {
+    // Taken once: it spots a repeat now and a twin when the print is pinned.
+    let hash = thumbnail::pixel_hash(&img);
+    if repeats.is_repeat(hash, Instant::now()) {
         return "duplicate (repeat)".into();
     }
     #[cfg(debug_assertions)]
@@ -119,7 +121,7 @@ fn pin_capture(app: &AppHandle, repeats: &mut RepeatFilter, img: DynamicImage, p
         Ok(path) => path,
         Err(e) => return format!("ignored (cannot save: {e})"),
     };
-    let pictures = thumbnail::for_flight(&img);
+    let pictures = thumbnail::for_flight(&img, hash);
     drop(img);
     let (image, thumb) = match pictures {
         Ok(pictures) => pictures,
@@ -175,11 +177,14 @@ fn pin_saved(app: &AppHandle, path: PathBuf, thumb: Thumb, show: Show) -> String
             "new".into()
         }
         // The auto-saved file got there first and is the one to keep. The
-        // copy Tack writes was never pinned or shown, and the same picture
-        // sits in the user's own file, so it alone is removed outright
-        // rather than recycled.
+        // copy Tack writes was never pinned or shown, and the board found
+        // the very same pixels (by their hash) in the user's own file, so it
+        // alone is removed outright rather than recycled.
         Pin::Duplicate => {
             when_saved(&path, |path| {
+                if !capture::in_captures(path) {
+                    return;
+                }
                 if let Err(e) = std::fs::remove_file(path) {
                     eprintln!("tack: cannot remove the duplicate capture {}: {e}", path.display());
                 }
@@ -196,7 +201,9 @@ fn pin_saved(app: &AppHandle, path: PathBuf, thumb: Thumb, show: Show) -> String
 }
 
 /// "Save to Pictures": the capture moves to the Screenshots folder and
-/// becomes an ordinary file there, no longer Tack's to clean up.
+/// becomes an ordinary file there, no longer Tack's to clean up. It takes
+/// a free name there and never replaces a file, even one that turns up
+/// while it moves.
 pub fn save_to_pictures(app: &AppHandle, id: &str) {
     let path = {
         let s = lock(app);
@@ -206,17 +213,20 @@ pub fn save_to_pictures(app: &AppHandle, id: &str) {
         }
     };
     let (app, id) = (app.clone(), id.to_string());
-    std::thread::spawn(move || {
+    let spawned = std::thread::Builder::new().name("tack-save-to-pictures".into()).spawn(move || {
         wait_saved(&path);
-        let dest = files::free_name(&screenshots::folder(), &path);
-        // Repointed first, so the folder watcher sees a pinned file arrive
-        // rather than a new screenshot.
-        if prints::repoint(&app, &id, dest.clone(), Origin::Folder).is_none() {
-            return;
-        }
-        if let Err(e) = files::move_file(&path, &dest) {
-            eprintln!("tack: cannot save {} to {}: {e}", path.display(), dest.display());
+        let folder = screenshots::folder();
+        // Repointed before each try, so the folder watcher sees a pinned
+        // file arrive rather than a new screenshot.
+        let moved = files::move_to_free_name(&path, &folder, |dest| {
+            prints::repoint(&app, &id, dest.to_path_buf(), Origin::Folder).is_some()
+        });
+        if let Err(e) = moved {
+            eprintln!("tack: cannot save {} to {}: {e}", path.display(), folder.display());
             prints::repoint(&app, &id, path, Origin::Capture);
         }
     });
+    if let Err(e) = spawned {
+        eprintln!("tack: cannot save to Pictures: {e}");
+    }
 }

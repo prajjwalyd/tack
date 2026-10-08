@@ -9,7 +9,7 @@ use std::time::{Instant, SystemTime};
 use serde::Serialize;
 
 /// One screenshot or note pinned to the board. Serialises as the IPC's
-/// `Print` (see docs/ipc.md); the fields marked `skip` stay on this side.
+/// `Print`; the fields marked `skip` stay on this side.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Print {
@@ -24,6 +24,10 @@ pub struct Print {
     /// The original size in pixels; 0 for a note.
     pub width: u32,
     pub height: u32,
+    /// The picture's pixel hash (see `thumbnail::pixel_hash`), to tell the
+    /// two halves of an auto-saved screenshot from two different pictures.
+    #[serde(skip)]
+    pub hash: Option<u64>,
     /// When it was first pinned, ms since the Unix epoch. Survives restarts;
     /// the UI shows it as "2 min ago", and the history ages prints by it.
     pub pinned_at: u64,

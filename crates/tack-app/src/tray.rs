@@ -21,7 +21,7 @@ use windows::Win32::System::Registry::{
 };
 
 use crate::ipc::events;
-use crate::state::lock;
+use crate::state::{self, lock};
 use crate::{phone, prints, reveal, shortcuts};
 
 /// The check items, kept to read and set their state when clicked.
@@ -182,14 +182,14 @@ fn follow_taskbar_theme(app: AppHandle) {
 pub fn handle(app: &AppHandle, id: &str) {
     if id == "tray:phone" {
         let app = app.clone();
-        std::thread::spawn(move || phone::window::open(&app));
+        spawn("tack-phone-window", move || phone::window::open(&app));
         return;
     }
     if id == "tray:shortcuts" || id.starts_with("tray:shortcuts-in-use") {
         // Not from this handler: building a window on the event loop's own
         // thread, inside one of its handlers, would wait on itself.
         let app = app.clone();
-        std::thread::spawn(move || shortcuts::open_dialog(&app));
+        spawn("tack-shortcuts-window", move || shortcuts::open_dialog(&app));
         return;
     }
     let state = app.state::<Items>();
@@ -214,8 +214,20 @@ pub fn handle(app: &AppHandle, id: &str) {
             autostart::set(on);
             let _ = items.autostart.set_checked(autostart::enabled());
         }
-        "tray:quit" => app.exit(0),
+        "tray:quit" => {
+            // board.json is written off the lock, a moment after each
+            // change: whatever is still waiting goes to disk before Tack ends.
+            state::flush_saves();
+            app.exit(0);
+        }
         _ => {}
+    }
+}
+
+/// Runs `job` on a thread of its own; if none can start, logs and skips.
+fn spawn(name: &str, job: impl FnOnce() + Send + 'static) {
+    if let Err(e) = std::thread::Builder::new().name(name.into()).spawn(job) {
+        eprintln!("tack: cannot start {name}: {e}");
     }
 }
 

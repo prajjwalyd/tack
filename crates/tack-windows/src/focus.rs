@@ -3,15 +3,15 @@
 //! click never pulls the keyboard away from the app in use. The show-or-hide
 //! shortcut makes it activatable and brings it to the foreground ([`take`]);
 //! when it goes, the previous window gets the keyboard back ([`give_back`]).
-//! Every function here must run on the UI thread.
+//! [`take`] and [`give_back`] must run on the UI thread.
 
 use windows::core::BOOL;
 use windows::Win32::Foundation::{HWND, LPARAM};
 use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
 use windows::Win32::UI::WindowsAndMessaging::{
-    BringWindowToTop, EnumWindows, GetForegroundWindow, GetWindow, GetWindowLongPtrW, GetWindowThreadProcessId,
-    IsWindow, IsWindowVisible, PeekMessageW, SetForegroundWindow, SetWindowLongPtrW, GWL_EXSTYLE, GW_OWNER, MSG,
-    PM_NOREMOVE, WM_USER, WS_EX_NOACTIVATE,
+    BringWindowToTop, EnumWindows, GetClassNameW, GetForegroundWindow, GetWindow, GetWindowLongPtrW,
+    GetWindowThreadProcessId, IsWindow, IsWindowVisible, PeekMessageW, SetForegroundWindow, SetWindowLongPtrW,
+    GWL_EXSTYLE, GW_OWNER, MSG, PM_NOREMOVE, WM_USER, WS_EX_NOACTIVATE,
 };
 
 /// Makes `hwnd` the foreground window. Returns the window that had the
@@ -73,9 +73,27 @@ unsafe fn force_foreground(hwnd: HWND) {
 
 /// The process whose window is in front.
 pub fn foreground_process() -> Option<u32> {
+    window_process(unsafe { GetForegroundWindow() })
+}
+
+/// The process a window belongs to.
+pub(crate) fn window_process(hwnd: HWND) -> Option<u32> {
+    if hwnd.is_invalid() {
+        return None;
+    }
     let mut pid = 0u32;
-    unsafe { GetWindowThreadProcessId(GetForegroundWindow(), Some(&mut pid)) };
+    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
     (pid != 0).then_some(pid)
+}
+
+/// A window's class name, "" if it has none (or is gone).
+pub(crate) fn class_name(hwnd: HWND) -> String {
+    if hwnd.is_invalid() {
+        return String::new();
+    }
+    let mut buf = [0u16; 256];
+    let len = unsafe { GetClassNameW(hwnd, &mut buf) }.max(0) as usize;
+    String::from_utf16_lossy(&buf[..len])
 }
 
 /// For tests: brings the main window of process `pid` to the front. Returns

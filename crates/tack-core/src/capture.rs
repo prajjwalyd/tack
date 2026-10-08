@@ -5,15 +5,14 @@
 //! the user never chose to keep that file but may still want it back.
 
 use std::collections::HashSet;
-use std::fs::OpenOptions;
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::fs::{Metadata, OpenOptions};
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
 use image::{DynamicImage, ImageFormat, RgbaImage};
 
-use crate::files::{is_image, path_key};
+use crate::files::{is_image, is_plain, path_key};
 use crate::print::Print;
 use crate::recycle::{recycle_file, Recycler};
 
@@ -32,45 +31,109 @@ pub fn in_captures(path: &Path) -> bool {
     path.parent().is_some_and(|dir| path_key(dir) == path_key(&captures_folder()))
 }
 
-/// A capture this young is never swept, pinned or not: it may have been
-/// saved just before a crash, before board.json could mention it.
-pub(crate) const SWEEP_GRACE: Duration = Duration::from_secs(10 * 60);
+/// A file this young is never swept, pinned or not. Longer than the
+/// history keeps an unkept print (7 days), so the sweep never judges a file
+/// the board might still show: it only catches what a failed recycle, or a
+/// crash before a save, left behind.
+pub const SWEEP_GRACE: Duration = Duration::from_secs(8 * 24 * 60 * 60);
 
-/// Recycles the leftover captures in `folder`: images no print in `pinned`
-/// refers to (for example after a crash) and half-written ones, but nothing
-/// modified within [`SWEEP_GRACE`] of `now`. Returns the files that went.
+/// The newest modification time a file may have and still be swept at
+/// `now`: older than [`SWEEP_GRACE`], and older than board.json's last
+/// successful save (`board_saved`). A file written after that save may be
+/// listed only in a later save that failed, so board.json cannot speak for
+/// it.
+pub fn sweep_cutoff(now: SystemTime, board_saved: Option<SystemTime>) -> SystemTime {
+    let graced = now.checked_sub(SWEEP_GRACE).unwrap_or(SystemTime::UNIX_EPOCH);
+    board_saved.map_or(graced, |saved| graced.min(saved))
+}
+
+/// Recycles the leftover captures in `folder`: images that no path in
+/// `keep` names, and half-written ones, last modified before `cutoff` (see
+/// [`sweep_cutoff`]). Returns the files that went.
 ///
 /// Only call this when board.json was read and fully understood: if Tack
 /// cannot say for sure which captures are pinned, every one of them would
-/// look like a leftover.
-pub fn sweep(folder: &Path, pinned: &[PathBuf], now: SystemTime, bin: &dyn Recycler) -> Vec<PathBuf> {
-    sweep_where(folder, pinned, now, bin, is_image)
+/// look like a leftover. `keep` holds every path that board.json, or any
+/// backup of it, mentions.
+pub fn sweep(folder: &Path, keep: &[PathBuf], cutoff: SystemTime, bin: &dyn Recycler) -> Vec<PathBuf> {
+    sweep_where(folder, keep, cutoff, bin, is_image)
 }
 
 /// [`sweep`] for any folder of Tack's own files: `ours` says which files in
-/// it Tack wrote (half-written ones always count).
+/// it Tack wrote (half-written ones always count). Links and other reparse
+/// points are never touched, and a folder that is one itself is not swept
+/// at all: it may lead anywhere.
 pub(crate) fn sweep_where(
     folder: &Path,
-    pinned: &[PathBuf],
-    now: SystemTime,
+    keep: &[PathBuf],
+    cutoff: SystemTime,
     bin: &dyn Recycler,
     ours: impl Fn(&Path) -> bool,
 ) -> Vec<PathBuf> {
-    let keep: HashSet<String> = pinned.iter().map(|p| path_key(p)).collect();
+    match std::fs::symlink_metadata(folder) {
+        Ok(meta) if meta.is_dir() && !is_reparse_point(&meta) => {}
+        Ok(_) => {
+            eprintln!("tack: {} is not a plain folder; nothing in it is swept", folder.display());
+            return Vec::new();
+        }
+        Err(_) => return Vec::new(),
+    }
+    let Ok(home) = std::fs::canonicalize(folder) else { return Vec::new() };
+    let kept = kept_names(&home, keep);
     let Ok(entries) = std::fs::read_dir(folder) else { return Vec::new() };
-    let old_enough = |path: &Path| {
-        std::fs::metadata(path)
-            .and_then(|m| m.modified())
-            .is_ok_and(|modified| now.duration_since(modified).is_ok_and(|age| age >= SWEEP_GRACE))
-    };
     entries
         .flatten()
         .map(|e| e.path())
         .filter(|path| {
-            path.is_file() && (ours(path) || is_partial(path)) && !keep.contains(&path_key(path)) && old_enough(path)
+            let Ok(meta) = std::fs::symlink_metadata(path) else { return false };
+            meta.is_file()
+                && !is_reparse_point(&meta)
+                && (ours(path) || is_partial(path))
+                && !kept.contains(&name_key(path))
+                && meta.modified().is_ok_and(|modified| modified < cutoff)
         })
         .filter(|path| recycle_file(path, bin))
         .collect()
+}
+
+/// The names (any case) of the files in the folder `home` (resolved) that
+/// `keep` names. A path counts by its folder, resolved, so another spelling
+/// of the same folder (an 8.3 short name, `\\?\`, a trailing separator)
+/// cannot make a pinned file look unreferenced; when its folder cannot be
+/// resolved at all, its name is kept anyway, to be safe.
+fn kept_names(home: &Path, keep: &[PathBuf]) -> HashSet<String> {
+    let home = path_key(home);
+    keep.iter()
+        .filter_map(|path| {
+            // The file itself first, which also turns a short name long.
+            let resolved = std::fs::canonicalize(path).ok();
+            let path = resolved.as_deref().unwrap_or(path);
+            let name = path.file_name()?;
+            let here = match path.parent().map(std::fs::canonicalize) {
+                Some(Ok(dir)) => path_key(&dir) == home,
+                _ => true,
+            };
+            here.then(|| name.to_string_lossy().to_lowercase())
+        })
+        .collect()
+}
+
+fn name_key(path: &Path) -> String {
+    path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default()
+}
+
+/// A link, a junction, a cloud placeholder or the like: something that may
+/// stand for a file somewhere else.
+#[cfg(windows)]
+fn is_reparse_point(meta: &Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn is_reparse_point(meta: &Metadata) -> bool {
+    meta.file_type().is_symlink()
 }
 
 /// Recycles a capture's file once its print has left the board. Only files
@@ -89,9 +152,10 @@ pub fn discard_owned(path: &Path, bin: &dyn Recycler) {
     }
 }
 
-/// Recycles a file Tack no longer needs, if it lies in `folder`.
+/// Recycles a file Tack no longer needs, if it is a file directly in
+/// `folder`, named plainly (no `..` that could lead out of it).
 fn discard_path(path: &Path, folder: &Path, bin: &dyn Recycler) {
-    if path.parent().is_some_and(|dir| path_key(dir) == path_key(folder)) {
+    if is_plain(path) && path.parent().is_some_and(|dir| path_key(dir) == path_key(folder)) && path.is_file() {
         recycle_file(path, bin);
     }
 }
@@ -108,12 +172,9 @@ impl RepeatFilter {
         RepeatFilter::default()
     }
 
-    /// Records `img` as read at `now`, and says whether it repeats the
-    /// previous capture.
-    pub fn is_repeat(&mut self, img: &DynamicImage, now: Instant) -> bool {
-        let mut hasher = DefaultHasher::new();
-        (img.width(), img.height(), img.as_bytes()).hash(&mut hasher);
-        let hash = hasher.finish();
+    /// Records a capture with this [`crate::thumbnail::pixel_hash`], read at
+    /// `now`, and says whether it repeats the previous capture.
+    pub fn is_repeat(&mut self, hash: u64, now: Instant) -> bool {
         let repeat = self.last.is_some_and(|(h, at)| h == hash && now.saturating_duration_since(at) < REPEAT_WINDOW);
         self.last = Some((hash, now));
         repeat
@@ -219,7 +280,9 @@ pub(crate) fn write_reserved_bytes(bytes: &[u8], path: &Path) -> std::io::Result
     let written = (|| {
         let mut file = OpenOptions::new().write(true).truncate(true).open(&partial)?;
         file.write_all(bytes)?;
-        file.flush()?;
+        // On disk before its name says it is whole: a crash just after the
+        // rename must not leave an empty or half-written picture.
+        file.sync_all()?;
         drop(file);
         std::fs::rename(&partial, path)
     })();
@@ -250,29 +313,44 @@ mod tests {
     use super::*;
     use crate::print::{Kind, Origin};
     use crate::recycle::testing::NotingBin;
+    use crate::thumbnail::pixel_hash;
     use image::Rgba;
 
     fn image(fill: u8) -> DynamicImage {
         DynamicImage::ImageRgba8(RgbaImage::from_pixel(4, 3, Rgba([fill, fill, fill, 255])))
     }
 
+    /// A fresh, empty folder for one test.
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("tack-capture-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Nine days from now: every file a test just wrote is past the grace.
+    fn nine_days_on() -> SystemTime {
+        sweep_cutoff(SystemTime::now() + Duration::from_secs(9 * 24 * 60 * 60), None)
+    }
+
     #[test]
     fn the_same_pixels_soon_after_are_a_repeat() {
         let mut filter = RepeatFilter::new();
         let now = Instant::now();
-        assert!(!filter.is_repeat(&image(10), now));
-        assert!(filter.is_repeat(&image(10), now + Duration::from_secs(1)));
+        let hash = pixel_hash(&image(10));
+        assert!(!filter.is_repeat(hash, now));
+        assert!(filter.is_repeat(hash, now + Duration::from_secs(1)));
         // Each read restarts the window.
-        assert!(filter.is_repeat(&image(10), now + Duration::from_secs(5)));
+        assert!(filter.is_repeat(hash, now + Duration::from_secs(5)));
     }
 
     #[test]
     fn other_pixels_or_a_later_copy_are_new() {
         let mut filter = RepeatFilter::new();
         let now = Instant::now();
-        assert!(!filter.is_repeat(&image(10), now));
-        assert!(!filter.is_repeat(&image(20), now));
-        assert!(!filter.is_repeat(&image(20), now + REPEAT_WINDOW));
+        assert!(!filter.is_repeat(pixel_hash(&image(10)), now));
+        assert!(!filter.is_repeat(pixel_hash(&image(20)), now));
+        assert!(!filter.is_repeat(pixel_hash(&image(20)), now + REPEAT_WINDOW));
     }
 
     #[test]
@@ -294,7 +372,7 @@ mod tests {
 
     #[test]
     fn saving_twice_in_a_second_picks_a_free_name() {
-        let dir = std::env::temp_dir().join(format!("tack-capture-test-{}", std::process::id()));
+        let dir = scratch("save");
         let at = Timestamp { year: 2026, month: 1, day: 2, hour: 3, minute: 4, second: 5 };
         let first = save(&image(1), &dir, at).unwrap();
         let second = save(&image(2), &dir, at).unwrap();
@@ -305,7 +383,7 @@ mod tests {
 
     #[test]
     fn a_reserved_name_is_taken_until_written_and_then_moved_into_place() {
-        let dir = std::env::temp_dir().join(format!("tack-reserve-test-{}", std::process::id()));
+        let dir = scratch("reserve");
         let at = Timestamp { year: 2026, month: 1, day: 2, hour: 3, minute: 4, second: 5 };
         let first = reserve(&dir, at).unwrap();
         let second = reserve(&dir, at).unwrap();
@@ -322,8 +400,7 @@ mod tests {
 
     #[test]
     fn the_sweep_takes_only_old_unpinned_images() {
-        let dir = std::env::temp_dir().join(format!("tack-sweep-test-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = scratch("sweep");
         let file = |name: &str| {
             let path = dir.join(name);
             std::fs::write(&path, b"x").unwrap();
@@ -334,29 +411,96 @@ mod tests {
         let partial = file("Crashed.png.part");
         // Not an image, so not a capture Tack wrote.
         file("notes.txt");
-        // Judged an hour from now, every file above is past the grace period.
-        let later = SystemTime::now() + Duration::from_secs(60 * 60);
         // Pinned under another case: Windows paths ignore it.
         let pinned_upper = PathBuf::from(pinned.to_string_lossy().to_uppercase());
 
         let bin = NotingBin::default();
-        let swept = sweep(&dir, std::slice::from_ref(&pinned_upper), later, &bin);
-        // Judged now, the same leftover is too young to touch.
+        let swept = sweep(&dir, std::slice::from_ref(&pinned_upper), nine_days_on(), &bin);
+        // A day from now, the same leftover is far too young to touch.
         let young = NotingBin::default();
-        let swept_now = sweep(&dir, &[pinned_upper], SystemTime::now(), &young);
+        let tomorrow = SystemTime::now() + Duration::from_secs(24 * 60 * 60);
+        let swept_soon = sweep(&dir, &[pinned_upper], sweep_cutoff(tomorrow, None), &young);
         let _ = std::fs::remove_dir_all(&dir);
 
         let mut swept = swept;
         swept.sort();
         assert_eq!(swept, vec![partial.clone(), leftover.clone()]);
         assert_eq!(bin.taken.borrow().len(), 2);
-        assert!(swept_now.is_empty(), "a capture saved in the last ten minutes is never swept");
+        assert!(swept_soon.is_empty(), "a capture saved in the last eight days is never swept");
         assert!(young.taken.borrow().is_empty());
     }
 
     #[test]
+    fn nothing_written_after_board_json_was_last_saved_is_swept() {
+        let dir = scratch("sweep-after-save");
+        let saved = SystemTime::now() - Duration::from_secs(60);
+        let leftover = dir.join("Unlisted.png");
+        std::fs::write(&leftover, b"x").unwrap();
+        let later = SystemTime::now() + Duration::from_secs(9 * 24 * 60 * 60);
+        let bin = NotingBin::default();
+        let swept = sweep(&dir, &[], sweep_cutoff(later, Some(saved)), &bin);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(swept.is_empty(), "board.json may simply have failed to save since");
+        assert_eq!(sweep_cutoff(later, Some(later)), later - SWEEP_GRACE);
+    }
+
+    #[test]
+    fn a_pinned_file_counts_however_its_folder_is_spelled() {
+        let dir = scratch("sweep-spelling");
+        let pinned = dir.join("Screenshot 2026-10-08 023223.png");
+        std::fs::write(&pinned, b"x").unwrap();
+        let elsewhere = dir.join("Elsewhere");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        let trailing = PathBuf::from(format!("{}{}", dir.display(), std::path::MAIN_SEPARATOR));
+        let spellings = [
+            // The resolved form, `\\?\C:\...` on Windows.
+            std::fs::canonicalize(&pinned).unwrap(),
+            trailing.join("Screenshot 2026-10-08 023223.png"),
+            dir.join("Elsewhere").join("..").join("SCREENSHOT 2026-10-08 023223.PNG"),
+            // A folder that cannot be found: the name alone is kept, to be safe.
+            PathBuf::from(r"Q:\gone\Screenshot 2026-10-08 023223.png"),
+        ];
+        let mut taken = Vec::new();
+        for spelling in &spellings {
+            let bin = NotingBin::default();
+            sweep(&dir, std::slice::from_ref(spelling), nine_days_on(), &bin);
+            taken.push(bin.taken.borrow().len());
+        }
+        // The same name in another folder that exists does not count.
+        let bin = NotingBin::default();
+        sweep(&dir, &[elsewhere.join("Screenshot 2026-10-08 023223.png")], nine_days_on(), &bin);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(taken, [0, 0, 0, 0]);
+        assert_eq!(*bin.taken.borrow(), vec![pinned]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn links_are_never_swept_and_a_linked_folder_not_at_all() {
+        let dir = scratch("sweep-links");
+        let real = dir.join("Real");
+        std::fs::create_dir_all(&real).unwrap();
+        std::fs::write(real.join("a.png"), b"x").unwrap();
+        // Creating links needs Developer Mode or elevation; without it there
+        // is nothing to test.
+        let file_link = std::os::windows::fs::symlink_file(real.join("a.png"), dir.join("link.png")).is_ok();
+        let dir_link = std::os::windows::fs::symlink_dir(&real, dir.join("Linked")).is_ok();
+        let bin = NotingBin::default();
+        sweep(&dir, &[], nine_days_on(), &bin);
+        let through = NotingBin::default();
+        sweep(&dir.join("Linked"), &[], nine_days_on(), &through);
+        let _ = std::fs::remove_dir_all(&dir);
+        if file_link {
+            assert!(bin.taken.borrow().is_empty(), "a link is not a capture");
+        }
+        if dir_link {
+            assert!(through.taken.borrow().is_empty(), "a linked folder is never swept");
+        }
+    }
+
+    #[test]
     fn discarding_only_touches_captures_in_tacks_own_folder() {
-        let root = std::env::temp_dir().join(format!("tack-discard-test-{}", std::process::id()));
+        let root = scratch("discard");
         let folder = root.join("Captures");
         std::fs::create_dir_all(&folder).unwrap();
         let file = |path: PathBuf| {
@@ -366,6 +510,7 @@ mod tests {
         let ours = file(folder.join("ours.png"));
         let moved = file(folder.join("saved to pictures.png"));
         let elsewhere = file(root.join("elsewhere.png"));
+        std::fs::create_dir_all(folder.join("folder.png")).unwrap();
         let print = |path: &Path, origin| Print {
             id: "1".into(),
             name: String::new(),
@@ -373,6 +518,7 @@ mod tests {
             thumb: String::new(),
             width: 1,
             height: 1,
+            hash: None,
             pinned_at: 0,
             kept: false,
             kept_at: None,
@@ -386,6 +532,9 @@ mod tests {
         discard_file(&print(&ours, Origin::Capture), &folder, &bin);
         discard_file(&print(&moved, Origin::Folder), &folder, &bin);
         discard_file(&print(&elsewhere, Origin::Capture), &folder, &bin);
+        // Not a file, and not plainly in the folder.
+        discard_file(&print(&folder.join("folder.png"), Origin::Capture), &folder, &bin);
+        discard_file(&print(&folder.join("..").join("elsewhere.png"), Origin::Capture), &folder, &bin);
         let _ = std::fs::remove_dir_all(&root);
         assert_eq!(*bin.taken.borrow(), vec![ours]);
     }

@@ -1,11 +1,12 @@
 // The phone board: shows what is pinned on the PC and pins photos and text
-// onto it. Talks only to the Tack that served it (crates/tack-app/src/phone/server.rs):
-//   GET  /api/board       200 the board (kept first, then newest)
-//                         403 {state: "waiting" | "denied"}: this phone is asking / was refused
+// onto it. Talks only to the Tack that served it (crates/tack-app/src/phone/routes.rs):
+//   GET  /api/board       200 the board (kept first, then newest), 304 if unchanged
+//                         403 {state: "waiting", code} | {state: "denied" | "busy"}
 //                         anything else: the PC can't be reached
 //   POST /api/ask         ask the PC again after a denial
-//   GET  /api/print/<id>  a print's full picture
+//   GET  /api/thumb/<id>, /api/print/<id>  a print's pictures (addressed by content, so cached)
 //   POST /api/pin         a JPEG or PNG, or text/plain
+// Every call carries X-Tack: 1, which tells the PC it comes from this page.
 "use strict";
 
 const $ = (id) => document.getElementById(id);
@@ -14,7 +15,7 @@ const $ = (id) => document.getElementById(id);
 // keeps a send quick on a relayed link and is still sharp on a PC screen.
 const MAX_SIDE = 2560;
 // How long to wait before the next look at the board, by what the last one found.
-const POLL_MS = { loading: 1500, ready: 3000, waiting: 2000, denied: 6000, down: 4000 };
+const POLL_MS = { loading: 1500, ready: 3000, waiting: 2000, denied: 6000, busy: 5000, down: 4000 };
 // A request with no answer by then counts as unreachable (a dead tunnel
 // often just hangs); a photo upload gets longer.
 const GET_TIMEOUT_MS = 6000;
@@ -22,10 +23,12 @@ const SEND_TIMEOUT_MS = 90000;
 const PIN_COLOURS = 5; // p0 .. p4 in phone.css: tomato, cobalt, violet, lemon, white
 const TIP_KEY = "tack.tip.home-screen";
 
-// loading | ready | waiting | denied | down ("down" is the unreachable card).
+// loading | ready | waiting | denied | busy | down ("down" is the unreachable card).
 let mode = "loading";
 let pc = "";
 let you = "";
+let code = ""; // shown while waiting, to match the one on the PC
+let etag = ""; // the board last drawn, so an unchanged one costs nothing
 let prints = [];
 let turn = 0; // which refresh is the latest; older answers are dropped
 let timer = 0;
@@ -52,14 +55,15 @@ function h(tag, props, ...kids) {
   return el;
 }
 
-// A request that gives up after `ms`. Resolves to {status, text}; rejects
-// when there is no answer at all.
+// A request that gives up after `ms`. Resolves to {status, text, etag};
+// rejects when there is no answer at all.
 async function request(url, init, ms) {
   const abort = new AbortController();
   const stop = setTimeout(() => abort.abort(), ms);
+  const headers = { "X-Tack": "1", ...(init.headers || {}) };
   try {
-    const response = await fetch(url, { cache: "no-store", ...init, signal: abort.signal });
-    return { status: response.status, text: await response.text() };
+    const response = await fetch(url, { cache: "no-store", ...init, headers, signal: abort.signal });
+    return { status: response.status, text: await response.text(), etag: response.headers.get("ETag") || "" };
   } finally {
     clearTimeout(stop);
   }
@@ -81,19 +85,29 @@ async function refresh() {
   let next = "down";
   let data = null;
   try {
-    const reply = await request("/api/board", {}, GET_TIMEOUT_MS);
+    const ask = mode === "ready" && etag ? { headers: { "If-None-Match": etag } } : {};
+    const reply = await request("/api/board", ask, GET_TIMEOUT_MS);
     data = json(reply.text);
-    if (reply.status === 200 && data && Array.isArray(data.prints)) next = "ready";
-    else if (reply.status === 403 && data && (data.state === "waiting" || data.state === "denied")) next = data.state;
+    if (reply.status === 304) next = "same";
+    else if (reply.status === 200 && data && Array.isArray(data.prints)) {
+      next = "ready";
+      etag = reply.etag;
+    } else if (reply.status === 403 && data && ["waiting", "denied", "busy"].includes(data.state)) next = data.state;
   } catch {}
   if (mine !== turn) return;
 
-  mode = next;
-  if (next !== "down") {
-    pc = data.pc || pc;
-    you = data.you || you;
+  if (next === "same") {
+    next = "ready";
+  } else {
+    if (next !== "ready") etag = "";
+    if (data && next !== "down") {
+      pc = data.pc || pc;
+      you = data.you || you;
+      code = data.code || "";
+    }
+    prints = next === "ready" ? data.prints : [];
   }
-  prints = next === "ready" ? data.prints : [];
+  mode = next;
   render();
   timer = setTimeout(() => document.visibilityState === "visible" && refresh(), POLL_MS[mode]);
 }
@@ -119,17 +133,19 @@ function render() {
     ready: `Connected through NetBird as ${you}`,
     waiting: `Waiting for approval as ${you}`,
     denied: `Not approved as ${you}`,
+    busy: "Your PC is busy",
     down: "Not connected",
   }[mode];
 
   const ready = mode === "ready";
-  const next = ready ? (prints.length ? "board" : "empty") : mode;
+  const next = ready ? (prints.length ? "board" : "empty") : mode === "waiting" ? `waiting:${code}` : mode;
   if (next !== view) {
     view = next;
     shown = "";
     $("board").replaceChildren();
-    $("state").replaceChildren(...(CARDS[next] ? CARDS[next]() : []));
-    $("state").hidden = !CARDS[next];
+    const card = CARDS[next.split(":")[0]];
+    $("state").replaceChildren(...(card ? card() : []));
+    $("state").hidden = !card;
   }
   $("board").hidden = next !== "board";
   $("bar").hidden = !ready;
@@ -140,7 +156,13 @@ function render() {
 // One calm card per state: a title, one line or one action.
 const CARDS = {
   loading: () => [pin(), h("h2", {}, "Connecting…"), h("p", {}, "Looking for your PC through NetBird.")],
-  waiting: () => [pin(), h("h2", {}, "Check your PC"), h("p", {}, `Click Allow on ${on()} to let this phone use your board.`)],
+  waiting: () => [
+    pin(),
+    h("h2", {}, "Check your PC"),
+    h("p", {}, `Click Allow on ${on()} if it shows this code:`),
+    h("p", { class: "code", "aria-label": `Code ${code.split("").join(" ")}` }, code),
+  ],
+  busy: () => [pin(), h("h2", {}, "Your PC is busy"), h("p", {}, "Other devices are asking right now. Try again in a minute.")],
   denied: () => [
     pin(),
     h("h2", {}, `${on()} didn't allow this phone.`),
@@ -159,7 +181,7 @@ function pin() {
 }
 
 function drawBoard() {
-  const key = JSON.stringify(prints.map((p) => [p.id, p.kept, p.text]));
+  const key = JSON.stringify(prints.map((p) => [p.id, p.kept, p.text, p.thumb]));
   if (key === shown) return;
   shown = key;
   // Pins count from the oldest print, so a new one doesn't recolour the rest.
@@ -195,7 +217,7 @@ $("tip-close").addEventListener("click", () => {
 // ---- tap a print or a note ----
 
 function openPrint(print) {
-  $("full").src = `/api/print/${encodeURIComponent(print.id)}`;
+  $("full").src = print.full;
   $("viewer").showModal();
 }
 

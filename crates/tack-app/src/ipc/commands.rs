@@ -1,8 +1,10 @@
-//! What the UI can ask for. See docs/ipc.md.
+//! What the UI can ask for.
 //!
-//! Plain commands run on the main thread, async ones on a worker. Anything
-//! slow (decoding a full image) or blocking (a popup menu) is async, so the
-//! board keeps animating meanwhile.
+//! Plain commands run on the main thread, so they must be quick. Anything
+//! slow (decoding a full image, a file to save or recycle) or blocking (a
+//! popup menu, a wait for another thread) is async and does its work with
+//! [`blocking`], on the blocking pool: the few async workers stay free and
+//! the board keeps animating meanwhile.
 
 use serde::{Deserialize, Serialize};
 use tack_core::{Print, Rect};
@@ -13,6 +15,16 @@ use crate::phone::{self, PhoneState};
 use crate::shortcuts::{self, DialogState, Pair};
 use crate::state::lock;
 use crate::{context_menu, drag, keyboard, notes, prints, reveal};
+
+/// Runs `job` on the async runtime's blocking pool and waits for it there,
+/// so a slow body never ties up one of the few async workers.
+async fn blocking<T: Send + 'static>(job: impl FnOnce() -> T + Send + 'static) -> T {
+    match tauri::async_runtime::spawn_blocking(job).await {
+        Ok(value) => value,
+        // The job panicked: fail this command the way it would have inline.
+        Err(e) => panic!("tack: a command's work stopped: {e}"),
+    }
+}
 
 /// What `board_ready` returns.
 #[derive(Serialize)]
@@ -45,7 +57,7 @@ pub fn set_board_rect(app: AppHandle, x: f64, y: f64, w: f64, h: f64) {
 
 #[tauri::command]
 pub async fn copy_print(app: AppHandle, id: String) -> Result<(), String> {
-    prints::copy(&app, &id)
+    blocking(move || prints::copy(&app, &id)).await
 }
 
 /// A screenshot in its default app; a link note in the browser.
@@ -66,6 +78,8 @@ pub async fn start_drag(app: AppHandle, id: String) {
     drag::start(&app, id);
 }
 
+/// Sync, so a quick unpin and keep apply in the order they were clicked;
+/// both are cheap (saving is queued, recycling runs on its own thread).
 #[tauri::command]
 pub fn discard_print(app: AppHandle, id: String) {
     prints::remove(&app, &id, Removal::Fall);
@@ -88,7 +102,7 @@ pub struct UiPoint {
 /// or `at` the focused print when the keyboard asked for it.
 #[tauri::command]
 pub async fn context_menu(app: AppHandle, id: String, at: Option<UiPoint>) -> Result<(), String> {
-    context_menu::show(&app, &id, at.map(|p| (p.x, p.y)))
+    blocking(move || context_menu::show(&app, &id, at.map(|p| (p.x, p.y)))).await
 }
 
 /// A rectangle from the UI, physical px relative to the window.
@@ -122,15 +136,21 @@ pub fn set_hovering(hovering: bool) {
 /// it saves a file and may wait to reveal.
 #[tauri::command]
 pub async fn pin_text(app: AppHandle, text: String) {
-    let _line = notes::pin_text(&app, &text);
-    trace!("dropped text: {_line}");
+    blocking(move || {
+        let _line = notes::pin_text(&app, &text);
+        trace!("dropped text: {_line}");
+    })
+    .await
 }
 
 /// A PNG or JPEG dropped on the board, as base64: pinned like a capture.
 #[tauri::command]
 pub async fn pin_image(app: AppHandle, name: String, data: String) {
-    let _line = notes::pin_dropped_image(&app, &name, &data);
-    trace!("dropped picture: {_line}");
+    blocking(move || {
+        let _line = notes::pin_dropped_image(&app, &name, &data);
+        trace!("dropped picture: {_line}");
+    })
+    .await
 }
 
 /// The board came down for the keyboard (the shortcut) and wants focus.
@@ -162,7 +182,7 @@ pub fn shortcuts_state(app: AppHandle) -> DialogState {
 /// for the hotkey thread.
 #[tauri::command]
 pub async fn set_shortcuts(app: AppHandle, toggle: String, pin: String) -> Pair {
-    shortcuts::set(&app, &toggle, &pin)
+    blocking(move || shortcuts::set(&app, &toggle, &pin)).await
 }
 
 /// The Shortcuts dialog listens for a chord (shortcuts paused) or is done.
@@ -179,25 +199,25 @@ pub async fn close_shortcuts(app: AppHandle) {
 /// The phone window opens. Async: it may ask NetBird how it is.
 #[tauri::command]
 pub async fn phone_state(app: AppHandle) -> PhoneState {
-    phone::state(&app)
+    blocking(move || phone::state(&app)).await
 }
 
 /// The phone window's switch.
 #[tauri::command]
 pub async fn set_phone(app: AppHandle, on: bool) -> PhoneState {
-    phone::set_on(&app, on)
+    blocking(move || phone::set_on(&app, on)).await
 }
 
 /// Allow or Don't allow, for a device asking to use the board.
 #[tauri::command]
 pub async fn answer_device(app: AppHandle, key: String, allow: bool) -> PhoneState {
-    phone::answer(&app, &key, allow)
+    blocking(move || phone::answer(&app, &key, allow)).await
 }
 
 /// Remove, for an allowed device.
 #[tauri::command]
 pub async fn forget_device(app: AppHandle, key: String) -> PhoneState {
-    phone::forget(&app, &key)
+    blocking(move || phone::forget(&app, &key)).await
 }
 
 /// "Get NetBird": NetBird's install page, in the browser.

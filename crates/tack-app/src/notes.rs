@@ -7,12 +7,13 @@
 //! clipboard is read here only right after the pin shortcut, and what the
 //! user had on it before is put back (`tack_windows::selection`).
 
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf, Prefix};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use base64::Engine;
 use tack_core::{capture, files, note, thumbnail, Origin, RevealReason};
-use tack_windows::selection::{self, Grabbed};
+use tack_windows::selection::{self, Clipboard, Grabbed, Target};
 use tack_windows::snipping_tool;
 use tauri::AppHandle;
 
@@ -35,6 +36,7 @@ pub mod say {
     pub const NOT_PINNABLE: &str = "Only images and text can be pinned";
     pub const BAD_IMAGE: &str = "Can't pin that image";
     pub const FAILED: &str = "Couldn't pin that";
+    pub const NOT_RESTORED: &str = "Couldn't restore your clipboard";
 }
 
 /// Brings the board down briefly (unless it is down already or something is
@@ -57,27 +59,44 @@ pub fn notice(app: &AppHandle, text: &str) {
     events::notice(app, text);
 }
 
-/// The pin shortcut was pressed: copies the selection in the app in front
-/// and pins what it was. Blocks for up to about two seconds; runs on a
-/// thread of its own.
-pub fn pin_selection(app: &AppHandle) -> String {
-    pin_selection_of(app, None)
+/// Set while a selection is pinned: one at a time, and a press meanwhile is
+/// dropped (two grabs would snapshot and restore each other's copies).
+static PINNING: AtomicBool = AtomicBool::new(false);
+
+/// Holds [`PINNING`] until dropped.
+struct Pinning;
+
+impl Pinning {
+    fn start() -> Option<Pinning> {
+        PINNING.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).ok().map(|_| Pinning)
+    }
 }
 
-/// [`pin_selection`], sending Ctrl+C only if the window in front belongs to
-/// process `only` (when given).
-fn pin_selection_of(app: &AppHandle, only: Option<u32>) -> String {
+impl Drop for Pinning {
+    fn drop(&mut self) {
+        PINNING.store(false, Ordering::SeqCst);
+    }
+}
+
+/// The pin shortcut was pressed over `target` (the window in front as it
+/// fired): copies the selection there and pins what it was. Blocks for up
+/// to about two seconds; runs on a thread of its own.
+pub fn pin_selection(app: &AppHandle, target: Option<Target>) -> String {
+    let Some(_pinning) = Pinning::start() else {
+        return "ignored (still pinning the last selection)".into();
+    };
     if !lock(app).ui_ready {
         return "ignored (the board is not ready)".into();
     }
-    let grab = selection::grab(only);
-    if let Some(Err(e)) = &grab.restored {
-        eprintln!("tack: the clipboard could not be put back as it was: {e}");
-    }
-    let restored = match &grab.restored {
-        None => "untouched",
-        Some(Ok(())) => "restored",
-        Some(Err(_)) => "NOT restored",
+    let grab = selection::grab(target);
+    let restored = match &grab.clipboard {
+        Clipboard::Untouched => "untouched",
+        Clipboard::Restored => "restored",
+        Clipboard::LeftNewer => "left as another app set it",
+        Clipboard::Failed(e) => {
+            eprintln!("tack: the clipboard could not be put back as it was: {e}");
+            "NOT restored"
+        }
     };
     let outcome = match grab.what {
         Grabbed::Text(text) => pin_text(app, &text),
@@ -96,6 +115,11 @@ fn pin_selection_of(app: &AppHandle, only: Option<u32>) -> String {
         }
         Grabbed::KeysHeld => "keys held too long, nothing sent".into(),
     };
+    if let Clipboard::Failed(_) = grab.clipboard {
+        // Last, so it is the notice that stays: the user's next paste
+        // will not be what they expect.
+        notice(app, say::NOT_RESTORED);
+    }
     let line = format!("pin selection: {outcome}; clipboard {restored}");
     trace!("{line}");
     line
@@ -142,7 +166,8 @@ pub fn pin_text(app: &AppHandle, text: &str) -> String {
 /// Other files are not pinned (yet).
 fn pin_files(app: &AppHandle, paths: Vec<PathBuf>) -> String {
     let total = paths.len();
-    let images: Vec<PathBuf> = paths.into_iter().filter(|p| files::is_image(p) && p.is_file()).collect();
+    let images: Vec<PathBuf> =
+        paths.into_iter().filter(|p| on_a_drive(p) && files::is_image(p) && p.is_file()).collect();
     if images.is_empty() {
         notice(app, say::NOT_PINNABLE);
         return format!("{total} file(s), none of them PNG or JPEG");
@@ -171,11 +196,27 @@ fn pin_files(app: &AppHandle, paths: Vec<PathBuf>) -> String {
     format!("{pinned} of {total} file(s) pinned")
 }
 
+/// Whether a copied file's path is on a drive letter (`C:\...`). Anything
+/// else is refused before it is touched: a UNC path (`\\server\share`, or
+/// one an app put there on purpose) would make Windows connect to that
+/// server and offer it the user's sign-in, and `\\?\` and `\\.\` paths
+/// reach devices and the same servers.
+fn on_a_drive(path: &Path) -> bool {
+    matches!(path.components().next(), Some(Component::Prefix(p)) if matches!(p.kind(), Prefix::Disk(_)))
+        && path.is_absolute()
+}
+
 /// A picture dropped on the board: the bytes of a PNG or JPEG file, in
 /// base64. Saved unchanged in Tack's captures folder and pinned like a
 /// capture, so it goes to the Recycle Bin when it leaves the board.
 pub fn pin_dropped_image(app: &AppHandle, name: &str, data: &str) -> String {
-    let bytes = match base64::engine::general_purpose::STANDARD.decode(data.trim()) {
+    let data = data.trim();
+    // Too long to be a picture Tack takes: refused before it is decoded.
+    if data.len() > MAX_DROP_BYTES.div_ceil(3) * 4 {
+        notice(app, say::BAD_IMAGE);
+        return format!("{name}: too large");
+    }
+    let bytes = match base64::engine::general_purpose::STANDARD.decode(data) {
         Ok(bytes) => bytes,
         _ => {
             notice(app, say::BAD_IMAGE);
@@ -231,12 +272,13 @@ pub fn pin_image_bytes(app: &AppHandle, name: &str, bytes: &[u8]) -> Result<Stri
 }
 
 /// Debug builds only: lets a script pin the selection of a window it
-/// started, without anyone's keyboard. See docs/performance.md.
+/// started, without anyone's keyboard.
 #[cfg(debug_assertions)]
 pub mod debug {
     use std::time::Duration;
 
     use tack_windows::focus;
+    use tack_windows::selection::Target;
     use tauri::AppHandle;
 
     /// With `TACK_DEBUG_CONTROL=1`, creating `%TEMP%\tack-debug\pin-selection`
@@ -269,7 +311,12 @@ pub mod debug {
             };
             let line = match focus::bring_to_front(pid) {
                 Some(previous) => {
-                    let line = super::pin_selection_of(&app, Some(pid));
+                    // Keys go to the target only while it stays in front.
+                    let target = Target::in_front().filter(|t| t.pid() == pid);
+                    let line = match target {
+                        Some(target) => super::pin_selection(&app, Some(target)),
+                        None => "FAIL (the window lost the front; no keys were sent)".into(),
+                    };
                     focus::return_foreground(previous);
                     line
                 }
@@ -277,5 +324,27 @@ pub mod debug {
             };
             eprintln!("tack: pin-selection test: {line}");
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_files_on_a_drive_are_opened() {
+        assert!(on_a_drive(Path::new(r"C:\Users\me\Pictures\a.png")));
+        assert!(on_a_drive(Path::new(r"Z:\shots\b.jpg")), "a mapped drive is the user's own");
+        for path in [
+            r"\server\share\a.png",
+            r"//server/share/a.png",
+            r"\?\UNC\server\share\a.png",
+            r"\?\C:\Users\me\a.png",
+            r"\.\pipe\a.png",
+            r"C:a.png",
+            r"a.png",
+        ] {
+            assert!(!on_a_drive(Path::new(path)), "{path}");
+        }
     }
 }

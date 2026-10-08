@@ -1,5 +1,5 @@
 //! Every event the backend sends the UI, in one place: the names (mirrored in
-//! `ui/scripts/ipc.js` and documented in docs/ipc.md) and one function per
+//! `ui/scripts/ipc.js`) and one function per
 //! event that builds its payload. Nothing else calls `emit`.
 //!
 //! Emitting is fire and forget: if the webview is gone there is nobody to

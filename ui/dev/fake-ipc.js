@@ -178,7 +178,7 @@ const withNotes = location.pathname.endsWith("/preview.html") ? params.get("note
 if (withNotes) {
   for (const [text, ago] of SAMPLE_NOTES) prints.push(makeNote(text, ago * MIN));
 }
-// ?notes=compare: a short note, a long one and a link (the note paper study, docs/design.md section 8).
+// ?notes=compare: a short note, a long one and a link (the note paper study).
 if (params.get("notes") === "compare") {
   for (const [text, ago] of [["Call Sam back at 4.", 5], [SAMPLE_NOTES[1][0], 40], [SAMPLE_NOTES[0][0], 3 * 60]]) {
     prints.push(makeNote(text, ago * MIN));

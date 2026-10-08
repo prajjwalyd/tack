@@ -1,5 +1,5 @@
 // Board boot and wiring. Plain ES modules, no dependencies, no build step.
-// Listens to backend events (ipc.js, docs/ipc.md), asks for the prints already
+// Listens to backend events (ipc.js), asks for the prints already
 // pinned, and keeps the webview from behaving like a browser. keyboard.js and
 // drop.js wire themselves up when imported.
 

@@ -8,15 +8,21 @@
 //! note leaves the board. A note whose whole text is one web link is a
 //! **link**: the board shows its domain, and opening it opens the browser.
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::capture::{self, Timestamp};
+use crate::files::{is_plain, same_dir};
 use crate::print::NoteBody;
 use crate::recycle::Recycler;
 
 /// The most text a note holds, in bytes of UTF-8.
 pub const MAX_NOTE_BYTES: usize = 20 * 1024;
+/// The most of a note's file that is read: enough for a full note after
+/// any normalising, while a file grown huge (or not text at all) costs
+/// nothing.
+const MAX_READ_BYTES: u64 = 64 * 1024;
 /// A link longer than this is kept as plain text.
 const MAX_LINK_LEN: usize = 4096;
 
@@ -29,6 +35,13 @@ pub fn notes_folder() -> PathBuf {
 /// A note's file: a `.txt`.
 fn is_note_file(path: &Path) -> bool {
     path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("txt"))
+}
+
+/// A note's file where Tack keeps them: a `.txt` directly in
+/// [`notes_folder`]. A note in board.json anywhere else was not written by
+/// Tack (board.json was edited by hand) and is not restored.
+pub fn in_notes(path: &Path) -> bool {
+    is_plain(path) && is_note_file(path) && path.parent().is_some_and(|dir| same_dir(dir, &notes_folder()))
 }
 
 /// What a note made of `text` holds, or `None` if there is nothing to pin
@@ -138,9 +151,13 @@ pub fn save(body: &NoteBody, dir: &Path, at: Timestamp) -> std::io::Result<PathB
 
 /// Reads a note's file back: a byte order mark goes, invalid UTF-8 is
 /// replaced, and the text is normalised and clamped as when it was pinned.
-/// An empty file is still a note (it was pinned, maybe edited since).
+/// An empty file is still a note (it was pinned, maybe edited since). Only
+/// the first 64 KB are read.
 pub fn read(path: &Path) -> Result<NoteBody, String> {
-    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .and_then(|file| file.take(MAX_READ_BYTES).read_to_end(&mut bytes))
+        .map_err(|e| e.to_string())?;
     Ok(from_bytes(&bytes))
 }
 
@@ -151,10 +168,10 @@ fn from_bytes(bytes: &[u8]) -> NoteBody {
 }
 
 /// Recycles leftover notes in `folder`, by the same rules as
-/// [`capture::sweep`]: text files no print refers to, half-written ones,
-/// nothing modified within [`capture::SWEEP_GRACE`] of `now`.
-pub fn sweep(folder: &Path, pinned: &[PathBuf], now: SystemTime, bin: &dyn Recycler) -> Vec<PathBuf> {
-    capture::sweep_where(folder, pinned, now, bin, is_note_file)
+/// [`capture::sweep`]: text files no path in `keep` names, and half-written
+/// ones, last modified before `cutoff`.
+pub fn sweep(folder: &Path, keep: &[PathBuf], cutoff: SystemTime, bin: &dyn Recycler) -> Vec<PathBuf> {
+    capture::sweep_where(folder, keep, cutoff, bin, is_note_file)
 }
 
 #[cfg(test)]
@@ -280,11 +297,33 @@ mod tests {
         let leftover = file("Note 2026-10-07 101010.txt");
         let partial = file("Note 2026-10-07 101011.txt.part");
         file("not ours.png");
-        let later = SystemTime::now() + Duration::from_secs(60 * 60);
+        let later = capture::sweep_cutoff(SystemTime::now() + Duration::from_secs(9 * 24 * 60 * 60), None);
         let bin = NotingBin::default();
         let mut swept = sweep(&dir, std::slice::from_ref(&pinned), later, &bin);
         let _ = std::fs::remove_dir_all(&dir);
         swept.sort();
         assert_eq!(swept, vec![leftover, partial]);
+    }
+
+    #[test]
+    fn only_a_text_file_directly_in_the_notes_folder_is_a_note() {
+        let folder = notes_folder();
+        assert!(in_notes(&folder.join("Note 2026-10-08 141530.txt")));
+        assert!(in_notes(&folder.join("NOTE.TXT")));
+        assert!(!in_notes(&folder.join("Note.png")));
+        assert!(!in_notes(&folder.join("sub").join("Note.txt")));
+        assert!(!in_notes(&folder.join("..").join("Notes").join("Note.txt")));
+        assert!(!in_notes(Path::new(r"C:\Windows\win.ini.txt")));
+    }
+
+    #[test]
+    fn a_huge_file_is_read_only_as_far_as_a_note_goes() {
+        let dir = scratch("huge");
+        let path = dir.join("Note.txt");
+        std::fs::write(&path, "a".repeat(5 * 1024 * 1024)).unwrap();
+        let note = read(&path).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(note.truncated);
+        assert_eq!(note.text.len(), MAX_NOTE_BYTES);
     }
 }

@@ -11,7 +11,7 @@
 use std::time::{Duration, Instant};
 
 use tack_core::{Rect, RevealReason, Settings, View};
-use tack_windows::edge_reveal::EdgeHost;
+use tack_windows::edge_reveal::{self, EdgeHost};
 use tack_windows::{overlay, pointer, snipping_tool, HWND};
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 use windows::Win32::Foundation::POINT;
@@ -282,6 +282,8 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
         v.ignoring = true;
         (v.generation, v.window_pos, v.window_size)
     };
+    // It may be idling (edge reveal off); the board needs it from now on.
+    edge_reveal::wake();
 
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {

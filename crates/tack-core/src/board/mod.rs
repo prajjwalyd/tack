@@ -21,7 +21,7 @@ use crate::print::{Kind, NoteBody, Origin, Print};
 use crate::thumbnail::Thumb;
 
 /// With auto-save on, Snipping Tool both saves the file and copies the image;
-/// arrivals of the same size this close together are one screenshot.
+/// arrivals of the same pixels this close together are one screenshot.
 const TWIN_WINDOW: Duration = Duration::from_secs(5);
 
 /// How a print comes to the board.
@@ -45,10 +45,12 @@ pub enum PinOutcome {
     /// pinned, and its capture file (if it is one) has no use any more.
     /// `aged` as for [`PinOutcome::New`].
     Expired { print: Print, aged: Vec<Print> },
-    /// The screenshot file of a capture pinned moments ago: that print now
-    /// shows the file, and the capture's own copy at `capture` is redundant.
+    /// The screenshot file of a capture pinned moments ago, the same pixels:
+    /// that print now shows the file, and the capture's own copy at
+    /// `capture` is redundant.
     Merged { print: Print, capture: PathBuf },
-    /// A capture of a screenshot file pinned moments ago; nothing was pinned.
+    /// A capture of a screenshot file pinned moments ago, the same pixels;
+    /// nothing was pinned.
     Duplicate,
     /// Already on the board: the same file, or a note with the same text.
     Exists,
@@ -109,13 +111,17 @@ impl Board {
     }
 
     /// The other half of an auto-saved screenshot: a print of the other
-    /// origin, the same size, that arrived moments ago. Notes have no twins.
-    fn twin(&self, origin: Origin, width: u32, height: u32, now: Instant) -> Option<usize> {
+    /// origin that arrived moments ago with the same size and pixels. Two
+    /// pictures are only ever one if their hashes are known and match;
+    /// anything less and both are pinned. Notes have no twins.
+    fn twin(&self, origin: Origin, thumb: &Thumb, now: Instant) -> Option<usize> {
+        let hash = thumb.hash?;
         self.prints.iter().position(|p| {
             p.kind == Kind::Image
                 && p.origin != origin
-                && p.width == width
-                && p.height == height
+                && p.width == thumb.width
+                && p.height == thumb.height
+                && p.hash == Some(hash)
                 && p.arrived.is_some_and(|t| now.saturating_duration_since(t) < TWIN_WINDOW)
         })
     }
@@ -126,7 +132,7 @@ impl Board {
             return PinOutcome::Exists;
         }
         if let Arrival::Live(now) = arrival {
-            if let Some(index) = self.twin(origin, thumb.width, thumb.height, now) {
+            if let Some(index) = self.twin(origin, &thumb, now) {
                 if origin == Origin::Capture {
                     return PinOutcome::Duplicate;
                 }
@@ -145,6 +151,7 @@ impl Board {
             print.thumb = thumb.data_url;
             print.width = thumb.width;
             print.height = thumb.height;
+            print.hash = thumb.hash;
             print.origin = origin;
         });
         self.insert(print, arrival, now_ms)
@@ -184,6 +191,7 @@ impl Board {
             thumb: String::new(),
             width: 0,
             height: 0,
+            hash: None,
             pinned_at,
             kept: kept_at.is_some(),
             kept_at,
@@ -286,6 +294,7 @@ impl Board {
         print.thumb = thumb.data_url;
         print.width = thumb.width;
         print.height = thumb.height;
+        print.hash = thumb.hash;
         print.stamp = file_stamp(path);
         Some(print.clone())
     }

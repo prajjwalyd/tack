@@ -10,9 +10,10 @@
 // (set_shortcuts); a chord another app holds is reported under its row.
 //
 // Chords travel as text: modifiers in the order Win, Ctrl, Alt, Shift, then
-// the key, joined with "+", e.g. "Win+Alt+S"; "" is off (docs/ipc.md).
+// the key, joined with "+", e.g. "Win+Alt+S"; "" is off.
 
 import * as ipc from "./ipc.js";
+import { $, WARN_SVG, blockBrowserKeys, backendReady } from "./dialog.js";
 
 const ROWS = [
   { name: "toggle", label: "Show or hide the board" },
@@ -25,7 +26,6 @@ const NAMED = {
   PageUp: "PageUp", PageDown: "PageDown",
   ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right",
 };
-const WARN_SVG = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8l6.4 11.4H1.6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M8 6.2v3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="11.6" r=".8" fill="currentColor"/></svg>`;
 
 const chords = { toggle: "", pin: "" };
 let defaults = { toggle: "Win+Alt+S", pin: "Win+Alt+C" };
@@ -51,7 +51,6 @@ document.body.innerHTML = `
     <button type="button" class="std accent" id="save">Save</button>
   </footer>`;
 
-const $ = (sel) => document.querySelector(sel);
 const rows = Object.fromEntries(ROWS.map((r) => [r.name, {
   ...r,
   field: $(`#${r.name}-field`),
@@ -216,9 +215,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { e.preventDefault(); ipc.closeShortcuts(); return; }
   // Enter anywhere but on a button saves.
   if (e.key === "Enter" && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); save(); }
-  // Block browser shortcuts (reload, print, zoom...) in a dialog window.
-  const k = e.key.toLowerCase();
-  if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && ["r", "p", "f", "g", "u", "s", "o", "n", "j", "h", "+", "-", "=", "0"].includes(k))) e.preventDefault();
+  blockBrowserKeys(e);
 }, true);
 document.addEventListener("keyup", onCaptureKeyUp, true);
 // A click anywhere but the listening field ends the capture.
@@ -232,7 +229,7 @@ window.addEventListener("pagehide", () => { if (capturing) endCapture(); });
 
 async function load() {
   for (const r of ROWS) render(r.name);
-  if (!ipc.available()) { console.error("[tack] window.__TAURI__ is not available"); return; }
+  if (!backendReady()) return;
   const st = await ipc.shortcutsState();
   if (!st) return;
   if (st.defaults) defaults = { ...defaults, ...st.defaults };

@@ -24,15 +24,18 @@ const ADDRESS = `http://${PC}.netbird.cloud:7717`;
 const MIN = 60000;
 const now = Date.now();
 
+// A device asking, as the backend describes it.
+const asking = (name, code) => ({ key: `k-${name}`, name, fqdn: `${name}.netbird.cloud`, ip: "100.90.12.34", code });
+
 const START = {
   missing: { on: false, netbird: "missing" },
   disconnected: { on: true, netbird: "disconnected" },
   off: { on: false, netbird: "connected" },
   serving: { on: true, netbird: "connected", devices: [{ key: "k-pixel", name: "pixel", approvedAt: now - 3 * 86400000 }] },
-  pending: { on: true, netbird: "connected", pending: [{ key: "k-pixel", name: "pixel" }] },
+  pending: { on: true, netbird: "connected", pending: [asking("pixel", "4821")] },
   combo: {
     on: true, netbird: "connected",
-    pending: [{ key: "k-pixel", name: "pixel" }, { key: "k-ipad", name: "Prajjwal's iPad" }],
+    pending: [asking("pixel", "4821"), asking("prajjwals-ipad", "0937")],
     devices: [{ key: "k-s24", name: "galaxy-s24", approvedAt: now - 25 * MIN }, { key: "k-old", name: "old-oneplus-with-a-rather-long-hostname", approvedAt: now - 40 * 86400000 }],
   },
   error: { on: true, netbird: "connected", fail: true },
@@ -116,7 +119,7 @@ window.__TAURI__ = {
 };
 
 window.__fake = {
-  ask(name = "galaxy-tab") { s.pending.push({ key: `k-${name}-${Date.now()}`, name }); emit(); },
+  ask(name = "galaxy-tab") { s.pending.push({ ...asking(name, String(Date.now() % 10000).padStart(4, "0")), key: `k-${name}-${Date.now()}` }); emit(); },
   set(patch) { Object.assign(s, patch); emit(); },
 };
 const ask = Number(params.get("ask"));

@@ -3,18 +3,30 @@
 //! moving it to the Recycle Bin, and putting its image or text on the
 //! clipboard.
 
+use std::ffi::OsString;
+use std::os::windows::ffi::OsStringExt;
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 
 use windows::core::{HSTRING, PCWSTR};
+use windows::Win32::Foundation::MAX_PATH;
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE};
+use windows::Win32::System::SystemInformation::GetWindowsDirectoryW;
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+/// Runs `job` on a short-lived thread of its own. If none can be started,
+/// the action is logged and dropped rather than taking Tack down.
+fn spawn(name: &str, job: impl FnOnce() + Send + 'static) {
+    if let Err(e) = std::thread::Builder::new().name(name.into()).spawn(job) {
+        eprintln!("tack: cannot start {name}: {e}");
+    }
+}
 
 /// ShellExecute may hand the file to a shell extension that needs COM, and
 /// can take a moment, so it runs on its own thread.
 fn shell_execute(verb: &'static str, path: PathBuf, fallback: Option<&'static str>) {
-    std::thread::spawn(move || unsafe {
+    spawn("tack-shell", move || unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
         let file = HSTRING::from(path.as_os_str());
         let run = |verb: &str| {
@@ -57,16 +69,32 @@ pub fn open_folder(path: &Path) {
     shell_execute("open", path.to_path_buf(), None);
 }
 
+/// `%WINDIR%\explorer.exe`, by its full path from Windows itself: a bare
+/// name would be looked for in the current folder and on PATH first.
+pub fn explorer_exe() -> Option<PathBuf> {
+    let mut buf = [0u16; MAX_PATH as usize];
+    let len = unsafe { GetWindowsDirectoryW(Some(&mut buf)) } as usize;
+    // 0 is a failure; more than the buffer is a size it would have needed.
+    if len == 0 || len >= buf.len() {
+        return None;
+    }
+    Some(PathBuf::from(OsString::from_wide(&buf[..len])).join("explorer.exe"))
+}
+
 /// Opens Explorer with the file selected.
 pub fn show_in_explorer(path: &Path) {
+    let Some(explorer) = explorer_exe() else {
+        eprintln!("tack: cannot find the Windows folder to start Explorer");
+        return;
+    };
     // Explorer parses its own command line, so the quotes are passed raw.
-    let _ = std::process::Command::new("explorer.exe").raw_arg(format!("/select,\"{}\"", path.display())).spawn();
+    let _ = std::process::Command::new(explorer).raw_arg(format!("/select,\"{}\"", path.display())).spawn();
 }
 
 /// Moves the file to the Recycle Bin, on a thread of its own: the shell can
 /// take a moment.
 pub fn recycle(path: PathBuf) {
-    std::thread::spawn(move || {
+    spawn("tack-recycle", move || {
         if let Err(e) = trash::delete(&path) {
             eprintln!("tack: cannot recycle {}: {e}", path.display());
         }

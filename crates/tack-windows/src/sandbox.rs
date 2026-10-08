@@ -4,6 +4,8 @@
 //! writes and namespaces named objects, so Tack would run a stale private
 //! copy of the board beside the user's real one. It relaunches itself
 //! through the shell instead, and the contained copy exits.
+//!
+//! Also where the process makes itself safe to start: [`safe_dll_search`].
 
 use std::collections::HashMap;
 
@@ -13,6 +15,7 @@ use windows::Win32::Storage::Packaging::Appx::{GetCurrentPackageFullName, GetPac
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
+use windows::Win32::System::LibraryLoader::{SetDefaultDllDirectories, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS};
 use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
 
 /// Set before relaunching. Explorer hands the launch to the running shell,
@@ -27,6 +30,15 @@ const STAY: &str = "TACK_STAY_IN_PACKAGE";
 /// How far up the parent chain to look. Hosts sit a few levels up (app,
 /// helper, shell, Tack); the chain ends long before this.
 const MAX_ANCESTORS: usize = 16;
+
+/// First thing at start-up: DLLs loaded by name come only from Tack's own
+/// folder and System32, never the current folder or PATH, where a planted
+/// DLL would run inside Tack.
+pub fn safe_dll_search() {
+    if let Err(e) = unsafe { SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS) } {
+        eprintln!("tack: cannot restrict the DLL search: {e}");
+    }
+}
 
 /// The package Tack is running under or below, if any: its own identity, or
 /// that of the nearest packaged ancestor process.
@@ -59,9 +71,10 @@ pub fn relaunch_outside(host: &str) -> bool {
         return false;
     }
     let Ok(exe) = std::env::current_exe() else { return false };
+    let Some(explorer) = crate::shell::explorer_exe() else { return false };
     eprintln!("tack: started inside {host}'s container; starting again outside it (set {STAY}=1 to stay)");
     std::env::set_var(RELAUNCHED, "1");
-    std::process::Command::new("explorer.exe").arg(exe).spawn().is_ok()
+    std::process::Command::new(explorer).arg(exe).spawn().is_ok()
 }
 
 fn own_package() -> Option<String> {

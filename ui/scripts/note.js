@@ -1,5 +1,5 @@
 // Paper notes: text and links pinned in the row like prints. A note is a print
-// with `data.kind` "note" (docs/ipc.md): print.js builds it with the same layers
+// with `data.kind` "note": print.js builds it with the same layers
 // and calls `fillNote` for its paper. This module also decides what "open"
 // means per kind (`openItem`) and unfolds a text note into a bigger sheet
 // hanging from its pin below the board.

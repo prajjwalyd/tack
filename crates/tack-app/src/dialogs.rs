@@ -11,6 +11,19 @@ use crate::reveal;
 /// (under ui/), with the board's privacy settings applied. Not from the
 /// event loop's own thread: building a window waits for it.
 pub fn open(app: &AppHandle, label: &str, page: &str, title: &str, size: (f64, f64)) -> tauri::Result<WebviewWindow> {
+    build(app, label, page, title, size, true)
+}
+
+/// As [`open`], but the dialog only takes the keyboard if `focus`: one that
+/// opens on its own (a device asking) must not catch what the user types.
+pub fn build(
+    app: &AppHandle,
+    label: &str,
+    page: &str,
+    title: &str,
+    size: (f64, f64),
+    focus: bool,
+) -> tauri::Result<WebviewWindow> {
     let board = app.config().app.windows.iter().find(|w| w.label == reveal::WINDOW_LABEL).cloned();
     let mut builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(page.into()))
         .title(title)
@@ -19,7 +32,7 @@ pub fn open(app: &AppHandle, label: &str, page: &str, title: &str, size: (f64, f
         .maximizable(false)
         .minimizable(false)
         .center()
-        .focused(true)
+        .focused(focus)
         .visible(true);
     if let Some(dir) = reveal::webview_data_dir(app) {
         builder = builder.data_directory(dir);

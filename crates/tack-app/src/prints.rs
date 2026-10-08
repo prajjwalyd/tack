@@ -3,6 +3,9 @@
 //! capture or a note leaving the board, followed by moving its file to the
 //! Recycle Bin. Also the history's upkeep: unkept prints age out (checked
 //! after the restore at startup, then hourly).
+//!
+//! A save here only hands a snapshot to the board saver (`state`), so
+//! none of this waits for the disk.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -26,10 +29,11 @@ pub enum Pin {
     New(Aged),
     /// A restored print already past the history's limits; not pinned.
     Expired,
-    /// The screenshot file of a capture pinned moments ago: that print now
-    /// shows the file and the capture's own copy is gone.
+    /// The screenshot file of a capture pinned moments ago, the same pixels:
+    /// that print now shows the file and the capture's own copy is recycled.
     Merged,
-    /// A capture of a screenshot file pinned moments ago; nothing was pinned.
+    /// A capture of a screenshot file pinned moments ago, the same pixels;
+    /// nothing was pinned.
     Duplicate,
     /// Already on the board.
     Exists,
@@ -129,12 +133,16 @@ pub fn pin_note(app: &AppHandle, path: PathBuf, body: NoteBody, arrival: Arrival
 }
 
 /// Makes a pin on the board with `pin` and carries out what came of it.
+/// A live pin is saved; a restored one is not, since the restore saves
+/// once when it is over (and every save meanwhile still lists the prints
+/// it has yet to put back).
 fn pin_with(
     app: &AppHandle,
     arrival: Arrival,
     flight: Option<&Flight>,
     pin: impl FnOnce(&mut Board, u64) -> PinOutcome,
 ) -> Pin {
+    let live = matches!(arrival, Arrival::Live(_));
     let mut s = lock(app);
     match pin(&mut s.board, history::now_ms()) {
         PinOutcome::Exists => Pin::Exists,
@@ -151,11 +159,13 @@ fn pin_with(
             Pin::Merged
         }
         PinOutcome::New { print, aged } => {
-            s.save();
+            if live {
+                s.save();
+            }
             let (ready, order) = (s.ui_ready, s.board.order());
             drop(s);
             if ready {
-                events::print_added(app, &print, matches!(arrival, Arrival::Live(_)), flight);
+                events::print_added(app, &print, live, flight);
                 events::order_changed(app, &order);
                 trace!("print {} added: board:print-added and board:order-changed sent", print.id);
             }
@@ -163,7 +173,7 @@ fn pin_with(
             Pin::New(Aged { ids: aged.into_iter().map(|p| p.id).collect() })
         }
         PinOutcome::Expired { print, aged } => {
-            if !aged.is_empty() {
+            if live && !aged.is_empty() {
                 s.save();
             }
             drop(s);
@@ -262,7 +272,7 @@ pub fn remove_path(app: &AppHandle, path: &Path, how: Removal) {
 pub fn clear(app: &AppHandle) {
     let ids: Vec<String> = lock(app).board.prints().iter().filter(|p| !p.kept).map(|p| p.id.clone()).collect();
     let app = app.clone();
-    std::thread::spawn(move || {
+    let spawned = std::thread::Builder::new().name("tack-clear".into()).spawn(move || {
         for (n, id) in ids.iter().enumerate() {
             if n > 0 {
                 std::thread::sleep(Duration::from_millis(45));
@@ -270,6 +280,9 @@ pub fn clear(app: &AppHandle) {
             remove(&app, id, Removal::Fall);
         }
     });
+    if let Err(e) = spawned {
+        eprintln!("tack: cannot clear the board: {e}");
+    }
 }
 
 /// Points a print at its file's new place. Returns the old path, so a move

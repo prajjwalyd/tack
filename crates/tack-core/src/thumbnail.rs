@@ -1,6 +1,8 @@
 //! Decoding screenshots: the small JPEG prints for the board, the full image
-//! for the clipboard, and the little bitmap that follows the pointer in a drag.
+//! for the clipboard, the little bitmap that follows the pointer in a drag,
+//! and the pixel hash that tells one picture from another of the same size.
 
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{BufRead, Cursor, Seek};
 use std::path::Path;
 use std::sync::{Condvar, Mutex};
@@ -28,6 +30,9 @@ pub struct Thumb {
     /// The original image's size.
     pub width: u32,
     pub height: u32,
+    /// The original image's [`pixel_hash`], when it was taken from the
+    /// full picture. Two prints are only ever one picture if theirs match.
+    pub hash: Option<u64>,
 }
 
 /// The most any one picture may claim: 16384 px a side and 256 MiB of
@@ -91,20 +96,55 @@ pub fn make(path: &Path) -> Result<Thumb, String> {
 
 /// For an image already in memory, such as a clipboard capture.
 pub fn from_image(img: DynamicImage) -> Result<Thumb, String> {
+    let hash = pixel_hash(&img);
+    shrunk(img, Some(hash))
+}
+
+/// The thumbnail of `img`, which also gives the size; `hash` is the full
+/// picture's.
+fn shrunk(img: DynamicImage, hash: Option<u64>) -> Result<Thumb, String> {
     let (width, height) = img.dimensions();
     let small = if width.max(height) > THUMB_SIDE { img.thumbnail(THUMB_SIDE, THUMB_SIDE) } else { img };
-    Ok(Thumb { data_url: jpeg_data_url(&small, THUMB_QUALITY)?, width, height })
+    Ok(Thumb { data_url: jpeg_data_url(&small, THUMB_QUALITY)?, width, height, hash })
 }
 
 /// For a capture that flies onto the board: the picture it flies with (a
 /// JPEG data URL, long side at most 1600 px) and its thumbnail, drawn from
-/// that picture rather than from the full image, which is quicker.
-pub fn for_flight(img: &DynamicImage) -> Result<(String, Thumb), String> {
+/// that picture rather than from the full image, which is quicker. `hash`
+/// is the full image's [`pixel_hash`], already taken to spot a repeat.
+pub fn for_flight(img: &DynamicImage, hash: u64) -> Result<(String, Thumb), String> {
     let (width, height) = img.dimensions();
     let flight = if width.max(height) > FLIGHT_SIDE { img.thumbnail(FLIGHT_SIDE, FLIGHT_SIDE) } else { img.clone() };
     let flight_url = jpeg_data_url(&flight, FLIGHT_QUALITY)?;
-    let thumb = from_image(flight)?;
+    let thumb = shrunk(flight, Some(hash))?;
     Ok((flight_url, Thumb { width, height, ..thumb }))
+}
+
+/// A hash of the picture's size and its pixels' colours, alpha left out, so
+/// the same picture hashes alike off the clipboard (often RGBA) and out of
+/// a PNG (often RGB). Fed row by row the same way for every layout, since
+/// a hasher need not give the same result for differently split input.
+pub fn pixel_hash(img: &DynamicImage) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    let (width, height) = img.dimensions();
+    (width, height).hash(&mut hasher);
+    if width == 0 || height == 0 {
+        return hasher.finish();
+    }
+    let row_len = width as usize * 3;
+    match img {
+        DynamicImage::ImageRgb8(rgb) => rgb.as_raw().chunks_exact(row_len).for_each(|row| hasher.write(row)),
+        DynamicImage::ImageRgba8(rgba) => {
+            let mut row = Vec::with_capacity(row_len);
+            for src in rgba.as_raw().chunks_exact(width as usize * 4) {
+                row.clear();
+                src.as_chunks::<4>().0.iter().for_each(|px| row.extend_from_slice(&px[..3]));
+                hasher.write(&row);
+            }
+        }
+        other => other.to_rgb8().as_raw().chunks_exact(row_len).for_each(|row| hasher.write(row)),
+    }
+    hasher.finish()
 }
 
 fn jpeg_data_url(img: &DynamicImage, quality: u8) -> Result<String, String> {
@@ -185,11 +225,28 @@ mod tests {
     #[test]
     fn a_flight_picture_is_capped_and_its_thumbnail_keeps_the_original_size() {
         let img = DynamicImage::ImageRgb8(RgbImage::from_pixel(3200, 1600, image::Rgb([200, 100, 50])));
-        let (flight, thumb) = for_flight(&img).unwrap();
+        let (flight, thumb) = for_flight(&img, pixel_hash(&img)).unwrap();
         assert!(flight.starts_with("data:image/jpeg;base64,"));
         assert_eq!((thumb.width, thumb.height), (3200, 1600));
+        assert_eq!(thumb.hash, from_image(img).unwrap().hash, "the full picture's hash, not the flight's");
         let drag = drag_image(&flight).unwrap();
         assert_eq!((drag.width, drag.height), (160, 80));
+    }
+
+    #[test]
+    fn the_same_pixels_hash_alike_in_any_layout_and_others_do_not() {
+        let rgba = RgbaImage::from_fn(5, 3, |x, y| Rgba([x as u8, y as u8, 7, 255]));
+        let rgb = DynamicImage::ImageRgba8(rgba.clone()).to_rgb8();
+        let hash = pixel_hash(&DynamicImage::ImageRgba8(rgba.clone()));
+        assert_eq!(hash, pixel_hash(&DynamicImage::ImageRgb8(rgb.clone())));
+        assert_eq!(hash, pixel_hash(&DynamicImage::ImageRgb16(DynamicImage::ImageRgb8(rgb).to_rgb16())));
+        let mut other = rgba.clone();
+        other.put_pixel(4, 2, Rgba([4, 2, 8, 255]));
+        assert_ne!(hash, pixel_hash(&DynamicImage::ImageRgba8(other)));
+        // The same bytes in another shape are another picture.
+        let reshaped = RgbaImage::from_raw(3, 5, rgba.into_raw()).unwrap();
+        assert_ne!(hash, pixel_hash(&DynamicImage::ImageRgba8(reshaped)));
+        assert_eq!(pixel_hash(&DynamicImage::new_rgb8(0, 0)), pixel_hash(&DynamicImage::new_rgba8(0, 0)));
     }
 
     #[test]

@@ -2,18 +2,17 @@
 //! NetBird). The rules, with no networking in them:
 //!
 //! - A device is known by its NetBird WireGuard public key, never by its
-//!   address: addresses can move between peers, keys cannot, and NetBird
-//!   only delivers a peer's packets from the address bound to its key.
-//! - A device the user allowed gets in. Allowed devices are saved
-//!   (`Settings::phone`) until the user removes them.
-//! - Any other device is asked about once: it waits while the PC shows
-//!   "Let pixel use your board?", and nothing of the board reaches it until
-//!   the user clicks Allow.
-//! - A device the user turned down stays out. It can ask again, but not
-//!   more than once every [`ASK_AGAIN_AFTER_MS`], so it cannot keep the
-//!   prompt coming back.
-//! - Requests are left unanswered past [`MAX_PENDING`] devices at once, and
-//!   a request that nobody answered lapses after [`PENDING_FOR_MS`].
+//!   address or name: addresses can move between peers and names can look
+//!   alike, keys cannot.
+//! - A device the user allowed gets in, until the user removes it.
+//! - Any other device is asked about once. The PC shows its name, address
+//!   and a code, and the device's page shows the same code, so the user can
+//!   tell their phone from a look-alike. Nothing of the board reaches it
+//!   until the user clicks Allow.
+//! - A device the user turned down stays out. It may ask again after
+//!   [`ASK_AGAIN_AFTER_MS`], twice as long after each further refusal.
+//! - At most [`MAX_PENDING`] devices wait at once; a request nobody answers
+//!   lapses after [`PENDING_FOR_MS`].
 
 use serde::{Deserialize, Serialize};
 
@@ -22,8 +21,10 @@ use serde::{Deserialize, Serialize};
 pub const MAX_PENDING: usize = 3;
 /// How long a request waits for the user before it lapses.
 pub const PENDING_FOR_MS: u64 = 10 * 60 * 1000;
-/// How soon a device that was turned down may ask again.
+/// How soon a device that was turned down may ask again; doubled after each
+/// further refusal, up to [`ASK_AGAIN_MAX_MS`].
 pub const ASK_AGAIN_AFTER_MS: u64 = 30 * 1000;
+pub const ASK_AGAIN_MAX_MS: u64 = 60 * 60 * 1000;
 
 /// The phone board's saved settings.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -66,35 +67,70 @@ impl PhoneSettings {
     }
 }
 
+/// A device asking to use the board, as NetBird knows it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Who {
+    pub key: String,
+    /// Its short NetBird name ("pixel").
+    pub name: String,
+    /// Its full NetBird name ("pixel.netbird.cloud").
+    pub fqdn: String,
+    /// Its NetBird address.
+    pub ip: String,
+}
+
 /// A device waiting for the user's answer.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Asking {
     pub key: String,
     pub name: String,
+    pub fqdn: String,
+    pub ip: String,
+    /// Shown on the PC and on the device's own page, to compare.
+    pub code: String,
     #[serde(skip)]
     pub since_ms: u64,
 }
 
 /// What a device gets.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Verdict {
     /// It was allowed: the board is open to it.
     Allowed,
-    /// It waits for the user. `asked` is true when this request is what
-    /// put the question to the user, so the PC should show it now.
-    Waiting { asked: bool },
-    /// It was turned down, or too many devices are already waiting.
+    /// It waits for the user, with the code to compare. `asked` is true when
+    /// this request put the question to the user, so the PC should show it.
+    Waiting { asked: bool, code: String },
+    /// The user turned it down.
     Refused,
+    /// Too many devices are already waiting.
+    Busy,
+}
+
+/// A device the user turned down: when, how often, and whether it has since
+/// been let ask again.
+#[derive(Debug)]
+struct Refusal {
+    key: String,
+    at_ms: u64,
+    times: u32,
+    lifted: bool,
+}
+
+impl Refusal {
+    fn may_ask_again(&self, now_ms: u64) -> bool {
+        let wait = ASK_AGAIN_AFTER_MS.saturating_mul(1 << self.times.saturating_sub(1).min(16)).min(ASK_AGAIN_MAX_MS);
+        now_ms.saturating_sub(self.at_ms) >= wait
+    }
 }
 
 /// The devices waiting for an answer, and those turned down, while Tack
-/// runs. (Refusals are not saved: after a restart a device may ask once
-/// more.)
+/// runs. Refusals outlive the server stopping and starting again; only a
+/// restart of Tack forgets them.
 #[derive(Debug, Default)]
 pub struct Gate {
     pending: Vec<Asking>,
-    refused: Vec<(String, u64)>,
+    refused: Vec<Refusal>,
 }
 
 impl Gate {
@@ -107,36 +143,48 @@ impl Gate {
         &self.pending
     }
 
-    /// A request from the device with `key`: whether it gets in, and whether
-    /// it needs asking about.
-    pub fn check(&mut self, settings: &PhoneSettings, key: &str, name: &str, now_ms: u64) -> Verdict {
-        self.lapse(now_ms);
-        if settings.allows(key) {
-            return Verdict::Allowed;
-        }
-        if self.refused.iter().any(|(k, _)| k == key) {
-            return Verdict::Refused;
-        }
-        if self.pending.iter().any(|a| a.key == key) {
-            return Verdict::Waiting { asked: false };
-        }
-        if self.pending.len() >= MAX_PENDING {
-            return Verdict::Refused;
-        }
-        self.pending.push(Asking { key: key.into(), name: name.into(), since_ms: now_ms });
-        Verdict::Waiting { asked: true }
+    /// Whether `key` may use the board, without asking anybody: for
+    /// requests that must not raise the question (see the server).
+    pub fn allowed(settings: &PhoneSettings, key: &str) -> bool {
+        settings.allows(key)
     }
 
-    /// A turned-down device asks again ("Ask again" on the phone). Allowed
-    /// once [`ASK_AGAIN_AFTER_MS`] have passed since the refusal.
-    pub fn ask_again(&mut self, settings: &PhoneSettings, key: &str, name: &str, now_ms: u64) -> Verdict {
-        if let Some(i) = self.refused.iter().position(|(k, _)| k == key) {
-            if now_ms.saturating_sub(self.refused[i].1) < ASK_AGAIN_AFTER_MS {
+    /// A request from `who`: whether it gets in, and whether it needs asking
+    /// about. `code` is a fresh random code, used if this request asks.
+    pub fn check(&mut self, settings: &PhoneSettings, who: &Who, code: &str, now_ms: u64) -> Verdict {
+        self.lapse(now_ms);
+        if settings.allows(&who.key) {
+            return Verdict::Allowed;
+        }
+        if self.refused.iter().any(|r| r.key == who.key && !r.lifted) {
+            return Verdict::Refused;
+        }
+        if let Some(asking) = self.pending.iter().find(|a| a.key == who.key) {
+            return Verdict::Waiting { asked: false, code: asking.code.clone() };
+        }
+        if self.pending.len() >= MAX_PENDING {
+            return Verdict::Busy;
+        }
+        self.pending.push(Asking {
+            key: who.key.clone(),
+            name: who.name.clone(),
+            fqdn: who.fqdn.clone(),
+            ip: who.ip.clone(),
+            code: code.into(),
+            since_ms: now_ms,
+        });
+        Verdict::Waiting { asked: true, code: code.into() }
+    }
+
+    /// A turned-down device asks again ("Ask again" on its page).
+    pub fn ask_again(&mut self, settings: &PhoneSettings, who: &Who, code: &str, now_ms: u64) -> Verdict {
+        if let Some(r) = self.refused.iter_mut().find(|r| r.key == who.key && !r.lifted) {
+            if !r.may_ask_again(now_ms) {
                 return Verdict::Refused;
             }
-            self.refused.remove(i);
+            r.lifted = true;
         }
-        self.check(settings, key, name, now_ms)
+        self.check(settings, who, code, now_ms)
     }
 
     /// The user's answer about a waiting device. Returns its name if it was
@@ -146,16 +194,21 @@ impl Gate {
         let i = self.pending.iter().position(|a| a.key == key)?;
         let asking = self.pending.remove(i);
         if !allow {
-            self.refused.retain(|(k, _)| k != key);
-            self.refused.push((key.into(), now_ms));
+            match self.refused.iter_mut().find(|r| r.key == key) {
+                Some(r) => {
+                    r.times += 1;
+                    r.at_ms = now_ms;
+                    r.lifted = false;
+                }
+                None => self.refused.push(Refusal { key: key.into(), at_ms: now_ms, times: 1, lifted: false }),
+            }
         }
         Some(asking.name)
     }
 
-    /// Forgets every request and refusal (the board stopped being served).
+    /// Forgets the waiting requests (the board stopped being served).
     pub fn clear(&mut self) {
         self.pending.clear();
-        self.refused.clear();
     }
 
     /// Lets requests nobody answered in time go.
@@ -168,59 +221,88 @@ impl Gate {
 mod tests {
     use super::*;
 
+    fn who(key: &str, name: &str) -> Who {
+        Who { key: key.into(), name: name.into(), fqdn: format!("{name}.netbird.cloud"), ip: "100.90.1.2".into() }
+    }
+
+    fn waiting(asked: bool, code: &str) -> Verdict {
+        Verdict::Waiting { asked, code: code.into() }
+    }
+
     const PIXEL: &str = "cGl4ZWw=";
     const LAPTOP: &str = "bGFwdG9w";
 
     #[test]
-    fn a_new_device_is_asked_about_once() {
+    fn a_new_device_is_asked_about_once_with_one_code() {
         let (mut gate, settings) = (Gate::new(), PhoneSettings::default());
-        assert_eq!(gate.check(&settings, PIXEL, "pixel", 0), Verdict::Waiting { asked: true });
-        assert_eq!(gate.check(&settings, PIXEL, "pixel", 1_000), Verdict::Waiting { asked: false });
+        assert_eq!(gate.check(&settings, &who(PIXEL, "pixel"), "1234", 0), waiting(true, "1234"));
+        assert_eq!(gate.check(&settings, &who(PIXEL, "pixel"), "9999", 1_000), waiting(false, "1234"));
         assert_eq!(gate.pending().len(), 1);
+        assert_eq!(gate.pending()[0].fqdn, "pixel.netbird.cloud");
     }
 
     #[test]
     fn allowing_lets_the_device_in_by_its_key() {
         let (mut gate, mut settings) = (Gate::new(), PhoneSettings::default());
-        gate.check(&settings, PIXEL, "pixel", 0);
+        gate.check(&settings, &who(PIXEL, "pixel"), "1234", 0);
         assert_eq!(gate.answer(PIXEL, true, 5).as_deref(), Some("pixel"));
         settings.allow(PIXEL, "pixel", 5);
-        assert_eq!(gate.check(&settings, PIXEL, "renamed", 10), Verdict::Allowed);
+        assert_eq!(gate.check(&settings, &who(PIXEL, "renamed"), "0000", 10), Verdict::Allowed);
+        assert!(Gate::allowed(&settings, PIXEL));
         assert_eq!(
-            gate.check(&settings, LAPTOP, "pixel", 10),
-            Verdict::Waiting { asked: true },
+            gate.check(&settings, &who(LAPTOP, "pixel"), "5678", 10),
+            waiting(true, "5678"),
             "a name is not an identity"
         );
     }
 
     #[test]
-    fn a_refused_device_stays_out_and_may_ask_again_only_later() {
+    fn each_refusal_makes_the_next_ask_wait_longer() {
         let (mut gate, settings) = (Gate::new(), PhoneSettings::default());
-        gate.check(&settings, PIXEL, "pixel", 0);
-        gate.answer(PIXEL, false, 1_000);
-        assert_eq!(gate.check(&settings, PIXEL, "pixel", 2_000), Verdict::Refused);
-        assert_eq!(gate.ask_again(&settings, PIXEL, "pixel", 2_000), Verdict::Refused);
+        let pixel = who(PIXEL, "pixel");
+        gate.check(&settings, &pixel, "1", 0);
+        gate.answer(PIXEL, false, 0);
+        assert_eq!(gate.check(&settings, &pixel, "2", 1_000), Verdict::Refused);
+        assert_eq!(gate.ask_again(&settings, &pixel, "2", 1_000), Verdict::Refused);
+        assert_eq!(gate.ask_again(&settings, &pixel, "3", ASK_AGAIN_AFTER_MS), waiting(true, "3"));
+
+        let t = ASK_AGAIN_AFTER_MS;
+        gate.answer(PIXEL, false, t);
         assert_eq!(
-            gate.ask_again(&settings, PIXEL, "pixel", 1_000 + ASK_AGAIN_AFTER_MS),
-            Verdict::Waiting { asked: true }
+            gate.ask_again(&settings, &pixel, "4", t + ASK_AGAIN_AFTER_MS),
+            Verdict::Refused,
+            "twice as long now"
         );
+        assert_eq!(gate.ask_again(&settings, &pixel, "5", t + 2 * ASK_AGAIN_AFTER_MS), waiting(true, "5"));
+    }
+
+    #[test]
+    fn refusals_outlive_the_server_stopping() {
+        let (mut gate, settings) = (Gate::new(), PhoneSettings::default());
+        gate.check(&settings, &who(PIXEL, "pixel"), "1", 0);
+        gate.answer(PIXEL, false, 0);
+        gate.clear();
+        assert_eq!(gate.check(&settings, &who(PIXEL, "pixel"), "2", 1), Verdict::Refused);
     }
 
     #[test]
     fn only_a_few_devices_may_wait_at_once() {
         let (mut gate, settings) = (Gate::new(), PhoneSettings::default());
         for n in 0..MAX_PENDING {
-            assert_eq!(gate.check(&settings, &format!("k{n}"), "x", 0), Verdict::Waiting { asked: true });
+            assert!(matches!(
+                gate.check(&settings, &who(&format!("k{n}"), "x"), "1", 0),
+                Verdict::Waiting { asked: true, .. }
+            ));
         }
-        assert_eq!(gate.check(&settings, "one-more", "x", 0), Verdict::Refused);
+        assert_eq!(gate.check(&settings, &who("one-more", "x"), "1", 0), Verdict::Busy);
     }
 
     #[test]
-    fn an_unanswered_request_lapses() {
+    fn an_unanswered_request_lapses_and_can_no_longer_be_allowed() {
         let (mut gate, settings) = (Gate::new(), PhoneSettings::default());
-        gate.check(&settings, PIXEL, "pixel", 0);
-        assert_eq!(gate.check(&settings, LAPTOP, "laptop", PENDING_FOR_MS), Verdict::Waiting { asked: true });
-        assert_eq!(gate.pending().len(), 1, "pixel's request lapsed");
+        gate.check(&settings, &who(PIXEL, "pixel"), "1", 0);
+        assert_eq!(gate.answer(PIXEL, true, PENDING_FOR_MS), None);
+        assert!(gate.pending().is_empty());
     }
 
     #[test]
@@ -228,14 +310,8 @@ mod tests {
         let (mut gate, mut settings) = (Gate::new(), PhoneSettings::default());
         settings.allow(PIXEL, "pixel", 0);
         assert!(settings.forget(PIXEL));
-        assert_eq!(gate.check(&settings, PIXEL, "pixel", 1), Verdict::Waiting { asked: true });
-    }
-
-    #[test]
-    fn a_lapsed_request_can_no_longer_be_allowed() {
-        let (mut gate, settings) = (Gate::new(), PhoneSettings::default());
-        gate.check(&settings, PIXEL, "pixel", 0);
-        assert_eq!(gate.answer(PIXEL, true, PENDING_FOR_MS), None);
+        assert!(!Gate::allowed(&settings, PIXEL));
+        assert_eq!(gate.check(&settings, &who(PIXEL, "pixel"), "1", 1), waiting(true, "1"));
     }
 
     #[test]

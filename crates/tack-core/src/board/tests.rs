@@ -7,8 +7,14 @@ use crate::recycle::testing::NotingBin;
 const NOW: u64 = 1_800_000_000_000;
 const MIN: u64 = 60_000;
 
+/// A picture of this size; all pictures of one size here have the same
+/// pixels (see [`with_hash`] for others).
 fn thumb(width: u32, height: u32) -> Thumb {
-    Thumb { data_url: format!("data:image/jpeg;base64,{width}x{height}"), width, height }
+    with_hash(width, height, Some(u64::from(width) << 32 | u64::from(height)))
+}
+
+fn with_hash(width: u32, height: u32, hash: Option<u64>) -> Thumb {
+    Thumb { data_url: format!("data:image/jpeg;base64,{width}x{height}"), width, height, hash }
 }
 
 fn path(name: &str) -> PathBuf {
@@ -233,6 +239,26 @@ fn twins_must_be_recent_and_the_same_size() {
     let again = Arrival::Restored { pinned_at: NOW, kept_at: None };
     let restored = board.pin(path("restored"), thumb(1920, 1080), Origin::Folder, again, NOW);
     assert!(matches!(restored, PinOutcome::New { .. }));
+}
+
+#[test]
+fn the_same_size_is_not_enough_to_be_twins() {
+    let mut board = Board::new();
+    let at = Instant::now();
+    board.pin(path("capture"), with_hash(1920, 1080, Some(1)), Origin::Capture, Arrival::Live(at), NOW);
+    // Another picture of the same size moments later: both stay.
+    let soon = Arrival::Live(at + Duration::from_secs(1));
+    let other = board.pin(path("file"), with_hash(1920, 1080, Some(2)), Origin::Folder, soon, NOW);
+    assert!(matches!(other, PinOutcome::New { .. }));
+    // Pixels nobody hashed cannot be shown to be the same, either way.
+    let unknown = board.pin(path("unknown"), with_hash(1920, 1080, None), Origin::Folder, soon, NOW);
+    assert!(matches!(unknown, PinOutcome::New { .. }));
+    let mut later = Board::new();
+    later.pin(path("file"), with_hash(800, 600, None), Origin::Folder, Arrival::Live(at), NOW);
+    let capture = later.pin(path("capture"), with_hash(800, 600, None), Origin::Capture, soon, NOW);
+    assert!(matches!(capture, PinOutcome::New { .. }));
+    assert_eq!(board.prints().len(), 3);
+    assert_eq!(later.prints().len(), 2);
 }
 
 #[test]

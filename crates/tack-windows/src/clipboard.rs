@@ -12,7 +12,7 @@ use image::{DynamicImage, RgbaImage};
 use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{GlobalFree, HANDLE, HGLOBAL, HWND};
 use windows::Win32::System::DataExchange::{
-    CloseClipboard, EmptyClipboard, EnumClipboardFormats, GetClipboardData, GetClipboardFormatNameW,
+    CloseClipboard, EmptyClipboard, EnumClipboardFormats, GetClipboardData, GetClipboardFormatNameW, GetClipboardOwner,
     GetClipboardSequenceNumber, IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
 };
 use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE};
@@ -30,17 +30,24 @@ pub(crate) fn sequence() -> u32 {
     unsafe { GetClipboardSequenceNumber() }
 }
 
+/// The window that last wrote to the clipboard; `None` when that app wrote
+/// without naming a window.
+pub(crate) fn owner() -> Option<HWND> {
+    unsafe { GetClipboardOwner() }.ok().filter(|h| !h.is_invalid())
+}
+
 /// The clipboard, open; closed again when dropped.
 struct Open;
 
 impl Open {
-    /// Opens the clipboard for `owner`, retrying while another app has it.
-    fn new(owner: HWND) -> Option<Open> {
+    /// Opens the clipboard for `owner` (`None`: only to read), retrying
+    /// while another app has it.
+    fn new(owner: Option<HWND>) -> Option<Open> {
         for attempt in 0..OPEN_TRIES {
             if attempt > 0 {
                 std::thread::sleep(OPEN_GAP);
             }
-            if unsafe { OpenClipboard(Some(owner)) }.is_ok() {
+            if unsafe { OpenClipboard(owner) }.is_ok() {
                 return Some(Open);
             }
         }
@@ -122,13 +129,19 @@ fn restorable(format: u32) -> bool {
 /// comes back as its text, RTF, HTML and picture, without the live object).
 pub(crate) struct Snapshot {
     formats: Vec<(u32, Vec<u8>)>,
+    /// Formats that should have been kept but whose data could not be read
+    /// (an owner that failed to draw it on demand): the restore is partial.
+    unread: usize,
+    /// Which of [`MARKERS`] were present, data or not.
+    marks: [bool; 4],
 }
 
 /// Takes a snapshot of the clipboard, or `None` if it could not be opened
 /// or holds more than can sensibly be kept.
 pub(crate) fn snapshot(owner: HWND) -> Option<Snapshot> {
-    let _open = Open::new(owner)?;
+    let _open = Open::new(Some(owner))?;
     let mut formats = Vec::new();
+    let mut unread = 0;
     let mut total = 0usize;
     let mut format = 0;
     loop {
@@ -139,7 +152,13 @@ pub(crate) fn snapshot(owner: HWND) -> Option<Snapshot> {
         if !restorable(format) {
             continue;
         }
-        let Some(bytes) = bytes_of(format) else { continue };
+        let Some(bytes) = bytes_of(format) else {
+            // A marker's presence is kept apart from its data.
+            if !is_marker(format) {
+                unread += 1;
+            }
+            continue;
+        };
         total += bytes.len();
         if total > SNAPSHOT_LIMIT {
             eprintln!("tack: the clipboard holds over {} MB; it will not be restored", SNAPSHOT_LIMIT >> 20);
@@ -147,36 +166,90 @@ pub(crate) fn snapshot(owner: HWND) -> Option<Snapshot> {
         }
         formats.push((format, bytes));
     }
-    Some(Snapshot { formats })
+    Some(Snapshot { formats, unread, marks: marks() })
 }
 
-/// Keep a restored copy out of clipboard history and the cloud clipboard.
-const MARKERS: [PCWSTR; 2] = [w!("CanIncludeInClipboardHistory"), w!("CanUploadToCloudClipboard")];
+/// The privacy markers apps put beside a copy. Either of the first two
+/// means "do not look"; the last two, set to 0, keep it out of clipboard
+/// history and the cloud clipboard.
+const MARKERS: [PCWSTR; 4] = [
+    w!("ExcludeClipboardContentFromMonitorProcessing"),
+    w!("Clipboard Viewer Ignore"),
+    w!("CanIncludeInClipboardHistory"),
+    w!("CanUploadToCloudClipboard"),
+];
 
-/// Puts a snapshot back on the clipboard. The restored copy is kept out of
-/// Windows' clipboard history and cloud clipboard, which already hold the
-/// original, unless the snapshot carries its own markers for that.
-pub(crate) fn restore(owner: HWND, snapshot: &Snapshot) -> Result<(), String> {
-    let _open = Open::new(owner).ok_or("the clipboard is busy")?;
+/// Which of [`MARKERS`] are on the clipboard, while it is open. Presence is
+/// what counts, as an app may set a marker with no data; the last two count
+/// unless they say 1 (allowed).
+fn marks() -> [bool; 4] {
+    let mut marks = [false; 4];
+    for (i, &name) in MARKERS.iter().enumerate() {
+        let format = registered(name);
+        marks[i] = available(format) && (i < 2 || bytes_of(format).is_none_or(|b| b.get(..4) != Some(&[1, 0, 0, 0])));
+    }
+    marks
+}
+
+fn is_marker(format: u32) -> bool {
+    MARKERS.iter().any(|&name| registered(name) == format)
+}
+
+/// How a restore went, when nothing failed.
+pub(crate) enum Restored {
+    /// The snapshot is back on the clipboard.
+    Done,
+    /// Another app wrote to the clipboard after `since`: theirs stays.
+    Superseded,
+}
+
+/// Puts a snapshot back on the clipboard, unless it changed after `since`
+/// (a [`sequence`] number). The restored copy is kept out of Windows'
+/// clipboard history and cloud clipboard, which already hold the original,
+/// unless the snapshot carries its own markers for that. A copy that was
+/// marked private goes back with every marker, whether or not their data
+/// could be read, so it stays private.
+pub(crate) fn restore(owner: HWND, snapshot: &Snapshot, since: u32) -> Result<Restored, String> {
+    let _open = Open::new(Some(owner)).ok_or("the clipboard is busy")?;
+    // Checked while it is open, so nobody can write in between.
+    if sequence() != since {
+        return Ok(Restored::Superseded);
+    }
     unsafe { EmptyClipboard() }.map_err(|e| e.to_string())?;
-    let mut failed = 0;
+    let private = snapshot.marks.contains(&true);
+    let mut failed = snapshot.unread;
+    let mut total = snapshot.unread;
     for (format, bytes) in &snapshot.formats {
+        if private && is_marker(*format) {
+            continue;
+        }
+        total += 1;
         if set_bytes(*format, bytes).is_err() {
             failed += 1;
         }
     }
-    let has = |format: u32| snapshot.formats.iter().any(|(f, _)| *f == format);
-    let markers = if snapshot.formats.is_empty() { [].as_slice() } else { MARKERS.as_slice() };
-    for &name in markers {
-        let format = registered(name);
-        if format != 0 && !has(format) {
-            let _ = set_bytes(format, &0u32.to_le_bytes());
+    let zero = 0u32.to_le_bytes();
+    if private {
+        for &name in &MARKERS {
+            let format = registered(name);
+            total += 1;
+            if format == 0 || set_bytes(format, &zero).is_err() {
+                failed += 1;
+            }
+        }
+    } else if !snapshot.formats.is_empty() {
+        let has = |format: u32| snapshot.formats.iter().any(|(f, _)| *f == format);
+        for &name in &MARKERS[2..] {
+            let format = registered(name);
+            if format != 0 && !has(format) {
+                let _ = set_bytes(format, &zero);
+            }
         }
     }
     if failed > 0 {
-        return Err(format!("{failed} of {} formats could not be set", snapshot.formats.len()));
+        return Err(format!("{failed} of {total} formats could not be put back"));
     }
-    Ok(())
+    Ok(Restored::Done)
 }
 
 /// Sets one memory format, while the clipboard is open.
@@ -214,15 +287,17 @@ pub(crate) enum Content {
 /// Whether whoever copied the current contents marked them private, while
 /// the clipboard is open: a password manager does, so they stay out of
 /// clipboard history and clipboard tools. Tack honours all three
-/// conventions.
+/// conventions (kept out of the cloud alone is not private).
 fn is_private() -> bool {
-    if available(registered(w!("ExcludeClipboardContentFromMonitorProcessing")))
-        || available(registered(w!("Clipboard Viewer Ignore")))
-    {
-        return true;
-    }
-    let history = registered(w!("CanIncludeInClipboardHistory"));
-    available(history) && bytes_of(history).is_some_and(|b| b.len() >= 4 && b[..4] == [0, 0, 0, 0])
+    let [exclude, ignore, history, _cloud] = marks();
+    exclude || ignore || history
+}
+
+/// [`is_private`] for the clipboard as it is now; `None` while another app
+/// holds it open.
+pub(crate) fn private_now() -> Option<bool> {
+    let _open = Open::new(None)?;
+    Some(is_private())
 }
 
 fn available(format: u32) -> bool {
@@ -244,7 +319,7 @@ pub(crate) fn has_picture() -> bool {
 /// copied picture that also offers a placeholder character is a picture.
 pub(crate) fn read(owner: HWND) -> Content {
     {
-        let Some(_open) = Open::new(owner) else { return Content::Empty };
+        let Some(_open) = Open::new(Some(owner)) else { return Content::Empty };
         if is_private() {
             return Content::Private;
         }
@@ -335,5 +410,21 @@ mod tests {
         assert!(restorable(private), "a password manager's marker comes back with its content");
         assert!(!restorable(ole));
         assert!(!restorable(embed));
+    }
+
+    #[test]
+    fn every_privacy_marker_is_known_and_kept() {
+        for name in [
+            "ExcludeClipboardContentFromMonitorProcessing",
+            "Clipboard Viewer Ignore",
+            "CanIncludeInClipboardHistory",
+            "CanUploadToCloudClipboard",
+        ] {
+            let wide: Vec<u16> = name.encode_utf16().chain([0]).collect();
+            let format = registered(PCWSTR(wide.as_ptr()));
+            assert!(is_marker(format), "{name}");
+            assert!(restorable(format), "{name}");
+        }
+        assert!(!is_marker(registered(w!("HTML Format"))));
     }
 }

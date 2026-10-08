@@ -32,6 +32,7 @@ fn print(dir: &Path, id: &str, name: &str, origin: Origin, pinned_at: u64, kept_
         thumb: String::new(),
         width: 1,
         height: 1,
+        hash: None,
         pinned_at,
         kept: kept_at.is_some(),
         kept_at,
@@ -299,11 +300,12 @@ fn an_unusable_board_json_is_backed_up_before_any_save() {
 /// lets the sweep run, and then only for old, unreferenced captures.
 #[test]
 fn only_an_understood_board_json_lets_the_sweep_run() {
-    let later = SystemTime::now() + Duration::from_secs(60 * 60);
-    let cases: [(&str, Option<String>); 4] = [
+    let later = capture::sweep_cutoff(SystemTime::now() + Duration::from_secs(9 * 24 * 60 * 60), None);
+    let cases: [(&str, Option<String>); 5] = [
         ("missing", None),
         ("corrupt", Some("{ \"prints\": [".into())),
         ("newer", Some(r#"{ "version": 7, "prints": [] }"#.into())),
+        ("no prints", Some(format!(r#"{{ "version": {VERSION}, "sound": false }}"#))),
         ("understood", Some(format!(r#"{{ "version": {VERSION}, "prints": [] }}"#))),
     ];
     for (name, contents) in cases {
@@ -332,4 +334,108 @@ fn only_an_understood_board_json_lets_the_sweep_run() {
             assert!(taken.is_empty(), "{name}: nothing is swept");
         }
     }
+}
+
+#[test]
+fn a_board_json_without_a_print_list_is_not_trusted() {
+    for json in [&b"{}"[..], br#"{ "version": 3, "sound": false }"#, br#"{ "captures": ["C:\\a.png"] }"#] {
+        let (saved_board, loaded) = parse(json, NOW, no_files);
+        assert!(saved_board.prints.is_empty());
+        assert!(matches!(loaded, Loaded::Unreadable { .. }), "{}", String::from_utf8_lossy(json));
+        assert!(!loaded.may_sweep());
+    }
+    // An empty list is a list: this build's own file with nothing pinned.
+    for json in [&br#"{ "version": 3, "prints": [] }"#[..], br#"{ "paths": [] }"#] {
+        let (_, loaded) = parse(json, NOW, no_files);
+        assert_eq!(loaded, Loaded::Ok, "{}", String::from_utf8_lossy(json));
+    }
+}
+
+#[test]
+fn every_path_in_board_json_and_its_backups_is_mentioned() {
+    let dir = scratch("mentioned");
+    let file = dir.join("board.json");
+    std::fs::write(&file, br#"{ "version": 3, "prints": [ { "path": "C:\\Cap\\now.png" } ] }"#).unwrap();
+    std::fs::write(beside(&file, ".bad-1"), br#"{ "prints": [ { "path": "C:\\Cap\\kept \"1\".png" } ] }"#).unwrap();
+    // Cut off mid-string: what is there still counts.
+    std::fs::write(beside(&file, ".BAD-2"), br#"{ "prints": [ { "path": "C:\\Cap\\cut"#).unwrap();
+    // Not a backup of board.json.
+    std::fs::write(dir.join("other.json"), br#"{ "path": "C:\\Cap\\other.png" }"#).unwrap();
+    let mentioned = mentioned(&file).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    for path in [r"C:\Cap\now.png", r#"C:\Cap\kept "1".png"#, r"C:\Cap\cut"] {
+        assert!(mentioned.contains(&PathBuf::from(path)), "{path} in {mentioned:?}");
+    }
+    assert!(!mentioned.contains(&PathBuf::from(r"C:\Cap\other.png")));
+}
+
+#[test]
+fn nothing_is_mentioned_without_a_folder_and_backups_can_stop_a_sweep() {
+    let dir = scratch("mentioned-sweep");
+    assert_eq!(mentioned(&dir.join("nowhere").join("board.json")), Some(Vec::new()));
+    let captures = dir.join("Captures");
+    std::fs::create_dir_all(&captures).unwrap();
+    let kept = captures.join("Screenshot 2026-01-01 101010.png");
+    std::fs::write(&kept, b"x").unwrap();
+    // Kept in a board.json that was backed up, then replaced by one without it.
+    let file = dir.join("board.json");
+    std::fs::write(beside(&file, ".bad-5"), format!(r#"{{ "prints": [ {{ "path": {:?} }} ] }}"#, kept)).unwrap();
+    save(&file, &[], &Settings::default());
+    let (saved_board, loaded) = load(&file, NOW);
+    let mut keep: Vec<PathBuf> = saved_board.prints.iter().map(|p| p.path.clone()).collect();
+    keep.extend(mentioned(&file).unwrap());
+    let bin = NotingBin::default();
+    let later = capture::sweep_cutoff(SystemTime::now() + Duration::from_secs(9 * 24 * 60 * 60), None);
+    capture::sweep(&captures, &keep, later, &bin);
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(loaded, Loaded::Ok);
+    assert!(bin.taken.borrow().is_empty(), "a path in any backup is never swept");
+}
+
+#[test]
+fn a_save_during_the_restore_keeps_the_prints_not_restored_yet() {
+    let dir = scratch("pending");
+    let file = dir.join("board.json");
+    let on_board = [print(&dir, "1", "a.png", Origin::Folder, NOW - 10, None)];
+    let pending = [
+        // Restored already: listed once.
+        SavedPrint {
+            path: dir.join("A.PNG"),
+            kind: Kind::Image,
+            origin: Origin::Folder,
+            pinned_at: NOW - 10,
+            kept_at: None,
+        },
+        SavedPrint {
+            path: dir.join("b.png"),
+            kind: Kind::Image,
+            origin: Origin::Capture,
+            pinned_at: NOW - 20,
+            kept_at: Some(NOW - 5),
+        },
+        SavedPrint {
+            path: dir.join("c.txt"),
+            kind: Kind::Note,
+            origin: Origin::Capture,
+            pinned_at: NOW - 30,
+            kept_at: None,
+        },
+    ];
+    write(&file, &Snapshot::new(&on_board, &pending, &Settings::default())).unwrap();
+    let (saved_board, loaded) = load(&file, NOW);
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(loaded, Loaded::Ok);
+    let mut expected = vec![
+        SavedPrint {
+            path: dir.join("a.png"),
+            kind: Kind::Image,
+            origin: Origin::Folder,
+            pinned_at: NOW - 10,
+            kept_at: None,
+        },
+        pending[1].clone(),
+        pending[2].clone(),
+    ];
+    expected.sort_by_key(|p| history::row_key(p.kept_at, p.pinned_at));
+    assert_eq!(saved_board.prints, expected);
 }

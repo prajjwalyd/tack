@@ -31,7 +31,7 @@ pub(super) fn own_working_set() {
 /// Trims the WebView2 processes' working sets, now and once more after
 /// [`SECOND_TRIM`] unless the board is revealed meanwhile: the GPU and
 /// browser processes keep tidying up for a few seconds after the suspend and
-/// touch some pages again. See docs/performance.md, "Paging out at once".
+/// touch some pages again.
 pub(super) fn web_view_processes(webview: &ICoreWebView2) {
     // Debug builds: TACK_DEBUG_TRIM=off leaves it to the runtime, to compare.
     if cfg!(debug_assertions) && std::env::var("TACK_DEBUG_TRIM").as_deref() == Ok("off") {

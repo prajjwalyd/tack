@@ -27,11 +27,9 @@ The debug build keeps a console. Tack logs to stderr with a `tack:` prefix,
 including one line per clipboard change, which is how the Snipping Tool
 capture flow is debugged.
 
-Where things live, and how a screenshot or a click travels through the app,
-is in [architecture.md](architecture.md). The UI and the backend
-talk only through the commands and events in [ipc.md](ipc.md): if
-you change one, change `crates/tack-app/src/ipc/`, `ui/scripts/ipc.js`,
-`ui/dev/fake-ipc.js` and `docs/ipc.md` together.
+The UI and the backend talk only through Tauri commands and events: if
+you change one, change `crates/tack-app/src/ipc/`, `ui/scripts/ipc.js` and
+`ui/dev/fake-ipc.js` together.
 
 ## The UI preview
 
@@ -59,7 +57,7 @@ whole `frontendDist` folder) but nothing in the app links to it.
 ## README images and the social preview
 
 The images in `docs/assets/` are rendered from the real board in a browser,
-never drawn by hand (see "README images" in [design.md](design.md)):
+never drawn by hand:
 `ui/dev/hero.html` gives the hero, hover, row and notes images and, with
 `?card`, the social preview; `ui/dev/demo.html` is the animated loop at the
 top of the README. If you change how the board looks, render them again.

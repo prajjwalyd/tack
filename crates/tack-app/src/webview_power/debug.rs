@@ -1,6 +1,6 @@
 //! Debug builds only: lets a script reveal and tuck the board without the
 //! keyboard or the pointer, and times how long a woken web view takes to
-//! draw. See docs/performance.md.
+//! draw.
 
 use std::path::PathBuf;
 use std::sync::Mutex;

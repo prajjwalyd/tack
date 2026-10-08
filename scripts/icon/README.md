@@ -1,7 +1,6 @@
 # Icon sources
 
-Everything Tack ships as an icon is generated from this folder. The design and
-its proportions are in [docs/design.md](../../docs/design.md), "Icon".
+Everything Tack ships as an icon is generated from this folder.
 
 | File | What it is |
 |---|---|
@@ -30,4 +29,4 @@ sizes, and writes the tray PNGs that `crates/tack-app/src/tray.rs` loads and `do
 
 To check the result, serve the repository root (`python -m http.server 5191`) and open
 `/ui/dev/icon-sheet.html`: every size at 1x and zoomed, on light and dark taskbars, in a
-Start-like grid and in the tray at each scale (`docs/screenshots/icon-sizes.png` is that page).
+Start-like grid and in the tray at each scale.

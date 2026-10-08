@@ -1,6 +1,6 @@
 //! Debug builds only: a stress test for "a new capture brings the board
 //! down", run from inside the app so it never needs the keyboard or the
-//! pointer. Started through the debug control (docs/performance.md):
+//! pointer. Started through the debug control:
 //!
 //! - `stress` (may hold a cycle count, default 30): tuck, wait one of
 //!   [`DELAYS_MS`], pin a generated capture, then check the page's reports:

@@ -1,4 +1,4 @@
-/* Note paper: one set from notes/ (docs/design.md, section 8): card.css
+/* Note paper: one set from notes/: card.css
    (white index card, shipped), classic.css or sticky.css. Change this line to switch. */
 @import url("notes/card.css");
 

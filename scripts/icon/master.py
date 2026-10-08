@@ -5,7 +5,7 @@ ui/styles/tokens.css) seen a little from above, and a brass push-pin driven in
 diagonally (needle into the felt, cap up and to the right). One key light from
 the top left: the frame's highlight and the pin's shadow agree.
 
-Proportions (docs/design.md, "Icon"): the board is 70% of the square; the pin
+Proportions: the board is 70% of the square; the pin
 is 53% of the board's diagonal and its cap 31% of the board's width; the needle
 enters at (0.61, 0.39) of the felt, so the cap overhangs the tile's top-right
 corner. The pin has the shipped character: a flat-topped cap with a bevelled

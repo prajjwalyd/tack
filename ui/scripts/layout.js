@@ -20,7 +20,7 @@ const BORDER = 4;                 // --print-border
 export const PIN_Y = 7;           // pin centre, from a print's top (--pin-y in print.css)
 
 export const PRINT_TOP = 13;      // prints hang from this line, below the screen edge
-const PHOTO_MAX_W = 160;          // long side at most 160 px (design.md)
+const PHOTO_MAX_W = 160;          // long side at most 160 px
 const PHOTO_MAX_H = 100;          // leaves room for the age caption under the tallest print
 const PHOTO_MIN = 40;
 // A paper note is one fixed size; its height leaves room for a link's three-line caption.

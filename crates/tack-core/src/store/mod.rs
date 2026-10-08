@@ -5,8 +5,14 @@
 //!
 //! The file carries a schema [`VERSION`]. Older layouts (version 2, without
 //! notes, and the unversioned `prints` and `paths`/`captures` layouts) still
-//! load. A file from a newer Tack is read as far as it goes but never trusted
-//! for cleanup, and is backed up before this build writes over it.
+//! load. A file from a newer Tack, or one that lists no prints at all, is
+//! read as far as it goes but never trusted for cleanup, and is backed up
+//! before this build writes over it.
+//!
+//! Saves are snapshots ([`Snapshot`]) taken under the app's lock and written
+//! by one [`Saver`] thread outside it.
+
+mod saver;
 
 use std::collections::HashSet;
 use std::ffi::OsString;
@@ -19,6 +25,8 @@ use crate::files::path_key;
 use crate::history;
 use crate::print::{Kind, Origin, Print};
 use crate::settings::Settings;
+
+pub use self::saver::Saver;
 
 /// The board.json schema this build writes and fully understands. 3: notes.
 const VERSION: u32 = 3;
@@ -33,7 +41,7 @@ struct Stored {
     prints: Option<Vec<StoredPrint>>,
     /// The older layout: the pinned paths, oldest first. Read, never written.
     #[serde(skip_serializing)]
-    paths: Vec<PathBuf>,
+    paths: Option<Vec<PathBuf>>,
     /// The older layout: which of `paths` are captures.
     #[serde(skip_serializing)]
     captures: Vec<PathBuf>,
@@ -42,7 +50,7 @@ struct Stored {
 }
 
 /// One print in board.json.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 struct StoredPrint {
     path: PathBuf,
@@ -93,9 +101,10 @@ pub enum Loaded {
     /// There is no board.json. Any captures lying around may belong to a
     /// board.json that was deleted, so they are left alone.
     Missing,
-    /// board.json exists but could not be read, did not parse, or comes from
-    /// a newer Tack. `backup` is where a copy of it was put, if one could be
-    /// made; without one, nothing may write over the original.
+    /// board.json exists but could not be read, did not parse, comes from a
+    /// newer Tack, or lists no prints at all (no `prints`, no older `paths`).
+    /// `backup` is where a copy of it was put, if one could be made; without
+    /// one, nothing may write over the original.
     Unreadable { reason: String, backup: Option<PathBuf> },
 }
 
@@ -197,9 +206,17 @@ fn parse(bytes: &[u8], now_ms: u64, modified: impl Fn(&Path) -> Option<u64>) -> 
             reason: format!("it was written by a newer Tack (schema {v}; this build knows up to {VERSION})"),
             backup: None,
         },
+        // Every Tack writes a print list, even an empty one. A file without
+        // one says nothing about which captures are pinned.
+        _ if stored.prints.is_none() && stored.paths.is_none() => {
+            Loaded::Unreadable { reason: "it lists no prints at all".into(), backup: None }
+        }
         _ => Loaded::Ok,
     };
-    let entries = stored.prints.unwrap_or_else(|| legacy_prints(stored.paths, &stored.captures));
+    let entries = match stored.prints {
+        Some(prints) => prints,
+        None => legacy_prints(stored.paths.unwrap_or_default(), &stored.captures),
+    };
     let mut prints: Vec<SavedPrint> = entries
         .into_iter()
         .filter_map(|p| {
@@ -243,31 +260,111 @@ fn legacy_prints(paths: Vec<PathBuf>, captures: &[PathBuf]) -> Vec<StoredPrint> 
         .collect()
 }
 
-/// Writes board.json, the prints in the order given (row order). Failures
-/// are logged, never fatal: the board still works, it just will not remember.
-pub fn save(file: &Path, prints: &[Print], settings: &Settings) {
+/// What one save writes: taken under the app's lock (cheap, a few paths),
+/// written outside it (serialised and flushed to disk).
+#[derive(Clone, Debug)]
+pub struct Snapshot {
+    prints: Vec<StoredPrint>,
+    settings: Settings,
+}
+
+impl Snapshot {
+    /// The board's `prints` in row order, then last session's prints still
+    /// `pending` restore (those not on the board yet), so a save made
+    /// before the restore is over never forgets them; and the settings.
+    pub fn new(prints: &[Print], pending: &[SavedPrint], settings: &Settings) -> Snapshot {
+        let on_board: HashSet<String> = prints.iter().map(|p| path_key(&p.path)).collect();
+        let board = prints.iter().map(|p| StoredPrint {
+            path: p.path.clone(),
+            kind: p.is_note().then(|| "note".to_string()),
+            capture: p.origin == Origin::Capture,
+            pinned_at: Some(p.pinned_at),
+            kept: p.kept,
+            kept_at: p.kept_at,
+        });
+        let waiting = pending.iter().filter(|p| !on_board.contains(&path_key(&p.path))).map(|p| StoredPrint {
+            path: p.path.clone(),
+            kind: (p.kind == Kind::Note).then(|| "note".to_string()),
+            capture: p.origin == Origin::Capture,
+            pinned_at: Some(p.pinned_at),
+            kept: p.kept_at.is_some(),
+            kept_at: p.kept_at,
+        });
+        Snapshot { prints: board.chain(waiting).collect(), settings: settings.clone() }
+    }
+}
+
+/// Writes board.json from a snapshot, replacing the file in one step.
+pub fn write(file: &Path, snapshot: &Snapshot) -> std::io::Result<()> {
     let stored = Stored {
         version: Some(VERSION),
-        prints: Some(
-            prints
-                .iter()
-                .map(|p| StoredPrint {
-                    path: p.path.clone(),
-                    kind: p.is_note().then(|| "note".to_string()),
-                    capture: p.origin == Origin::Capture,
-                    pinned_at: Some(p.pinned_at),
-                    kept: p.kept,
-                    kept_at: p.kept_at,
-                })
-                .collect(),
-        ),
-        settings: settings.clone(),
+        prints: Some(snapshot.prints.clone()),
+        settings: snapshot.settings.clone(),
         ..Stored::default()
     };
-    let written = serde_json::to_vec_pretty(&stored).map_err(std::io::Error::other).and_then(|b| replace(file, &b));
-    if let Err(e) = written {
+    let bytes = serde_json::to_vec_pretty(&stored).map_err(std::io::Error::other)?;
+    replace(file, &bytes)
+}
+
+/// Writes board.json, the prints in the order given (row order), at once.
+/// Failures are logged, never fatal: the board still works, it just will
+/// not remember.
+pub fn save(file: &Path, prints: &[Print], settings: &Settings) {
+    if let Err(e) = write(file, &Snapshot::new(prints, &[], settings)) {
         eprintln!("tack: cannot save {}: {e}", file.display());
     }
+}
+
+/// Every path that board.json and its `board.json.bad-*` backups mention,
+/// read as loosely as can be: each string in them, so even a backup that is
+/// not valid JSON any more still protects the files it names. `None` if
+/// one of them, or the folder, cannot be read: then nobody can say which
+/// files are spoken for.
+pub fn mentioned(file: &Path) -> Option<Vec<PathBuf>> {
+    let dir = file.parent()?;
+    let name = file.file_name()?.to_string_lossy().to_lowercase();
+    let backup_prefix = format!("{name}.bad-");
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Some(Vec::new()),
+        Err(_) => return None,
+    };
+    let mut paths = Vec::new();
+    for entry in entries {
+        let entry = entry.ok()?;
+        let entry_name = entry.file_name().to_string_lossy().to_lowercase();
+        if entry_name != name && !entry_name.starts_with(&backup_prefix) {
+            continue;
+        }
+        let bytes = std::fs::read(entry.path()).ok()?;
+        paths.extend(strings_in(&bytes).into_iter().map(PathBuf::from));
+    }
+    Some(paths)
+}
+
+/// Every JSON string in `bytes`, unescaped, including one cut off by the
+/// end of the file. Nothing else about the JSON need be valid.
+fn strings_in(bytes: &[u8]) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'"' {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        i += 1;
+        while i < bytes.len() && bytes[i] != b'"' {
+            i += if bytes[i] == b'\\' { 2 } else { 1 };
+        }
+        let end = (i + 1).min(bytes.len());
+        let literal = &bytes[start..end];
+        let text = serde_json::from_slice::<String>(literal)
+            .unwrap_or_else(|_| String::from_utf8_lossy(literal.get(1..).unwrap_or_default()).into_owned());
+        found.push(text);
+        i = end;
+    }
+    found
 }
 
 /// Replaces `file` with `bytes` all at once: they are written and flushed to

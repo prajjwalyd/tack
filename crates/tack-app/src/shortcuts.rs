@@ -54,11 +54,13 @@ fn on_press(app: &AppHandle, action: Action) {
     match action {
         Action::Toggle => reveal::toggle(app, RevealReason::Hotkey),
         Action::PinSelection => {
-            // Now, while Win and Alt are still down.
+            // Now, while Win and Alt are still down and before the user can
+            // switch to another window: the keys go to this one only.
+            let target = selection::Target::in_front();
             selection::mask_menu();
             let app = app.clone();
             let spawned = std::thread::Builder::new().name("tack-pin-selection".into()).spawn(move || {
-                let _line = notes::pin_selection(&app);
+                let _line = notes::pin_selection(&app, target);
                 trace!("{_line}");
             });
             if let Err(e) = spawned {

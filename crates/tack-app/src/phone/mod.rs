@@ -14,18 +14,22 @@
 //!    key ([`tack_core::phone`]): nothing of the board reaches a device the
 //!    user has not allowed, on this PC, by name.
 //! 4. The page refuses other websites and limits what a device may send
-//!    ([`server`]).
+//!    ([`routes`]); the server has hard limits of its own ([`http`]).
 
+mod http;
+mod routes;
 pub mod server;
 pub mod window;
 
+use std::collections::hash_map::RandomState;
+use std::hash::BuildHasher;
 use std::sync::{Condvar, Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use serde::Serialize;
 use tack_core::history;
 use tack_core::netbird::{Peer, Status};
-use tack_core::phone::{Asking, Device, Gate, Verdict};
+use tack_core::phone::{Asking, Device, Gate, PhoneSettings, Verdict, Who};
 use tack_windows::netbird;
 use tauri::AppHandle;
 
@@ -39,8 +43,10 @@ pub const PORT: u16 = 7717;
 pub const NETBIRD_INSTALL: &str = "https://docs.netbird.io/get-started/install";
 
 /// How often NetBird is looked at while the switch is on: it may have
-/// connected, disconnected or given this PC another address.
-const WATCH_EVERY: Duration = Duration::from_secs(20);
+/// connected, disconnected or given this PC another address. Less often once
+/// serving, since requests look up the peers they need themselves.
+const WATCH_WAITING: Duration = Duration::from_secs(15);
+const WATCH_SERVING: Duration = Duration::from_secs(60);
 
 /// NetBird on this PC, as the window describes it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -51,7 +57,7 @@ pub enum NetBirdState {
     Connected,
 }
 
-/// What the "Tack on your phone" window shows (docs/ipc.md).
+/// What the "Tack on your phone" window shows.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PhoneState {
@@ -78,6 +84,8 @@ static PHONE: Mutex<Phone> =
 
 /// Wakes the watcher early (the switch was flipped).
 static NUDGE: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
+/// One reconcile at a time, so two cannot both start a server.
+static RECONCILING: Mutex<()> = Mutex::new(());
 
 fn phone() -> MutexGuard<'static, Phone> {
     PHONE.lock().unwrap_or_else(|p| p.into_inner())
@@ -88,9 +96,10 @@ fn phone() -> MutexGuard<'static, Phone> {
 pub fn start(app: AppHandle) {
     let spawned = std::thread::Builder::new().name("tack-phone-watch".into()).spawn(move || loop {
         reconcile(&app);
+        let every = if phone().running.is_some() { WATCH_SERVING } else { WATCH_WAITING };
         let (lock, wake) = &NUDGE;
         let nudged = lock.lock().unwrap_or_else(|p| p.into_inner());
-        let (mut nudged, _) = wake.wait_timeout_while(nudged, WATCH_EVERY, |n| !*n).unwrap_or_else(|p| p.into_inner());
+        let (mut nudged, _) = wake.wait_timeout_while(nudged, every, |n| !*n).unwrap_or_else(|p| p.into_inner());
         *nudged = false;
     });
     if let Err(e) = spawned {
@@ -107,6 +116,7 @@ fn nudge() {
 /// Serves or stops serving to match the switch and NetBird. NetBird is only
 /// asked while the switch is on.
 fn reconcile(app: &AppHandle) {
+    let _one = RECONCILING.lock().unwrap_or_else(|p| p.into_inner());
     let on = lock(app).settings.phone.on;
     let status = if on { netbird::status() } else { None };
     let netbird_now = if on { netbird_state(status.as_ref()) } else { phone().netbird };
@@ -232,26 +242,46 @@ pub fn forget(app: &AppHandle, key: &str) -> PhoneState {
     state
 }
 
+/// Whether the device with `key` is allowed, without asking anybody.
+pub(crate) fn allowed(app: &AppHandle, key: &str) -> bool {
+    Gate::allowed(&lock(app).settings.phone, key)
+}
+
 /// Whether `peer` may use the board; a device asking for the first time
-/// brings the window up with the question.
+/// puts the question to the user.
 pub(crate) fn admit(app: &AppHandle, peer: &Peer) -> Verdict {
-    decide(app, |gate, settings, now| gate.check(settings, &peer.key, peer.short_name(), now))
+    decide(app, peer, |gate, settings, who, code, now| gate.check(settings, who, code, now))
 }
 
-/// A turned-down device asks again ("Ask again" on the phone).
+/// A turned-down device asks again ("Ask again" on its page).
 pub(crate) fn ask_again(app: &AppHandle, peer: &Peer) -> Verdict {
-    decide(app, |gate, settings, now| gate.ask_again(settings, &peer.key, peer.short_name(), now))
+    decide(app, peer, |gate, settings, who, code, now| gate.ask_again(settings, who, code, now))
 }
 
-fn decide(app: &AppHandle, rule: impl FnOnce(&mut Gate, &tack_core::phone::PhoneSettings, u64) -> Verdict) -> Verdict {
+type Rule = fn(&mut Gate, &PhoneSettings, &Who, &str, u64) -> Verdict;
+
+fn decide(app: &AppHandle, peer: &Peer, rule: Rule) -> Verdict {
     let settings = lock(app).settings.phone.clone();
-    let verdict = rule(&mut phone().gate, &settings, history::now_ms());
-    if verdict == (Verdict::Waiting { asked: true }) {
+    let who = Who {
+        key: peer.key.clone(),
+        name: peer.short_name().to_string(),
+        fqdn: peer.fqdn.clone(),
+        ip: peer.ip.to_string(),
+    };
+    let verdict = rule(&mut phone().gate, &settings, &who, &fresh_code(), history::now_ms());
+    if matches!(verdict, Verdict::Waiting { asked: true, .. }) {
         trace!("phone: a device asks to use the board");
         events::phone_state(app, &state_now(app));
-        window::open(app);
+        window::ask(app);
     }
     verdict
+}
+
+/// A four-digit code for one request, shown on the PC and on the device.
+/// Only has to differ between requests, not be secret: what it proves is
+/// that the prompt on the PC belongs to the phone in your hand.
+fn fresh_code() -> String {
+    format!("{:04}", RandomState::new().hash_one(SystemTime::now()) % 10_000)
 }
 
 /// A QR code for `address`, as SVG markup for the window.
