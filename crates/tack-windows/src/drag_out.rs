@@ -1,14 +1,8 @@
 //! Native file drag for a print, so it can be dropped wherever Windows
-//! accepts a file.
-//!
-//! The data object comes from the shell's own `IShellItem` for the file, so
-//! targets receive what an Explorer drag would give them. The drop target
-//! chooses copy or move: apps generally copy, and the print stays pinned;
-//! Explorer folders, the Desktop and the Recycle Bin move the file, and the
-//! app unpins a print whose file is gone.
-//!
-//! Explorer can complete a move after `SHDoDragDrop` has returned, which is
-//! why the caller re-checks the file over the following second or so.
+//! accepts a file. The data object is the shell's own for the file, so
+//! targets get what an Explorer drag would give them, and the target picks
+//! copy or move. Explorer can finish a move after `SHDoDragDrop` returns, so
+//! the caller re-checks the file for a moment afterwards.
 
 use std::path::Path;
 

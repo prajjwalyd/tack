@@ -1,16 +1,14 @@
 // What the pointer does to a print:
 //   click          copy_print (held back DBL_MS in case a second click follows)
-//   double click   open (note.js openItem: open_print, or a text note unfolds)
-//   press and hold onHold below (today edit_print; the print sinks as the hold builds)
+//   double click   open (note.js openItem)
+//   press and hold onHold below (edit_print; the print sinks as the hold builds)
 //   drag > 4 px    start_drag (a native file drag; the backend takes over)
 //   right click    context_menu
-//   × button       discard_print (unpin)
-//   Keep button    set_kept (toggle)
-// Hover lives here too. The window can turn click-through under the pointer
-// (board:pointer-left), and the row can scroll under a still pointer, so the
-// browser's own enter/leave events are not the whole story. So does the
-// hovered print's lean toward the pointer and the sheen that follows it
-// (print.css), updated at most once a frame and only while hovered.
+//   x / Keep       discard_print / set_kept
+// Hover lives here too: the window can turn click-through under the pointer
+// (board:pointer-left) and the row can scroll under a still pointer, so the
+// browser's enter/leave events are not enough. Also the hovered print's lean
+// toward the pointer and its sheen (print.css), once per frame while hovered.
 
 import * as ipc from "./ipc.js";
 import { openItem } from "./note.js";
@@ -22,14 +20,9 @@ const HOLD_MS = 520;     // keep in step with --dur-press in tokens.css
 const DBL_MS = 260;
 const DRAG_PX = 4;
 
-const LEAN_DEG = 0.9;     // the most a hovered print leans on its pin toward the pointer
+const LEAN_DEG = 0.9;     // most a hovered print leans on its pin toward the pointer
 
-// What a press-and-hold does. The owner is still deciding; to make hold keep
-// a print instead, change this one line to:
-//   const onHold = (print) => toggleKeep(print);
 const onHold = (print) => ipc.editPrint(print.id);
-
-// ---------------------------------------------------------------- hover
 
 /** Makes `print` the hovered one (or none). At most one print is hovered. */
 export function setHover(print, on = true) {
@@ -55,15 +48,12 @@ export function clearHover() {
   resetTilt(p);
 }
 
-// ---------------------------------------------------------------- lean and sheen
-
 let tiltPrint = null, tiltX = 0, tiltY = 0, tiltRaf = 0;
 
 /** The pointer moved over `print` (client px): lean it next frame. */
 function trackTilt(print, x, y) {
   if (state.reduced || state.hovered !== print || state.press || print.leaving) return;
-  // The slot's box is untouched by the lean (that is on the card), so it
-  // is a steady frame to measure against; read once per hover.
+  // The lean is on the card, so the slot's box is a steady frame; read once per hover.
   print.tiltRect ||= print.slot.getBoundingClientRect();
   tiltPrint = print; tiltX = x; tiltY = y;
   if (!tiltRaf) tiltRaf = requestAnimationFrame(applyTilt);
@@ -75,8 +65,7 @@ function applyTilt() {
   if (!print || !r || state.hovered !== print || state.press) return;
   const nx = clamp(((tiltX - r.left) / r.width) * 2 - 1);
   const ny = clamp(((tiltY - r.top) / r.height) * 2 - 1);
-  // Its free end swings toward the pointer, more the further down it is,
-  // the way a finger near the bottom of a pinned print would move it.
+  // The free end swings toward the pointer, more the lower it is.
   const lean = -nx * LEAN_DEG * (0.35 + 0.65 * (ny + 1) / 2);
   const style = print.el.style;
   style.setProperty("--lean", `${lean.toFixed(2)}deg`);
@@ -95,8 +84,7 @@ function resetTilt(print) {
 
 const clamp = (v) => Math.max(-1, Math.min(1, v));
 
-// The last pointer position over the board, to find what is under it once
-// a scroll settles (the pointer did not move, so no enter event comes).
+// Last pointer position, to find what is under it once a scroll settles (no enter event comes).
 let pointer = null;
 dom.board.addEventListener("pointermove", (e) => { pointer = { x: e.clientX, y: e.clientY }; }, { passive: true });
 dom.board.addEventListener("pointerleave", () => { pointer = null; });
@@ -119,8 +107,6 @@ export function onPointerLeft() {
   pointer = null;
   if (!state.press) clearHover();
 }
-
-// ---------------------------------------------------------------- presses
 
 /** Ends the press in progress, if any. */
 export function endPress(release = true) {
@@ -232,15 +218,14 @@ export function wireGestures(print) {
     e.preventDefault();
     e.stopPropagation();
     if (print.leaving) return;
-    // The menu key and Shift+F10 also fire this; keyboard.js has already
-    // asked for the menu, placed at the print rather than at the pointer.
+    // The menu key and Shift+F10 also fire this; keyboard.js already asked for the menu at the print.
     if (performance.now() - state.keyMenuAt < 600) return;
     if (state.press?.print === print) endPress();
     forgetPendingClick(id);
     ipc.contextMenu(id);
   });
 
-  // The two hover buttons act on click and keep the press machinery out.
+  // The hover buttons act on click and stay out of the press machinery.
   const button = (el, fn) => {
     el.addEventListener("pointerdown", (e) => { e.stopPropagation(); e.preventDefault(); });
     el.addEventListener("pointerup", (e) => e.stopPropagation());

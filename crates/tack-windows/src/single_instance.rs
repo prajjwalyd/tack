@@ -20,7 +20,6 @@ pub fn already_running() -> bool {
         }
     }
     unsafe {
-        // The handle is kept for the life of the process on purpose.
         match CreateMutexW(None, true, &HSTRING::from(name)) {
             Ok(_) => GetLastError() == ERROR_ALREADY_EXISTS,
             Err(_) => false,

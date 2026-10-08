@@ -1,8 +1,7 @@
-// Tack's board UI: boot and wiring. Plain ES modules, no dependencies, no
-// build step. Listens to the backend's events (see ipc.js and docs/ipc.md),
-// asks for the prints already pinned, and keeps the webview from behaving
-// like a browser. The keyboard (keyboard.js) and drop to pin (drop.js) wire
-// themselves up when imported.
+// Board boot and wiring. Plain ES modules, no dependencies, no build step.
+// Listens to backend events (ipc.js, docs/ipc.md), asks for the prints already
+// pinned, and keeps the webview from behaving like a browser. keyboard.js and
+// drop.js wire themselves up when imported.
 
 import * as ipc from "./ipc.js";
 import { EVENTS } from "./ipc.js";
@@ -24,7 +23,7 @@ reducedMotion.addEventListener?.("change", (e) => {
   if (e.matches) stopGusts(); else if (state.revealed) scheduleGust();
 });
 
-// ---------------------------------------------------------------- browser hygiene
+// Keep the webview from behaving like a browser.
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 document.addEventListener("dragstart", (e) => e.preventDefault());
 document.addEventListener("selectstart", (e) => e.preventDefault());
@@ -46,7 +45,7 @@ window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     resizeTimer = 0;
-    // A new monitor or size: jump to the new layout, don't slide.
+    // New monitor or size: jump, don't slide.
     forgetRect();
     layout({ instant: true });
     if (!state.revealed) restScroll();
@@ -56,7 +55,6 @@ window.addEventListener("resize", () => {
 dom.board.addEventListener("pointerenter", () => ipc.setHovering(true));
 dom.board.addEventListener("pointerleave", () => ipc.setHovering(false));
 
-// ---------------------------------------------------------------- wiring
 async function init() {
   if (!ipc.available()) {
     console.error("[tack] window.__TAURI__ is not available");
@@ -91,10 +89,9 @@ async function init() {
   const ready = await ipc.boardReady();
   if (ready) {
     if (typeof ready.sound === "boolean") state.sound = ready.sound;
-    // Already in row order: append as they come.
+    // Already in row order.
     for (const print of ready.prints || []) addPrint(print, false, true);
   }
-  // Initial prints go straight to their places.
   layout({ instant: true });
   restScroll();
 }
@@ -107,7 +104,7 @@ function onReveal(reason) {
   noticeAfterReveal(was);
 }
 
-/** board:tuck: everything transient goes away with the board. */
+/** board:tuck: everything transient goes with the board. */
 function onTuck() {
   keyboardTuck();
   fold(true);

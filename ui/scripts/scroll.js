@@ -1,20 +1,19 @@
-// Scrolling the row. The track (#prints) is translated sideways; nothing is
-// laid out. A mouse wheel's coarse steps glide to their target (an
-// exponential approach, so quick flicks accumulate into one smooth run); a
-// touchpad's fine deltas, momentum included, are followed almost directly.
-// Vertical wheel turns scroll sideways. The rAF loop runs only while the row
-// is actually moving, and the edge fades appear only where more prints wait.
+// Scrolling the row: the track (#prints) is translated sideways, nothing is
+// laid out. A mouse wheel's coarse steps glide to their target (exponential
+// approach, so quick flicks accumulate into one run); a touchpad's fine deltas
+// are followed almost directly. Vertical wheel turns scroll sideways. The rAF
+// loop runs only while the row moves; edge fades show where more prints wait.
 
 import { state, dom } from "./state.js";
 
 const WHEEL_TAU = 95;      // ms: how quickly a wheel glide catches up with its target
-const PAD_TAU = 22;        // ms: a touchpad follows almost at once (it brings its own momentum)
-const GLIDE_TAU = 110;     // ms: scrolls the board makes by itself (a new print, a shorter row)
+const PAD_TAU = 22;        // ms: a touchpad brings its own momentum
+const GLIDE_TAU = 110;     // ms: scrolls the board makes itself (new print, shorter row)
 const LINE_PX = 40;        // deltaMode 1 (lines) to px
 const SETTLED = 0.25;      // px: close enough, snap and stop
 
-let pos = 0;               // what is shown
-let target = 0;            // where it is going
+let pos = 0;               // shown
+let target = 0;            // heading to
 let max = 0;               // furthest scroll, 0 when the row fits
 let tau = WHEEL_TAU;
 let raf = 0;
@@ -26,7 +25,6 @@ const listeners = new Set();
 export function onScrollState(fn) { listeners.add(fn); }
 
 export function scrollPos() { return pos; }
-export function scrollMax() { return max; }
 export function isScrolling() { return raf !== 0; }
 
 /** The row's full width and the visible width changed (layout.js). */
@@ -35,7 +33,7 @@ export function setExtent(contentW, viewW) {
   const scrolls = max > 0;
   if (dom.rail.classList.contains("scrolls") !== scrolls) dom.rail.classList.toggle("scrolls", scrolls);
   if (target > max || pos > max) {
-    // The row got shorter while scrolled to its end: glide back, never jump.
+    // Shorter row while scrolled to its end: glide back, never jump.
     target = Math.min(target, max);
     if (state.revealed && !state.reduced) { tau = GLIDE_TAU; start(); }
     else { stop(); pos = Math.min(pos, max); apply(); }
@@ -113,11 +111,10 @@ function onWheel(e) {
   const dx = e.deltaX * unit, dy = e.deltaY * unit;
   const d = Math.abs(dx) > Math.abs(dy) ? dx : dy;
   if (!d) return;
-  // Wheels step in large round notches (100/120 px); touchpads send many
-  // small, fractional deltas, horizontal ones included.
+  // Wheels step in large round notches (100/120 px); touchpads send many small, fractional deltas.
   const notch = e.deltaMode !== 0 || (Math.abs(d) >= 50 && Number.isInteger(d) && !dx);
   tau = state.reduced ? 1 : notch ? WHEEL_TAU : PAD_TAU;
-  // A new wheel notch while gliding stacks onto the target, not the current spot.
+  // A notch while gliding stacks onto the target, not the current spot.
   target = clamp(target + d);
   start();
 }

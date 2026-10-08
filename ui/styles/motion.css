@@ -1,8 +1,7 @@
-/* Reduced motion. The board still comes and goes, but as a short plain slide
-   with no hinge, swing or overshoot; prints change state with quick fades
-   instead of lifts, and nothing leans, peels, shines or glints. The scripts
-   skip swings, breezes, the tumbling fall, scroll smoothing and the pointer
-   tilt (state.reduced). Loaded last so it wins. */
+/* Reduced motion: the board comes and goes as a short plain slide (no hinge,
+   swing or overshoot), prints fade instead of lifting, and nothing leans,
+   peels, shines or glints. Scripts skip swings, breezes, the tumbling fall,
+   scroll smoothing and pointer tilt (state.reduced). Loaded last so it wins. */
 
 @media (prefers-reduced-motion: reduce) {
   #board { transition: transform 160ms ease-out; }
@@ -13,7 +12,7 @@
   #board::after { display: none; }
   .slot.arriving .pin::before,
   #board:not(.tucked) .slot.kept .pin-brass::after { animation: none; }
-  #board:not(.tucked) .slot > .pin { transition: none; }   /* the kept pin's size: a plain swap under the brass fade */
+  #board:not(.tucked) .slot > .pin { transition: none; }   /* kept pin's size swaps plainly under the brass fade */
   .slot { transition: transform 1ms; }
   .card, .slot.hover .card, .slot.pressing .card, .slot.dragging .card {
     transform: rotate(var(--tilt));

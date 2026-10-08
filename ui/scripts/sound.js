@@ -1,8 +1,7 @@
-// The two sounds, synthesised with Web Audio (no sound files), quiet and
-// short: a soft, cork-damped "tock" as a pin goes in, and a small dry tick as
-// one comes out. Silent when sound is off in the tray. The audio context is
-// suspended while the board is tucked, so no audio thread runs in the
-// background.
+// The two sounds, synthesised with Web Audio (no sound files): a soft,
+// cork-damped "tock" as a pin goes in and a small dry tick as one comes out.
+// Silent when sound is off in the tray. The audio context is suspended while
+// the board is tucked so no audio thread runs in the background.
 
 import { state } from "./state.js";
 
@@ -63,23 +62,17 @@ function out(a, level) {
   return g;
 }
 
-/**
- * Pin into cork: a soft, muffled tock. Three quiet layers: the press (a
- * short low thump that drops in pitch as the pin seats), the cork's body (a
- * damped resonance in the low mids, what makes it sound like cork rather
- * than wood or plastic), and the faintest touch of contact noise, filtered
- * well below anything bright.
- */
+/** Pin into cork: a muffled tock of three layers: the press, the cork's body and a touch of contact noise. */
 export function playTock() {
   const a = ctx();
   if (!a) return;
   const t = a.currentTime + 0.004;
   const o = out(a, 0.85);
-  const soft = a.createBiquadFilter();   // the whole tock, rounded off
+  const soft = a.createBiquadFilter();   // rounds off the whole tock
   soft.type = "lowpass"; soft.frequency.value = 1600; soft.Q.value = 0.5;
   soft.connect(o);
 
-  // The press.
+  // Press: a low thump dropping in pitch as the pin seats.
   const s = a.createOscillator();
   s.type = "sine";
   s.frequency.setValueAtTime(190, t);
@@ -89,7 +82,7 @@ export function playTock() {
   s.connect(sg).connect(soft);
   s.start(t); s.stop(t + 0.09);
 
-  // The cork: noise rung through a narrow resonance that dies fast.
+  // Cork body: noise through a narrow, fast-dying resonance.
   const n = noise(a);
   const body = a.createBiquadFilter();
   body.type = "bandpass"; body.frequency.value = 420; body.Q.value = 7;
@@ -98,7 +91,7 @@ export function playTock() {
   n.connect(body).connect(bg).connect(soft);
   n.start(t); n.stop(t + 0.07);
 
-  // The contact.
+  // Contact.
   const c = noise(a);
   const bp = a.createBiquadFilter();
   bp.type = "bandpass"; bp.frequency.value = 1100; bp.Q.value = 0.9;

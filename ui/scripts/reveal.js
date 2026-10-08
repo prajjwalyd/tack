@@ -1,9 +1,9 @@
 // The board sliding down (reveal) and back up (tuck). The backend shows the
 // window before a reveal and hides it after the tuck. While tucked nothing
-// runs: no animations, no timers, no rAF, the audio context suspended, and
-// the board is display:none so its layers are released. Of the prints that
-// arrived meanwhile, the newest is pinned on as the board comes down, or
-// flies in if it is a new capture (flight.js).
+// runs: no animations, timers or rAF, the audio context is suspended, and the
+// board is display:none so its layers are released. Of the prints that arrived
+// meanwhile, the newest is pinned on as the board comes down (or flies in if
+// it is a new capture, flight.js).
 
 import { debugAck } from "./ipc.js";
 import { abortFlights, dropTip, restingBox } from "./flight.js";
@@ -30,10 +30,8 @@ export function reveal() {
     dom.board.classList.add("tucked");
     void dom.board.offsetWidth;
   }
-  // Prints can pile up while the board is away: a new screenshot that did
-  // not bring it down (something was full screen), or events that waited
-  // in a sleeping page. Only the newest is pinned on, with its sound; the
-  // rest are simply there when the board comes down, never a salvo.
+  // Prints pile up while the board is away (a capture over a full-screen app,
+  // or events queued in a sleeping page). Only the newest pins on with sound.
   const queued = state.awaiting.length;
   const queue = state.awaiting.splice(0).filter((p) => !p.leaving);
   const newest = queue.reduce((a, b) => (arrivedAt(b) > arrivedAt(a) ? b : a), queue[0]);
@@ -47,8 +45,7 @@ export function reveal() {
     wakeSound();
     dom.board.classList.remove("gone");
     if (newest) showPrint(newest);
-    // A flight aims at where its print will rest once the board is down:
-    // measured now, before the swing starts.
+    // A flight aims at the resting spot: measure before the swing starts.
     if (newest?.flight && !state.reduced) rest = restingBox(newest);
     void dom.board.offsetWidth;   // one style flush, so the slide starts from tucked
     dom.board.classList.remove("tucked");
@@ -70,21 +67,19 @@ export function reveal() {
   }, start);
 }
 
-/**
- * Once at startup (board:warm-up), while the backend shows the hidden window
- * for a moment: draws the board once, at 1% opacity so nothing is seen,
- * part-way through its swing and then flat, with a stand-in like a flight's.
- * The first drawing of all that costs the renderer about a second in which
- * no frame reaches the screen; paid now, the first reveal and the first
- * flight are seen from their first frame.
- */
 let endWarmUp = null;
 
+/**
+ * Startup (board:warm-up): draws the board once at 1% opacity, part-way
+ * through its swing and then flat, with a flight stand-in. The renderer's
+ * first draw of all that stalls frames for about a second; paying it now
+ * lets the first reveal and flight show from their first frame.
+ */
 export function warmUp() {
   if (state.revealed || endWarmUp) return;
   const b = dom.board;
   const timers = [];
-  // Undone at the end, or at once by a reveal that comes meanwhile.
+  // Undone at the end, or at once by a reveal meanwhile.
   endWarmUp = (revealing) => {
     endWarmUp = null;
     timers.forEach(clearTimeout);
@@ -133,14 +128,12 @@ export function tuck() {
   tuckTimer = setTimeout(() => {
     tuckTimer = 0;
     if (state.revealed) return;
-    // Nothing keeps running while tucked.
     for (const c of state.prints.values()) {
       c.sw = null; c.swAnim = null;
       c.slot.classList.remove("arriving", "moving");
     }
     for (const a of dom.board.getAnimations({ subtree: true })) a.cancel();
     for (const s of dom.prints.querySelectorAll(".slot.leaving")) s.remove();
-    // Prints still waiting to pin on stay hidden until the next reveal.
     restScroll();
     stopRectTimers();
     sleepSound();

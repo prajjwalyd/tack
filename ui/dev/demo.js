@@ -15,7 +15,7 @@ const params = new URLSearchParams(location.search);
 const CAPTURE = params.has("capture");
 const DPR = window.devicePixelRatio || 1;
 
-// ---------------------------------------------------------------- the stand-in backend
+// the stand-in backend
 const handlers = new Map();
 const emit = (name, payload) => { for (const fn of handlers.get(name) || []) fn({ event: name, payload }); };
 let boardReady;
@@ -40,7 +40,7 @@ window.__TAURI__ = {
   },
 };
 
-// ---------------------------------------------------------------- pictures
+// pictures
 function canvas(w, h, scale = 1) {
   const c = document.createElement("canvas");
   c.width = Math.round(w * scale);
@@ -190,7 +190,7 @@ const existing = [
   print("p-web", webpage(360, 225), 3 * 60 * MIN),
 ];
 
-// ---------------------------------------------------------------- the window and the snip
+// the window and the snip
 const app = document.getElementById("app-canvas");
 const painted = dashboard();
 app.width = painted.width; app.height = painted.height;
@@ -211,7 +211,7 @@ const sel = document.querySelector("#snip .sel");
 const flash = document.querySelector("#snip .flash");
 const cross = document.querySelector("#snip .cross");
 
-// ---------------------------------------------------------------- the story
+// the story
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
 const span = (t, a, b) => clamp01((t - a) / (b - a));
@@ -236,10 +236,8 @@ function snipAt(t) {
   cross.style.opacity = (span(t, 0, 120) * (1 - span(t, ...T.crossOut))).toFixed(3);
 }
 
-// The trail: the flight's path behind it, a soft ribbon of light that
-// narrows and fades behind the snip. Points are taken while it travels
-// (lift and press stay clean), and the ribbon is drawn as one strip of
-// quads, so nothing overlaps into beads.
+// The trail: a soft ribbon of light narrowing and fading behind the snip,
+// sampled only while it travels and drawn as one strip of quads so nothing beads.
 const trail = document.getElementById("trail");
 trail.width = 960 * DPR; trail.height = 540 * DPR;
 const tg = trail.getContext("2d");
@@ -291,8 +289,7 @@ new MutationObserver((list) => {
 
 let start = null;
 function tick() {
-  // performance.now(), not the frame time: under the frame grabber the
-  // clock that timers follow is the virtual one.
+  // performance.now(), not the frame time: the frame grabber's virtual clock is what timers follow.
   const t = performance.now() - start;
   snipAt(t);
   trailAt(t);

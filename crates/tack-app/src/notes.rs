@@ -1,14 +1,11 @@
 //! Pinning things on purpose: the selection (Win+Alt+C) and whatever is
 //! dropped on the board. Text becomes a note, a picture a print, image files
-//! prints of those files.
+//! prints of those files. Anything that cannot be pinned gets a short
+//! notice on the board instead.
 //!
 //! Text only ever reaches the board this way, because the user asked. The
 //! clipboard is read here only right after the pin shortcut, and what the
 //! user had on it before is put back (`tack_windows::selection`).
-//!
-//! Anything that does not turn into a print gets a short notice on the
-//! board ("Nothing selected", "Already pinned"...), which comes down for it
-//! briefly.
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -204,7 +201,7 @@ pub fn pin_image_bytes(app: &AppHandle, name: &str, bytes: &[u8]) -> Result<Stri
         notice(app, say::BAD_IMAGE);
         return Err(format!("{name}: neither PNG nor JPEG"));
     };
-    let thumb = match image::load_from_memory(bytes).map_err(|e| e.to_string()).and_then(thumbnail::from_image) {
+    let thumb = match thumbnail::decode_bytes(bytes).and_then(thumbnail::from_image) {
         Ok(thumb) => thumb,
         Err(e) => {
             notice(app, say::BAD_IMAGE);

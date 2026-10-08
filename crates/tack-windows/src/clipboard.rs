@@ -1,15 +1,9 @@
 //! The Windows clipboard, for pinning a selection: reading what an app just
-//! copied (text, a picture, or files), telling whether it was marked
-//! private, and putting back what the user had on the clipboard before.
+//! copied (text, a picture or files), telling whether it was marked private,
+//! and putting back what the user had on the clipboard before.
 //!
-//! Only [`crate::selection`] reads the clipboard's text, and only right after
-//! the user pressed the pin shortcut: Tack never reads text off the clipboard
-//! on its own.
-//!
-//! A snapshot keeps every format that is plain memory (`HGLOBAL`): text in
-//! all its forms, bitmaps as DIBs, PNG, HTML, RTF, file lists, and the
-//! private-content markers. Formats that are GDI objects or live OLE objects
-//! cannot be copied byte for byte and are not restored; see [`Snapshot`].
+//! Only [`crate::selection`] reads text from here, and only right after the
+//! user pressed the pin shortcut.
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -32,7 +26,7 @@ const OPEN_TRIES: u32 = 12;
 const OPEN_GAP: Duration = Duration::from_millis(15);
 
 /// Bumped by Windows on every clipboard change.
-pub fn sequence() -> u32 {
+pub(crate) fn sequence() -> u32 {
     unsafe { GetClipboardSequenceNumber() }
 }
 
@@ -126,24 +120,13 @@ fn restorable(format: u32) -> bool {
 /// as GDI objects (Windows makes bitmaps again from the DIB that is kept),
 /// and embedded or linked OLE objects (an Office object copied as such
 /// comes back as its text, RTF, HTML and picture, without the live object).
-pub struct Snapshot {
+pub(crate) struct Snapshot {
     formats: Vec<(u32, Vec<u8>)>,
-}
-
-impl Snapshot {
-    /// How many formats it holds (0: the clipboard was empty).
-    pub fn len(&self) -> usize {
-        self.formats.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.formats.is_empty()
-    }
 }
 
 /// Takes a snapshot of the clipboard, or `None` if it could not be opened
 /// or holds more than can sensibly be kept.
-pub fn snapshot(owner: HWND) -> Option<Snapshot> {
+pub(crate) fn snapshot(owner: HWND) -> Option<Snapshot> {
     let _open = Open::new(owner)?;
     let mut formats = Vec::new();
     let mut total = 0usize;
@@ -173,7 +156,7 @@ const MARKERS: [PCWSTR; 2] = [w!("CanIncludeInClipboardHistory"), w!("CanUploadT
 /// Puts a snapshot back on the clipboard. The restored copy is kept out of
 /// Windows' clipboard history and cloud clipboard, which already hold the
 /// original, unless the snapshot carries its own markers for that.
-pub fn restore(owner: HWND, snapshot: &Snapshot) -> Result<(), String> {
+pub(crate) fn restore(owner: HWND, snapshot: &Snapshot) -> Result<(), String> {
     let _open = Open::new(owner).ok_or("the clipboard is busy")?;
     unsafe { EmptyClipboard() }.map_err(|e| e.to_string())?;
     let mut failed = 0;
@@ -217,7 +200,7 @@ fn set_bytes(format: u32, bytes: &[u8]) -> Result<(), String> {
 }
 
 /// What an app put on the clipboard, as Tack would pin it.
-pub enum Content {
+pub(crate) enum Content {
     Text(String),
     Image(DynamicImage),
     /// Files copied in Explorer (or any app that copies files).
@@ -246,10 +229,20 @@ fn available(format: u32) -> bool {
     format != 0 && unsafe { IsClipboardFormatAvailable(format) }.is_ok()
 }
 
+/// Whether the registered format `name` is on the clipboard.
+pub(crate) fn has_format(name: PCWSTR) -> bool {
+    available(registered(name))
+}
+
+/// Any bitmap shows up as CF_DIB, which Windows synthesises from the others.
+pub(crate) fn has_picture() -> bool {
+    available(CF_DIB.0 as u32) || has_format(w!("PNG"))
+}
+
 /// Reads what is on the clipboard now: files, else text, else a picture.
 /// Text that is only whitespace or control characters counts as none, so a
 /// copied picture that also offers a placeholder character is a picture.
-pub fn read(owner: HWND) -> Content {
+pub(crate) fn read(owner: HWND) -> Content {
     {
         let Some(_open) = Open::new(owner) else { return Content::Empty };
         if is_private() {
@@ -266,9 +259,8 @@ pub fn read(owner: HWND) -> Content {
             }
         }
     }
-    let has_picture = available(CF_DIB.0 as u32) || available(registered(w!("PNG")));
-    if has_picture {
-        if let Some(img) = image() {
+    if has_picture() {
+        if let Some(img) = read_image(4, Duration::from_millis(60)) {
             return Content::Image(img);
         }
     }
@@ -301,12 +293,13 @@ fn files() -> Option<Vec<PathBuf>> {
 }
 
 /// The clipboard's picture, through arboard (which opens the clipboard
-/// itself, so ours must be closed). Retried briefly: the picture may be
-/// drawn on demand by its app.
-fn image() -> Option<DynamicImage> {
-    for attempt in 0..4 {
+/// itself, so ours must be closed). Tried `tries` times, `gap` apart: the
+/// picture may be drawn on demand by its app, or the clipboard still held
+/// open by its owner.
+pub(crate) fn read_image(tries: u32, gap: Duration) -> Option<DynamicImage> {
+    for attempt in 0..tries {
         if attempt > 0 {
-            std::thread::sleep(Duration::from_millis(60));
+            std::thread::sleep(gap);
         }
         let Ok(mut clipboard) = arboard::Clipboard::new() else { continue };
         let Ok(data) = clipboard.get_image() else { continue };

@@ -1,11 +1,7 @@
-//! What Tack needs to know from NetBird, read from `netbird status --json`:
-//! this device's address and name on the NetBird network, and the peers it
-//! can see. Tack serves the phone board on that address only, and answers
-//! only the peers listed here. NetBird's WireGuard tunnel makes a peer's
-//! address trustworthy: a packet from a peer's IP really came from that peer.
-//!
-//! Only the fields Tack uses are read; NetBird adds fields over time and the
-//! rest are ignored.
+//! What Tack needs from `netbird status --json`: this device's address and
+//! name on the NetBird network, and the peers it can see. Tack serves the
+//! phone board on that address only, and answers only the peers listed here.
+//! Only the fields Tack uses are read; NetBird adds fields over time.
 
 use std::net::Ipv4Addr;
 

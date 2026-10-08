@@ -50,16 +50,15 @@ impl Settings {
     }
 }
 
-/// Show-or-hide shortcuts Tack used to ship as its default. Older builds
-/// saved the default into board.json, so a saved one of these was Tack's
-/// choice, not the user's: Win+Alt+T in particular belongs to the Xbox Game
-/// Bar on a stock Windows, so it would never register.
+/// Former default show-or-hide shortcuts. Builds that shipped them saved the
+/// default into board.json, so a saved one was Tack's choice, not the
+/// user's. Win+Alt+T belongs to the Xbox Game Bar and never registers.
 const RETIRED_TOGGLE_DEFAULTS: &[&str] = &["Win+Alt+T", "Ctrl+Alt+T"];
 
 impl Settings {
     /// Moves a toggle shortcut still set to a retired default over to the
     /// current one. Called once when board.json is read.
-    pub fn retire_old_defaults(&mut self) {
+    pub(crate) fn retire_old_defaults(&mut self) {
         let saved = Chord::parse(&self.toggle_shortcut).ok().flatten().map(|c| c.to_string());
         if saved.is_some_and(|s| RETIRED_TOGGLE_DEFAULTS.contains(&s.as_str())) {
             self.toggle_shortcut = DEFAULT_TOGGLE.into();

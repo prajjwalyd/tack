@@ -1,13 +1,11 @@
 //! The board's window: a transparent, topmost overlay across the top of one
-//! monitor. It is never activated, and it is click-through except where the
-//! board is.
+//! monitor, never activated and click-through except where the board is.
 //!
-//! The window is driven with plain Win32 calls rather than Tauri's setters:
-//! tao rewrites the whole extended style (and re-shows the window, activating
-//! it) whenever one of its own flags changes, which would undo the
-//! never-take-focus behaviour. Every function that takes an `HWND` must run on
-//! the UI thread; touching the window from another thread would mean
-//! cross-thread SendMessage calls that can deadlock against the board lock.
+//! Driven with plain Win32 calls rather than Tauri's setters: tao rewrites the
+//! whole extended style (and re-shows, activating, the window) whenever one of
+//! its own flags changes. Every function taking an `HWND` must run on the UI
+//! thread; from another thread the cross-thread SendMessage calls can
+//! deadlock against the board lock.
 
 use windows::Win32::Foundation::{HWND, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTONEAREST};

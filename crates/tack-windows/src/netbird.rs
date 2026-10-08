@@ -1,7 +1,6 @@
-//! Asking the NetBird client how this device sits on the NetBird network,
-//! through its command-line tool (`netbird status --json`). The tool talks
-//! to the NetBird service for us, and reading status needs no admin rights.
-//! Parsing lives in `tack_core::netbird`.
+//! This device's NetBird status, from the client's command-line tool
+//! (`netbird status --json`), which talks to the NetBird service for us and
+//! needs no admin rights. Parsing lives in `tack_core::netbird`.
 
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
@@ -33,11 +32,11 @@ pub fn installed() -> bool {
     cli().is_some()
 }
 
-/// The NetBird tool, where NetBird's installer puts it. Only there: Program
-/// Files is writable by administrators alone, while a folder on the PATH
-/// may be the user's own, where any program could leave a fake
-/// `netbird.exe` to lie about who the peers are. The tool, in turn, checks
-/// that it talks to the real NetBird service.
+/// The NetBird tool where its installer puts it, and only there: Program
+/// Files is writable by administrators alone, while a folder on the PATH may
+/// be the user's own, where any program could plant a fake `netbird.exe` to
+/// lie about the peers. The tool in turn checks it talks to the real NetBird
+/// service.
 fn cli() -> Option<PathBuf> {
     let program_files = std::env::var_os("ProgramW6432").or_else(|| std::env::var_os("ProgramFiles"))?;
     Some(PathBuf::from(program_files).join("NetBird").join("netbird.exe")).filter(|p| p.is_file())

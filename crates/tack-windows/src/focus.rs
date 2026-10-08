@@ -1,11 +1,9 @@
-//! Keyboard focus for the board, and only when the keyboard asked for it.
-//!
-//! The board's window never takes focus (`WS_EX_NOACTIVATE`): the edge, a
-//! new snip or a click must never pull the keyboard away from the app being
-//! used. Only the show-or-hide shortcut opens it for the keyboard; then the
-//! window is made activatable and brought to the foreground ([`take`]), and
-//! when it goes the window that had the keyboard before gets it back
-//! ([`give_back`]). Every function here must run on the UI thread.
+//! Keyboard focus for the board, only when the keyboard asked for it. The
+//! window is normally `WS_EX_NOACTIVATE`, so the edge, a new capture or a
+//! click never pulls the keyboard away from the app in use. The show-or-hide
+//! shortcut makes it activatable and brings it to the foreground ([`take`]);
+//! when it goes, the previous window gets the keyboard back ([`give_back`]).
+//! Every function here must run on the UI thread.
 
 use windows::core::BOOL;
 use windows::Win32::Foundation::{HWND, LPARAM};
@@ -117,11 +115,6 @@ unsafe extern "system" fn find_window(hwnd: HWND, data: LPARAM) -> BOOL {
         return BOOL(0);
     }
     BOOL(1)
-}
-
-/// Whether `hwnd` is the foreground window.
-pub fn is_foreground(hwnd: HWND) -> bool {
-    unsafe { GetForegroundWindow() == hwnd }
 }
 
 fn set_no_activate(hwnd: HWND, on: bool) {

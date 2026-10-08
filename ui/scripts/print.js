@@ -1,18 +1,16 @@
 // A print on the board: creating its element, pinning it on, keeping it,
-// reordering the row, updating its picture, the copied check, its age
-// caption, and taking it down. A paper note (text or a link) is a print too,
-// with the same layers and motion; only its paper differs (note.js).
+// reordering, updating its picture, the copied check, the age caption and
+// taking it down. A paper note (text or link) is a print too, with the same
+// layers; only its paper differs (note.js).
 //
-// Each print is a stack of layers, outermost first:
-//   .slot   placed in the row by layout.js (translate); holds the pin and caption
+// Layers, outermost first:
+//   .slot   placed in the row by layout.js; holds the pin and caption
 //   .drop   arrival, keep press, reorder lift and fall animations
-//   .swing  the pendulum motion around the pin (motion/swing.js)
-//   .card   the resting tilt, hover lift and press; holds the lift .shade, the
-//           .paper (border, rest shadow, .photo > img, or a note's text), the
-//           copied .badge and the Keep and × buttons
-// `print` objects hold those elements and the backend's data (`print.data`,
-// an IPC Print). For screen readers each .slot is an option of the board's
-// listbox, labelled in words (announce.js); its layers are hidden from them.
+//   .swing  pendulum motion around the pin (motion/swing.js)
+//   .card   resting tilt, hover lift and press; holds .shade, .paper
+//           (.photo > img, or a note's text), .badge and the Keep and x buttons
+// Each .slot is an option of the board's listbox, labelled in words
+// (announce.js); its layers are hidden from screen readers.
 
 import * as ipc from "./ipc.js";
 import { announce, labelFor } from "./announce.js";
@@ -46,16 +44,16 @@ function createPrint(data) {
     w: 0, h: 0, x: 0, y: 0, t: "",
     sw: null, swAnim: null,
     leaving: false,
-    flight: null,     // a new capture's way in, see flight.js
+    flight: null,     // see flight.js
     badgeTimer: 0,
     captionTimer: 0,
-    captionAge: null, // a link note's caption keeps its age in a span of its own (note.js)
+    captionAge: null, // a link note's age span (note.js)
   };
 
   const slot = document.createElement("div");
   slot.className = "slot placing";
   slot.dataset.id = data.id;
-  slot.tabIndex = -1;                       // roving focus, see keyboard.js
+  slot.tabIndex = -1;                       // roving focus (keyboard.js)
   slot.setAttribute("role", "option");
   slot.setAttribute("aria-selected", "false");
   const paper = note ? "" : `<div class="photo"><img alt="" draggable="false" decoding="async"></div>`;
@@ -87,7 +85,7 @@ function createPrint(data) {
     fillNote(print);
   } else {
     print.img.addEventListener("load", () => {
-      // Fall back to the decoded size when the backend sent no dimensions.
+      // The backend sent no dimensions: use the decoded size.
       if (!(print.data.width > 0 && print.data.height > 0)) {
         print.data.width = print.img.naturalWidth;
         print.data.height = print.img.naturalHeight;
@@ -106,10 +104,9 @@ function createPrint(data) {
 export function printById(id) { return state.prints.get(id); }
 
 /**
- * Puts a print on the board; `animate` pins it on (now, or once revealed),
- * or with a `flight` (a new capture) flies it in from where it was taken.
- * Initial prints arrive in display order and are appended (`append`); a new
- * one goes where the backend's order puts it: at the end of the kept group
+ * Puts a print on the board. `animate` pins it on (now, or once revealed);
+ * with a `flight` it flies in from where it was taken. Initial prints arrive
+ * in display order (`append`); a new one goes at the end of the kept group
  * if kept, else first among the recent prints.
  */
 export function addPrint(data, animate, append = false, flight = null) {
@@ -120,17 +117,16 @@ export function addPrint(data, animate, append = false, flight = null) {
   state.prints.set(data.id, print);
   const keptCount = state.order.filter((id) => state.prints.get(id)?.data.kept).length;
   if (append) state.order.push(data.id);
-  else state.order.splice(keptCount, 0, data.id);   // end of the kept group, or first of the recent
+  else state.order.splice(keptCount, 0, data.id);
   dom.prints.appendChild(print.slot);
   const widthBefore = state.boardW;
   layout();
-  // Place it without sliding in from the origin.
+  // Flush so it is placed without sliding in from the origin.
   void print.slot.offsetWidth;
   print.slot.classList.remove("placing");
   if (!animate) return;
   if (!state.revealed) { print.slot.classList.add("awaiting"); state.awaiting.push(print); return; }
-  // If the board has to grow, or the row to scroll, to make room, pin on
-  // once there is cork under the print.
+  // If the board grows or the row scrolls to make room, pin on once there is cork under it.
   const moved = showPrint(print);
   if (print.flight) { flyIn(print); return; }
   if ((state.boardW > widthBefore || moved) && !state.reduced) {
@@ -169,7 +165,7 @@ export function updatePrint(data) {
   const before = print.data;
   print.data = { ...before, ...data };
   if (isNote(print.data)) {
-    // An edit (in Notepad) changed the text.
+    // Text edited externally (e.g. in Notepad).
     if (data.note && JSON.stringify(data.note) !== JSON.stringify(before.note)) {
       if (isUnfolded(print)) fold(true);
       fillNote(print);
@@ -191,13 +187,7 @@ export function updatePrint(data) {
   refreshLabel(print);
 }
 
-// ---------------------------------------------------------------- pin on
-
-/**
- * A new capture flies in from where it was taken (flight.js), then lands
- * with the pin-on's press. `rest`: where it lands, if already measured.
- * Under reduced motion it simply pins on, quietly.
- */
+/** Flies a new capture in (flight.js). `rest` is its landing box if already measured. Reduced motion just pins on. */
 export function flyIn(print, rest = null) {
   const flight = print.flight;
   print.flight = null;
@@ -230,7 +220,7 @@ export function pinOn(print) {
   }
   slot.classList.add("arriving");
   const lean = Math.sign(print.tilt || 1) * rand(0.8, 1.6);
-  // Held: scale 1.06, a wide soft shadow. Pressed onto the cork in ~260 ms.
+  // Held just above the cork (scale 1.06, wide soft shadow), then pressed down.
   print.drop.animate([
     { offset: 0, opacity: 0, transform: `translateY(-7px) scale(1.06) rotate(${lean}deg)` },
     { offset: 0.2, opacity: 1, transform: `translateY(-6px) scale(1.06) rotate(${lean}deg)`, easing: "cubic-bezier(.45, 0, .25, 1)" },
@@ -241,7 +231,6 @@ export function pinOn(print) {
     { offset: 0.2, opacity: 1, transform: "translateY(4px) scale(1.03)", easing: "cubic-bezier(.45, 0, .25, 1)" },
     { opacity: 0, transform: "none" },
   ], { duration: 330 });
-  // The pin lands last.
   const pinAt = 250;
   print.pin.animate([
     { opacity: 0, transform: "translateY(-4px) scale(1.7)" },
@@ -251,8 +240,6 @@ export function pinOn(print) {
   later(tock, pinAt + 95);
   later(() => { slot.classList.remove("arriving"); swing(print, -Math.sign(print.tilt || 1) * 0.6); }, pinAt + 150);
 }
-
-// ---------------------------------------------------------------- keep
 
 function setKeptClass(print, kept) {
   print.slot.classList.toggle("kept", kept);
@@ -267,7 +254,7 @@ function setKept(print, kept, animate) {
   if (!kept) print.data.keptAt = null;
   if (state.revealed) announce(kept ? "Kept" : "No longer kept");
   if (!animate || state.reduced || !state.revealed) { setKeptClass(print, kept); return; }
-  // The pin is pressed in, turns brass at the bottom of the press, and springs back.
+  // The pin turns brass at the bottom of the press and springs back.
   print.pin.animate([
     { transform: "none" },
     { offset: 0.32, transform: "scale(.7)", easing: "cubic-bezier(.2, .9, .3, 1.5)" },
@@ -283,7 +270,7 @@ function setKept(print, kept, animate) {
   holdOrder(KEEP_PRESS_MS);
 }
 
-/** The Keep button (and, if the owner chooses, the hold): toggles keeping. */
+/** Toggles keeping. */
 export function toggleKeep(print) {
   if (print.leaving) return;
   const kept = !print.data.kept;
@@ -292,8 +279,6 @@ export function toggleKeep(print) {
   applyOrder(localOrder());   // the backend confirms with board:order-changed
 }
 
-// ---------------------------------------------------------------- order
-
 let orderHoldUntil = 0;
 let orderTimer = 0;
 let pendingOrder = null;
@@ -301,7 +286,7 @@ let pendingOrder = null;
 /** Holds reorders back for `ms`, so a keep press is seen before the print moves. */
 function holdOrder(ms) { orderHoldUntil = Math.max(orderHoldUntil, performance.now() + ms); }
 
-/** Applies a reorder that was waiting for a keep press (tuck: no timers left behind). */
+/** Applies a reorder waiting on a keep press, so tucking leaves no timers behind. */
 export function flushOrder() {
   orderHoldUntil = 0;
   if (orderTimer) { cancel(orderTimer); orderTimer = 0; }
@@ -324,11 +309,7 @@ function localOrder() {
   }).map((p) => p.id);
 }
 
-/**
- * A new order for the row (board:order-changed, or a local keep). Prints
- * glide to their new places; ones that travel further than a step lift
- * slightly on the way, so they pass over their neighbours.
- */
+/** A new row order (board:order-changed, or a local keep). Prints that travel further than a step lift on the way. */
 export function applyOrder(ids) {
   const wait = orderHoldUntil - performance.now();
   if (wait > 0 && state.revealed) {
@@ -339,8 +320,7 @@ export function applyOrder(ids) {
   const seen = new Set();
   const next = [];
   for (const id of ids || []) if (state.prints.has(id) && !seen.has(id)) { seen.add(id); next.push(id); }
-  // A print missing from `ids` is about to be removed (board:print-removed
-  // follows): it stays where it is, after the print it followed until now.
+  // A print missing from `ids` is about to be removed (board:print-removed follows): it keeps its place.
   state.order.forEach((id, i) => {
     if (seen.has(id)) return;
     const prev = state.order[i - 1];
@@ -369,8 +349,6 @@ export function applyOrder(ids) {
   }
 }
 
-// ---------------------------------------------------------------- take down
-
 /** "fall": the pin pops out and the print drops away. "quiet": a quick fade. */
 function detach(print, how) {
   print.leaving = true;
@@ -394,7 +372,6 @@ function detach(print, how) {
     return;
   }
 
-  // The pin pops out...
   const dir = Math.sign(print.tilt) || 1;
   print.pin.animate([
     { opacity: 1, transform: "none" },
@@ -402,7 +379,6 @@ function detach(print, how) {
     { opacity: 0, transform: `translate(${dir * 3}px, -9px) scale(1)` },
   ], { duration: 200, easing: "cubic-bezier(.2, .7, .4, 1)", fill: "forwards" });
   playPop();
-  // ...and the print drops away and fades, in about 450 ms.
   const a = print.drop.animate([
     { offset: 0, transform: "none", opacity: 1 },
     { offset: 0.12, transform: `translateY(-2px) rotate(${dir * 0.6}deg)`, opacity: 1, easing: "cubic-bezier(.5, 0, .9, .55)" },
@@ -411,8 +387,6 @@ function detach(print, how) {
   ], { duration: 450, delay: 50, fill: "forwards" });
   a.onfinish = done;
 }
-
-// ---------------------------------------------------------------- copied
 
 /** A check stamps onto the print for a second, and the print sways on its pin. */
 export function showCopied(print) {
@@ -429,8 +403,6 @@ export function showCopied(print) {
   }, COPIED_MS);
   swing(print, Math.sign(print.tilt || 1) * 1.2);
 }
-
-// ---------------------------------------------------------------- age caption
 
 const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: "long" });
 const dateFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
@@ -457,7 +429,7 @@ export function showCaption(print) {
   const text = ageText(t);
   const target = print.captionAge || print.caption;
   if (target.textContent !== text) target.textContent = text;
-  refreshLabel(print);   // its spoken age, kept current the same way
+  refreshLabel(print);   // spoken age
   const age = Date.now() - t;
   const next = age < 3600e3 ? 60e3 - (age % 60e3) + 50 : 5 * 60e3;
   print.captionTimer = later(() => { if (state.hovered === print) showCaption(print); }, next);

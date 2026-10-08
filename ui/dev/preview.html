@@ -3,8 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- The app's own CSP (crates/tack-app/tauri.conf.json), so the preview
-       catches anything the real webview would block. -->
+  <!-- The app's own CSP (crates/tack-app/tauri.conf.json), so the preview catches what the webview would block. -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src ipc: http://ipc.localhost; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Tack preview</title>
   <link rel="stylesheet" href="../styles/tokens.css">

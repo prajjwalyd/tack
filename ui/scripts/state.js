@@ -1,5 +1,5 @@
 // The board's shared UI state, the page elements every module works on, and
-// a few small helpers. One plain object, mutated in place; no framework.
+// a few small helpers. One plain object, mutated in place.
 
 export const dom = {
   board: document.getElementById("board"),
@@ -16,11 +16,11 @@ export const state = {
   sound: true,
   prints: new Map(),    // id -> print (see print.js)
   order: [],            // ids in display order: kept first, then newest first
-  hovered: null,        // the print under the pointer, see gestures.js
-  press: null,          // the press in progress, see gestures.js
-  pendingClick: null,   // a click waiting to see if it becomes a double click
+  hovered: null,        // print under the pointer (gestures.js)
+  press: null,          // press in progress (gestures.js)
+  pendingClick: null,   // click waiting to see if it becomes a double click
   draggingId: null,
-  keyMenuAt: -1e9,      // when the keyboard last asked for the context menu (performance.now())
+  keyMenuAt: -1e9,      // performance.now() of the last keyboard context-menu request
   gustTimer: 0,
   timers: new Set(),    // short-lived animation timeouts, cleared on tuck
   awaiting: [],         // prints to pin on once the board is revealed

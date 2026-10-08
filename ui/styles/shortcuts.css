@@ -1,10 +1,8 @@
-/* The shortcuts dialog (shortcuts.html, scripts/shortcuts.js): a small
-   Windows 11 dialog. A Mica-like solid background that follows the system
-   theme, one settings card with two rows, each shortcut shown as keycaps,
-   and a footer with "Reset to defaults", Cancel and an accent Save.
-   Fluent's metrics: Segoe UI Variable 14/20, 4 px controls, 32 px buttons,
-   the two-tone focus ring. <html data-theme="light|dark"> forces a theme
-   (the dev preview). */
+/* The shortcuts dialog (shortcuts.html, scripts/shortcuts.js): a small Windows
+   11 dialog with a solid system-themed background, one card of two keycap
+   rows, and a footer. Fluent metrics: Segoe UI Variable 14/20, 4 px controls,
+   32 px buttons, two-tone focus ring. <html data-theme="light|dark"> forces
+   a theme (dev preview). */
 
 :root {
   color-scheme: light dark;
@@ -61,7 +59,7 @@ body {
   color: var(--ink-2);
 }
 
-/* ---------------------------------------------------------------- the card */
+/* ---- the card ---- */
 .card {
   border-radius: 6px;
   background: var(--card);
@@ -132,7 +130,7 @@ kbd {
 .status.warn { display: flex; }
 .status.warn svg { flex: none; width: 14px; height: 14px; margin-top: 1px; color: var(--warn); }
 
-/* ---------------------------------------------------------------- footer */
+/* ---- footer ---- */
 footer {
   display: flex;
   align-items: center;
@@ -189,7 +187,7 @@ button { font: inherit; }
 .text:focus-visible { box-shadow: 0 0 0 1px var(--focus-inner); }
 .field:focus-visible:not(.capturing) { box-shadow: 0 0 0 1px var(--focus-inner); }
 
-/* ---------------------------------------------------------------- High Contrast */
+/* ---- High Contrast ---- */
 @media (forced-colors: active) {
   .card { border: 1px solid CanvasText; }
   .field { border-color: ButtonText; }

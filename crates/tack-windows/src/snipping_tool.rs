@@ -1,33 +1,24 @@
 //! Hears Snipping Tool captures arrive on the clipboard. With "Automatically
-//! save original screenshots" turned off, Win + Shift + S never writes a file,
-//! so watching the Screenshots folder alone would miss them.
+//! save original screenshots" off, Win + Shift + S never writes a file, so
+//! watching the Screenshots folder alone would miss them. Only Snipping
+//! Tool's own copies count: the clipboard is everyone's, and pinning every
+//! copied image would be noise.
 //!
-//! Only Snipping Tool's own copies count: the clipboard is everyone's, and a
-//! board that pinned every copied image would be noise. Tack's own copies
-//! (clicking a print) are owned by tack.exe and so are ignored too.
-//!
-//! Debug builds log every clipboard change to stderr, one line each, to learn
-//! what the real capture flow looks like: which process owns the clipboard,
-//! which app and window class are in front, and what Tack decided. Window
-//! titles are never logged (they can name private documents and chats), and
-//! release builds log nothing at all.
+//! Debug builds log one line per clipboard change: owner process, foreground
+//! app and window class, and the decision. Window titles are never logged, as
+//! they can name private documents and chats.
 
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Sender};
 use std::sync::OnceLock;
 use std::time::Duration;
 
-use image::{DynamicImage, RgbaImage};
-use tack_core::capture::{self, Timestamp};
-
-use crate::capture_origin;
+use image::DynamicImage;
+use tack_core::capture::Timestamp;
 use windows::core::{w, Error, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{CloseHandle, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
-use windows::Win32::System::DataExchange::{
-    AddClipboardFormatListener, GetClipboardOwner, IsClipboardFormatAvailable, RegisterClipboardFormatW,
-};
+use windows::Win32::System::DataExchange::{AddClipboardFormatListener, GetClipboardOwner};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::System::Ole::CF_DIB;
 use windows::Win32::System::SystemInformation::GetLocalTime;
 use windows::Win32::System::Threading::{
     OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -38,10 +29,11 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WNDCLASSW,
 };
 
+use crate::{capture_origin, clipboard};
+
 /// The processes that put Win + Shift + S captures on the clipboard.
 const SNIPPERS: [&str; 2] = ["snippingtool.exe", "screenclippinghost.exe"];
-/// The image may be rendered on demand, or the clipboard still held open by
-/// its owner, so reading it is retried for about a second.
+/// Reading the image is retried for about a second.
 const READ_TRIES: u32 = 6;
 const READ_GAP: Duration = Duration::from_millis(200);
 
@@ -71,7 +63,7 @@ pub fn start(mut on_capture: impl FnMut(DynamicImage, (i32, i32)) -> String + Se
         .name("tack-capture".into())
         .spawn(move || {
             for Accepted { line, pointer } in rx {
-                let decision = match read_image() {
+                let decision = match clipboard::read_image(READ_TRIES, READ_GAP) {
                     Some(img) => on_capture(img, pointer),
                     None => "ignored (unreadable)".into(),
                 };
@@ -153,16 +145,16 @@ fn changed() {
     } else {
         String::new()
     };
-    let snipper = owner_exe.is_some_and(|exe| SNIPPERS.contains(&exe.to_ascii_lowercase().as_str()));
+    let snipper = owner_exe.is_some_and(|exe| is_snipper(&exe));
     let ignored = if crate::selection::grabbing() {
         // Pinning the selection copies and restores the clipboard itself.
         Some("ignored (pinning the selection)")
     } else if !snipper {
         Some("ignored")
-    } else if has_format(w!("ExcludeClipboardContentFromMonitorProcessing")) {
+    } else if clipboard::has_format(w!("ExcludeClipboardContentFromMonitorProcessing")) {
         // Marked private by whoever copied it.
         Some("ignored (excluded)")
-    } else if !has_image() {
+    } else if !clipboard::has_picture() {
         // Snipping Tool also copies text, from its text actions.
         Some("ignored (no image)")
     } else {
@@ -180,7 +172,11 @@ fn changed() {
 /// full-screen overlay Win + Shift + S puts up while a region is picked.
 /// Windows can report that overlay as a full-screen app.
 pub fn in_front() -> bool {
-    front_exe().is_some_and(|exe| SNIPPERS.contains(&exe.to_ascii_lowercase().as_str()))
+    front_exe().is_some_and(|exe| is_snipper(&exe))
+}
+
+fn is_snipper(exe: &str) -> bool {
+    SNIPPERS.contains(&exe.to_ascii_lowercase().as_str())
 }
 
 /// The file name of the app whose window is in front, e.g. "Code.exe".
@@ -193,19 +189,6 @@ fn log(line: &str, decision: &str) {
     if cfg!(debug_assertions) {
         eprintln!("tack: clipboard {line} -> {decision}");
     }
-}
-
-fn has_format(name: PCWSTR) -> bool {
-    unsafe {
-        let format = RegisterClipboardFormatW(name);
-        format != 0 && IsClipboardFormatAvailable(format).is_ok()
-    }
-}
-
-/// Any bitmap shows up as CF_DIB, which Windows synthesises from the others.
-fn has_image() -> bool {
-    let dib = unsafe { IsClipboardFormatAvailable(CF_DIB.0 as u32).is_ok() };
-    dib || has_format(w!("PNG"))
 }
 
 /// The file name of the process that owns a window, e.g. "SnippingTool.exe".
@@ -239,18 +222,4 @@ fn class_name(hwnd: HWND) -> String {
     let mut buf = [0u16; 256];
     let len = unsafe { GetClassNameW(hwnd, &mut buf) }.max(0) as usize;
     String::from_utf16_lossy(&buf[..len])
-}
-
-fn read_image() -> Option<DynamicImage> {
-    for attempt in 0..READ_TRIES {
-        if attempt > 0 {
-            std::thread::sleep(READ_GAP);
-        }
-        let Ok(mut clipboard) = arboard::Clipboard::new() else { continue };
-        let Ok(data) = clipboard.get_image() else { continue };
-        if let Some(rgba) = RgbaImage::from_raw(data.width as u32, data.height as u32, data.bytes.into_owned()) {
-            return Some(capture::without_alpha(rgba));
-        }
-    }
-    None
 }

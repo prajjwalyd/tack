@@ -1,30 +1,21 @@
-//! Notes: short texts and links pinned to the board on purpose, as small
-//! paper notes beside the prints.
+//! Notes: short texts and links pinned to the board on purpose (Win+Alt+C on
+//! a selection, or a drop on the board). Nothing reads text off the clipboard
+//! on its own.
 //!
-//! Text only ever reaches the board because the user asked for it: Win+Alt+C
-//! on a selection, or a drop on the board. Nothing reads text off the
-//! clipboard on its own.
-//!
-//! Each note is a UTF-8 text file in Tack's own folder,
-//! `%LOCALAPPDATA%\Tack\Notes\Note YYYY-MM-DD HHMMSS.txt`, so it can be
-//! dragged out, opened and edited like any file, and board.json only ever
-//! holds its path, never the text. Like a capture, a note's file goes to the
-//! Recycle Bin when the note leaves the board.
-//!
-//! A note holds at most [`MAX_NOTE_BYTES`] of text; longer text is cut at a
-//! character boundary and marked as truncated. A note whose whole text is one
-//! web link is a **link**: the board shows its domain, and opening it opens
-//! the browser.
+//! Each note is a UTF-8 text file in `%LOCALAPPDATA%\Tack\Notes`, so it can be
+//! dragged out, opened and edited like any file, and board.json holds only
+//! its path. Like a capture, a note's file goes to the Recycle Bin when the
+//! note leaves the board. A note whose whole text is one web link is a
+//! **link**: the board shows its domain, and opening it opens the browser.
 
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::capture::{self, Timestamp};
-use crate::files::path_key;
 use crate::print::NoteBody;
 use crate::recycle::Recycler;
 
-/// The most text a note holds, in bytes of UTF-8: about 20 KB.
+/// The most text a note holds, in bytes of UTF-8.
 pub const MAX_NOTE_BYTES: usize = 20 * 1024;
 /// A link longer than this is kept as plain text.
 const MAX_LINK_LEN: usize = 4096;
@@ -35,13 +26,8 @@ pub fn notes_folder() -> PathBuf {
     base.join("Tack").join("Notes")
 }
 
-/// The file is one of Tack's own notes.
-pub fn in_notes(path: &Path) -> bool {
-    path.parent().is_some_and(|dir| path_key(dir) == path_key(&notes_folder()))
-}
-
 /// A note's file: a `.txt`.
-pub fn is_note_file(path: &Path) -> bool {
+fn is_note_file(path: &Path) -> bool {
     path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("txt"))
 }
 
@@ -60,15 +46,13 @@ pub fn body(text: &str) -> Option<NoteBody> {
 }
 
 /// `\r\n` and `\r` become `\n`, other control characters go, and so do
-/// blank lines before the text and all whitespace after it. A first line's indentation stays (it
-/// may be code).
+/// blank lines before the text and all whitespace after it. The first line's
+/// indentation stays (it may be code).
 fn normalise(text: &str) -> String {
     let text = text.replace("\r\n", "\n").replace('\r', "\n");
-    // Control characters (a copied picture's placeholder, NULs) are not
-    // text; line breaks and tabs are.
+    // A copied picture's placeholder character and NULs are not text.
     let text: String = text.chars().filter(|&c| !c.is_control() || c == '\n' || c == '\t').collect();
     let text = text.trim_end();
-    // Drop whole blank lines at the start, keeping the first real line as is.
     let start = text.split_inclusive('\n').take_while(|line| line.trim().is_empty()).map(str::len).sum::<usize>();
     text[start..].to_string()
 }
@@ -117,7 +101,7 @@ pub fn link_of(text: &str) -> Option<String> {
 /// The host of an http(s) URL, lower case, without "www.", a port or a user
 /// name: "https://www.GitHub.com:443/a?b" gives "github.com". `None` if
 /// there is no plausible host.
-pub fn domain_of(url: &str) -> Option<String> {
+fn domain_of(url: &str) -> Option<String> {
     let rest = url.split_once("://")?.1;
     let authority = rest.split(['/', '?', '#']).next()?;
     let host = authority.rsplit_once('@').map_or(authority, |(_, host)| host);
@@ -139,7 +123,7 @@ pub fn domain_of(url: &str) -> Option<String> {
 }
 
 /// The note's file name stem, `Note YYYY-MM-DD HHMMSS`.
-pub fn file_stem(at: Timestamp) -> String {
+fn file_stem(at: Timestamp) -> String {
     format!("Note {}", at.stamp())
 }
 

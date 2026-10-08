@@ -1,9 +1,6 @@
-/* Note paper, "classic" (the shipped look): a pale warm yellow, so a note
-   never reads as a print's border, and clear enough of the green that it
-   stays paper, never khaki, on the felt. Like the prints' paper it stays
-   light in the dark theme, only a little dimmer (a lamp-lit room), so its
-   ink never changes. Picked in tokens.css; the other sets are card.css and
-   sticky.css, with the same tokens. */
+/* Note paper "classic": pale warm yellow, distinct from a print's border and
+   never khaki against the felt. A little dimmer in the dark theme, ink
+   unchanged. Picked in tokens.css; same tokens as card.css and sticky.css. */
 :root {
   --note-paper: light-dark(#fdf6d6, #f0e5ba);
   --note-ink: rgba(46, 37, 22, .86);
@@ -12,9 +9,7 @@
   --note-domain: rgba(52, 80, 122, .78);
   --note-curl: rgba(120, 92, 34, .07);       /* the free corner, lifting a hair off the felt */
   --note-scroll: rgba(70, 54, 26, .30);      /* the unfolded sheet's thin scrollbar */
-  /* Printed on the paper, under the text (note.css): nothing here. */
   --note-face: none;
   --note-sheet-face: none;
-  /* The free corner stands a hair proud of the felt: a little more shadow under it. */
   --shadow-note-corner: 5px 7px 7px -7px light-dark(rgba(0, 14, 6, .40), rgba(0, 0, 0, .5));
 }

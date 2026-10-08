@@ -1,14 +1,9 @@
-//! The notification area icon and its menu, kept short: Show board and Use
-//! on your phone…; Clear board and Open Screenshots folder; the settings
-//! (Reveal at top edge, Sound, Start with Windows, Shortcuts…); Quit. A left click on the icon toggles the board. If a
-//! shortcut could not be registered (another app has it), the menu says so
-//! and offers to change it; the menu is rebuilt whenever that changes.
+//! The notification area icon and its menu. A left click toggles the board.
+//! If a shortcut could not be registered (another app has it), the menu says
+//! so and offers to change it; the menu is rebuilt whenever that changes.
 //!
-//! The icon is the app icon in full colour (the brass pin in green felt),
-//! hand-drawn for the tray at 16, 20, 24 and 32 px, in two tunings: a darker
-//! frame and brass rim for a light taskbar, a lighter felt and frame for a
-//! dark one. It follows `SystemUsesLightTheme` (the taskbar's theme, not the
-//! apps'), read at startup and again whenever that registry key changes.
+//! The icon comes in a light-taskbar and a dark-taskbar version and follows
+//! `SystemUsesLightTheme` (the taskbar's theme, not the apps').
 
 use std::sync::Mutex;
 

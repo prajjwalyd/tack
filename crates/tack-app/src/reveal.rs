@@ -1,15 +1,12 @@
 //! Revealing and tucking the board: updates the shared view, moves the
-//! overlay window on the UI thread and tells the UI to slide. Also hands the
-//! edge-reveal poller its way into the app.
+//! overlay window and tells the UI to slide. Also the board window's setup
+//! and the edge-reveal poller's way into the app.
 //!
 //! Every window operation runs on the main thread; touching the window from
 //! the poller thread would mean cross-thread SendMessage calls that can
-//! deadlock against the state lock.
-//!
-//! The web view sleeps while the board is tucked ([`webview_power`]): it is
-//! put to sleep once the tuck slide is over and the window hidden. Every
-//! reveal, whatever asked for it, wakes it first and waits until the page
-//! runs again; only then is the window shown and the page told to slide down.
+//! deadlock against the state lock. The web view sleeps while the board is
+//! tucked ([`webview_power`]), so every reveal wakes it before showing the
+//! window.
 
 use std::time::{Duration, Instant};
 
@@ -27,9 +24,8 @@ use crate::{webview_power, webview_privacy};
 pub const WINDOW_LABEL: &str = "board";
 /// How long a new screenshot keeps the board down on its own.
 const PEEK: Duration = Duration::from_secs(3);
-/// The same for a capture that flies in: the flight and the pin's landing
-/// take about 0.9 s, then the board stays about 1.2 s more (this, plus the
-/// poller's 350 ms leave delay) unless the pointer is on it.
+/// The same for a capture that flies in. The flight and the pin's landing
+/// use the first part of it, and the poller's leave delay comes on top.
 pub const FLIGHT_PEEK: Duration = Duration::from_millis(1750);
 /// How long the one-time tip under the board keeps it down for reading,
 /// unless the pointer comes over it (and then leaves) first.
@@ -48,13 +44,11 @@ const WARM_UP: Duration = Duration::from_millis(900);
 const FULLSCREEN_GRACE: Duration = Duration::from_millis(1000);
 const FULLSCREEN_RECHECK: Duration = Duration::from_millis(100);
 
-/// Where the board's window goes on a monitor: across the whole width of
-/// its work area, from the top of it to the bottom. The window is
-/// transparent and lets clicks through everywhere but the board, and being
-/// as tall as the work area lets a new capture fly in from anywhere on the
-/// monitor without the window ever changing size while it shows (a resize
-/// can flash). It stops short of the taskbar, so Windows never takes it for
-/// a full-screen app.
+/// Where the board's window goes on a monitor: its whole work area. The
+/// window is transparent and click-through except on the board; being that
+/// tall lets a capture fly in from anywhere without a resize (which can
+/// flash), and stopping short of the taskbar keeps Windows from taking it
+/// for a full-screen app.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Placement {
     /// Top-left and size, physical px.
@@ -72,8 +66,8 @@ impl Placement {
         let mon = overlay::monitor_at(POINT { x: pt.0, y: pt.1 });
         let work = mon.work;
         let mut height = work.bottom - work.top;
-        // Debug builds: TACK_DEBUG_WINDOW=strip gives the old 396 CSS px
-        // strip instead, to compare what the height costs.
+        // Debug builds: TACK_DEBUG_WINDOW=strip limits it to a 396 CSS px
+        // strip, to compare what the height costs.
         if cfg!(debug_assertions) && std::env::var("TACK_DEBUG_WINDOW").as_deref() == Ok("strip") {
             height = height.min((396.0 * mon.scale).round() as i32);
         }
@@ -102,8 +96,7 @@ pub fn board_hwnd(app: &AppHandle) -> Option<HWND> {
 pub fn init_window(app: &AppHandle) {
     if app.get_webview_window(WINDOW_LABEL).is_none() {
         if let Err(e) = create_window(app) {
-            // Without its window Tack is only a tray icon that does nothing;
-            // fail the way a broken window config always has.
+            // Without its window Tack is only a tray icon that does nothing.
             eprintln!("tack: cannot create the board window: {e}");
             std::process::exit(1);
         }
@@ -120,31 +113,34 @@ pub fn init_window(app: &AppHandle) {
 
 /// The window is described in tauri.conf.json but created here
 /// (`"create": false` there), because only the builder can put WebView2's
-/// user data folder in an absolute place: `%LOCALAPPDATA%\Tack\WebView2`,
-/// next to Tack's other local data, rather than a folder named after the
-/// bundle identifier.
+/// user data folder at [`webview_data_dir`].
 fn create_window(app: &AppHandle) -> tauri::Result<()> {
     let Some(config) = app.config().app.windows.iter().find(|w| w.label == WINDOW_LABEL).cloned() else {
         return Err(tauri::Error::WindowNotFound);
     };
     let mut builder = WebviewWindowBuilder::from_config(app, &config)?;
-    if let Ok(local) = app.path().local_data_dir() {
-        builder = builder.data_directory(local.join("Tack").join("WebView2"));
+    if let Some(dir) = webview_data_dir(app) {
+        builder = builder.data_directory(dir);
     }
     builder.build()?;
     Ok(())
 }
 
+/// WebView2's user data folder, shared by all of Tack's windows:
+/// `%LOCALAPPDATA%\Tack\WebView2`, next to Tack's other local data, rather
+/// than a folder named after the bundle identifier.
+pub fn webview_data_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
+    app.path().local_data_dir().ok().map(|local| local.join("Tack").join("WebView2"))
+}
+
 /// The window starts hidden, so its web view can sleep as soon as the UI has
 /// loaded the board. Polls only until then.
 ///
-/// Before it sleeps, the window is shown once, click-through, for a moment,
-/// and the page draws the board in it unseen (`board:warm-up`, at 1%
-/// opacity): the very first show of a WebView2 window sets up its surfaces
-/// in the GPU process, and the very first drawing of the board (its cork,
-/// shadows, swing and prints) costs the renderer about a second, during
-/// which no frame reaches the screen. Paid here, the first reveal of a
-/// session, or a new capture's flight, is seen from its first frame.
+/// Before it sleeps, the window is shown once, click-through, and the page
+/// draws the board unseen (`board:warm-up`): the first show of a WebView2
+/// window sets up its GPU surfaces and the first drawing of the board is
+/// slow, with no frame reaching the screen meanwhile. Paid here, the first
+/// reveal (or flight) is seen from its first frame.
 fn sleep_once_ready(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {

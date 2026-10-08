@@ -1,9 +1,7 @@
-//! A print: one thing pinned to the board, and where its file came from.
-//! Most prints are screenshots; a **note** is a short text or a link the user
-//! pinned on purpose (Win+Alt+C on a selection, or dropped on the board).
-//! Tack points at screenshot files where they already are and leaves them
-//! there. Captures and notes are different: Tack wrote those files itself, so
-//! it is also responsible for cleaning them up.
+//! A print: one screenshot or note pinned to the board, and where its file
+//! came from. Tack points at screenshot files where they already are and
+//! leaves them there; captures and notes are files Tack wrote itself, so
+//! nobody else knows they are there and Tack cleans them up.
 
 use std::path::PathBuf;
 use std::time::{Instant, SystemTime};
@@ -87,8 +85,7 @@ pub struct NoteBody {
     pub truncated: bool,
 }
 
-/// Where a print's file came from. Tack wrote a capture's file itself, so it
-/// also cleans it up: nobody else knows it is there.
+/// Where a print's file came from.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Origin {
     /// A screenshot file in the Screenshots folder (or anywhere else the user

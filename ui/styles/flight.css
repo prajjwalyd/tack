@@ -1,18 +1,14 @@
-/* The capture flight (scripts/flight.js): a new snip lifts off the screen
-   where it was taken and flies up into its place on the board, then the
-   one-time tip that can hang under the board afterwards.
+/* The capture flight (scripts/flight.js) and the one-time tip after it.
 
-   .flight          fixed, laid out exactly where the print will rest on the
-                    board; flight.js moves it there from the snip with a
-                    transform about the pin point (50% var(--pin-y)), the
-                    same point the print's own layers turn and scale about,
-                    so it can pass through the print's "held" pose and
-                    be pressed down to the print's resting pose, where the
-                    print itself takes over.
-     .flight-shade  the lift shadow (as .shade on a print), faded in
-     .flight-paper  the paper border and rest shadow, faded in on the way
-     .flight-photo  the picture, inset by the border; it starts out exactly
-                    over the snip, so it has no rounding and no gloss. */
+   .flight          fixed, laid out where the print will rest; flight.js
+                    transforms it about the pin point (50% var(--pin-y)), the
+                    point the print's own layers turn about, from the snip
+                    through the print's "held" pose to its resting pose, where
+                    the print takes over
+     .flight-shade  lift shadow (as .shade), faded in
+     .flight-paper  paper border and rest shadow, faded in on the way
+     .flight-photo  the picture, inset by the border; it starts exactly over
+                    the snip, so it has no rounding and no gloss */
 
 .flight {
   --pin-y: 7px;
@@ -24,7 +20,7 @@
   transform-origin: 50% var(--pin-y);
   will-change: transform, opacity;
   contain: layout style;
-  /* Outside #board, so it needs the board's colour scheme of its own. */
+  /* Outside #board, so it needs its own colour scheme. */
   color-scheme: light dark;
 }
 :root[data-theme="light"] .flight { color-scheme: light; }
@@ -59,22 +55,18 @@
   display: block;
   width: 100%;
   height: 100%;
-  /* Stretched to the box, never cropped: the box is scaled to the snip's
-     exact size, so the first frame is the snip itself. */
+  /* Stretched, not cropped: the box is scaled to the snip's exact size. */
   object-fit: fill;
 }
 
-/* While flight.js measures where the print will rest, the board is held
-   flat for a moment (within one task, never painted). */
+/* flight.js holds the board flat while measuring the print's resting spot (never painted). */
 #board.measuring { transform: none !important; transition: none !important; }
 
-/* The landing: the class comes as the pin starts to drive in, about 100 ms
-   before the print touches the cork; the board's knock follows the touch. */
+/* .landing is set as the pin starts to drive in, ~100 ms before the print
+   touches the cork; delays the board's knock until the touch. */
 #board:has(.slot.arriving.landing) > :is(.cork, #rail) { animation-delay: 100ms; }
 
-/* ---------------------------------------------------------------- the tip
-   A paper slip pinned to the bottom edge of the board, once, after the
-   first flight: Snipping Tool's own notification is redundant now. */
+/* The tip: a paper slip pinned to the bottom edge of the board, once, after the first flight. */
 
 .tip {
   --pin-y: 9px;

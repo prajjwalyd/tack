@@ -1,11 +1,10 @@
-/* The "Tack on your phone" window (phone-link.html, scripts/phone-link.js):
-   a small Windows 11 window in the Shortcuts dialog's style. A solid
-   background that follows the system theme, Fluent cards, a toggle switch,
-   a QR code on a white card, and a footer with the privacy line and Close.
-   Fluent's metrics: Segoe UI Variable 14/20, 4 px controls, 32 px buttons,
-   the two-tone focus ring. A request to use the board is the one loud thing
-   on the page: an accent-ringed card at the very top. <html
-   data-theme="light|dark"> forces a theme (the dev preview). */
+/* The "Tack on your phone" window (phone-link.html, scripts/phone-link.js), in
+   the Shortcuts dialog's Windows 11 style: solid system-themed background,
+   Fluent cards, a switch, a QR code on a white card, and a footer. Fluent
+   metrics: Segoe UI Variable 14/20, 4 px controls, 32 px buttons, two-tone
+   focus ring. A request to use the board is the one loud thing: an
+   accent-ringed card at the top. <html data-theme="light|dark"> forces a
+   theme (dev preview). */
 
 :root {
   color-scheme: light dark;
@@ -56,8 +55,7 @@ body {
   overflow: hidden;
 }
 
-/* The page scrolls between a fixed top and the footer, for small screens
-   and big text sizes. */
+/* Scrolls between the top and the footer for small screens and big text. */
 .dialog {
   flex: 1;
   min-height: 0;
@@ -66,7 +64,6 @@ body {
   gap: 12px;
   padding: 14px 20px 16px;
   overflow-y: auto;
-  /* Only there when needed, and slim when it is. */
   scrollbar-width: thin;
   scrollbar-color: light-dark(rgba(0, 0, 0, .3), rgba(255, 255, 255, .3)) transparent;
 }
@@ -79,7 +76,7 @@ h1, h2, p, ol, ul { margin: 0; }
 h1, h2 { font-weight: 600; }
 h1:focus, .ask-title:focus { outline: none; }
 
-/* ---------------------------------------------------------------- a request */
+/* ---- a request ---- */
 .ask {
   padding: 12px 14px 14px;
   border-radius: 8px;
@@ -109,7 +106,7 @@ h1:focus, .ask-title:focus { outline: none; }
   to { opacity: 1; transform: none; }
 }
 
-/* ---------------------------------------------------------------- the header */
+/* ---- the header ---- */
 .hero { display: flex; gap: 14px; align-items: center; padding: 2px 0 0; }
 .hero-icon {
   flex: none;
@@ -125,7 +122,7 @@ h1:focus, .ask-title:focus { outline: none; }
 .hero h1 { font: 600 20px/26px var(--font-display); }
 .hero p { margin-top: 2px; font: 400 13px/18px var(--font); color: var(--ink-2); }
 
-/* ---------------------------------------------------------------- cards */
+/* ---- cards ---- */
 .card {
   border-radius: 6px;
   background: var(--card);
@@ -180,7 +177,7 @@ h1:focus, .ask-title:focus { outline: none; }
 .switch[aria-checked="true"] .track::before { background: var(--on-accent); transform: translateX(20px); }
 .switch[aria-checked="true"]:hover .track::before { transform: translateX(19px); }
 
-/* ---------------------------------------------------------------- the body */
+/* ---- the body ---- */
 .note { padding: 14px 16px; }
 .note p + p, .note p + .std { margin-top: 10px; }
 .note .std { display: inline-block; }
@@ -236,7 +233,7 @@ h1:focus, .ask-title:focus { outline: none; }
   cursor: text;
 }
 
-/* ---------------------------------------------------------------- devices */
+/* ---- devices ---- */
 .sec { margin: 0 2px 6px; font: 600 13px/18px var(--font); }
 .list { list-style: none; padding: 0; }
 .dev {
@@ -251,7 +248,7 @@ h1:focus, .ask-title:focus { outline: none; }
 .dev-name { display: block; overflow-wrap: anywhere; }
 .dev-when { display: block; font: 400 12px/16px var(--font-small); color: var(--ink-2); }
 
-/* ---------------------------------------------------------------- footer */
+/* ---- footer ---- */
 footer {
   display: flex;
   align-items: center;
@@ -262,7 +259,7 @@ footer {
 }
 .privacy { flex: 1; font: 400 12px/16px var(--font-small); color: var(--ink-2); }
 
-/* ---------------------------------------------------------------- buttons */
+/* ---- buttons ---- */
 button { font: inherit; }
 .std {
   min-width: 88px;
@@ -326,7 +323,7 @@ button { font: inherit; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
-/* ---------------------------------------------------------------- High Contrast */
+/* ---- High Contrast ---- */
 @media (forced-colors: active) {
   .card, .ask { border: 1px solid CanvasText; box-shadow: none; }
   .ask { border-width: 2px; }

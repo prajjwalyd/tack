@@ -1,14 +1,11 @@
-/* Passing cues: the notice under the board (scripts/notice.js) and the drop
-   affordance on the felt while something pinnable is dragged over it
-   (scripts/drop.js). Both quiet, both gone in a moment, opacity and
-   transform only.
+/* Passing cues, opacity and transform only.
 
-   #notice      a frosted pill centred under the board, in the overhang.
-                Outside #board (it never swings with it), so it carries the
-                board's colour scheme itself, like .flight.
-   .drop-cue    a soft wash of light over the felt, a light rim, and a small
-                "Drop to pin" label in the middle. No backdrop filter: the
-                board may still be swinging down when a drag arrives. */
+   #notice      frosted pill under the board (scripts/notice.js). Outside
+                #board so it never swings, hence its own colour scheme, like
+                .flight.
+   .drop-cue    light wash, rim and "Drop to pin" label over the felt while
+                something pinnable is dragged over it (scripts/drop.js). No
+                backdrop filter: the board may still be swinging down. */
 
 #notice {
   position: fixed;
@@ -37,7 +34,6 @@
 :root[data-theme="light"] #notice { color-scheme: light; }
 :root[data-theme="dark"] #notice { color-scheme: dark; }
 
-/* ---------------------------------------------------------------- drop */
 .drop-cue {
   position: absolute;
   left: var(--frame-w);
@@ -76,7 +72,7 @@
 }
 .drop-label svg { width: 12px; height: 12px; }
 #board.drop-over .drop-label { transform: none; }
-/* The prints step back a little, so the wash reads as "here". */
+/* Prints step back so the wash reads as "here". */
 #prints { transition: opacity 160ms ease; }
 #board.drop-over #prints { opacity: .8; }
 

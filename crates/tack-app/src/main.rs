@@ -1,14 +1,7 @@
 //! Tack: a corkboard for your recent screenshots that slides down from the
-//! top edge of the screen. Each new screenshot is pinned to it, and a print
-//! can be copied, opened, edited or dragged out as a file. Text and links
-//! can be pinned too, on purpose: the selection with Win+Alt+C, or anything
-//! dropped on the board.
-//!
-//! The board lives in a transparent, never-focused window that covers the top
-//! of one monitor. The UI (`ui/`) draws and animates it; this binary wires
-//! the board model (`tack-core`) to the Windows integrations
-//! (`tack-windows`) and to the UI through the IPC in docs/ipc.md.
-//! docs/architecture.md walks through how the pieces fit.
+//! top edge of the screen. This binary wires the board model (`tack-core`)
+//! to the Windows integrations (`tack-windows`) and to the UI (`ui/`,
+//! through the IPC in docs/ipc.md). docs/architecture.md has the overview.
 
 // No console window in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -26,6 +19,7 @@ macro_rules! trace {
 
 mod captures;
 mod context_menu;
+mod dialogs;
 mod drag;
 mod ipc;
 mod keyboard;
@@ -54,9 +48,8 @@ use crate::ipc::commands;
 use crate::state::AppState;
 
 fn main() {
-    // Started under another app's MSIX container (a terminal or coding tool
-    // hosted by one, say): run as a normal app instead. See
-    // tack-windows/src/sandbox.rs.
+    // Started inside another app's MSIX container: run as a normal app
+    // instead (see tack-windows/src/sandbox.rs).
     if let Some(host) = sandbox::host_package() {
         if sandbox::relaunch_outside(&host) {
             return;

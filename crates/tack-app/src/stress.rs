@@ -2,25 +2,19 @@
 //! down", run from inside the app so it never needs the keyboard or the
 //! pointer. Started through the debug control (docs/performance.md):
 //!
-//! - `stress` (the file may hold a cycle count, default 30): tuck, wait a
-//!   while (from 0.2 s, inside the window where the web view is being put to
-//!   sleep, up to 5 s), pin a generated capture, then check what the page
-//!   reported back: the reveal handled within 300 ms of the capture, its
-//!   print's pin-on started on schedule (half way through the slide, so
-//!   within 400 ms of the reveal) and its sound played, and no other print
-//!   pinned on with it.
-//! - `stress-stale`: the same, but each capture arrives while the poller's
-//!   last full-screen sample still says "busy", as it does for up to half a
-//!   second after Snipping Tool's own full-screen overlay closes.
-//! - `stress-pending`: the capture, saved ahead of time, is pinned on the
-//!   main thread right after the web view's suspend has been asked for, so
-//!   its reveal arrives while that suspend is still pending.
-//! - `backlog`: three captures arrive while something really is full screen
-//!   (so each is pinned quietly), then the tray brings the board down: only
-//!   the newest of them should pin on with a sound.
+//! - `stress` (may hold a cycle count, default 30): tuck, wait one of
+//!   [`DELAYS_MS`], pin a generated capture, then check the page's reports:
+//!   reveal handled and pin-on started within budget, its sound played, no
+//!   other print pinned on with it.
+//! - `stress-stale`: the same, with the poller's last full-screen reading
+//!   still saying "busy", as just after Snipping Tool's overlay closes.
+//! - `stress-pending`: the capture lands while the web view's suspend is
+//!   still pending.
+//! - `backlog`: three captures pinned quietly behind something full screen,
+//!   then a tray reveal: only the newest should pin on, with a sound.
 //!
-//! The page reports through [`debug_ack`], which it only calls once the
-//! backend has set `window.__tackDebug` (see [`enable_page_acks`]).
+//! The page reports through [`debug_ack`], once [`enable_page_acks`] has set
+//! `window.__tackDebug`.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -46,8 +40,7 @@ pub fn running() -> bool {
 }
 
 /// Pauses between the tuck and the capture, cycled through. Most fall in or
-/// near the sleep window: the window hides 300 ms after the tuck and the
-/// suspend completes a little later.
+/// near the time the web view is being put to sleep.
 const DELAYS_MS: [u64; 15] = [200, 280, 300, 310, 320, 340, 370, 420, 500, 650, 900, 1500, 2500, 3500, 5000];
 /// How long a capture's page reports are waited for.
 const SETTLE: Duration = Duration::from_millis(1300);

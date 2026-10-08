@@ -1,12 +1,12 @@
-// Board geometry: each print's size and place in the row, the board's width,
-// the pin colours, and the board rect the backend uses for click-through
-// (grown to take in an unfolded note, see note.js).
-// The CSS sizes in styles/tokens.css mirror the constants here.
+// Board geometry: each print's size and place in the row, the board width,
+// pin colours, and the board rect the backend uses for click-through (grown
+// for an unfolded note, see note.js). CSS sizes in styles/tokens.css mirror
+// the constants here.
 //
-// One row, always. Kept prints lead, then a wider gap, then the rest newest
-// first. The board fits its content up to the window width minus SIDE;
-// beyond that the row scrolls (scroll.js). Prints are placed relative to the
-// board's centre, so a width change never shifts the ones already there.
+// One row: kept prints, a wider gap, then the rest newest first. The board
+// fits its content up to window width minus SIDE, beyond that the row scrolls
+// (scroll.js). Prints are placed relative to the board's centre, so a width
+// change never shifts the ones already there.
 
 import * as ipc from "./ipc.js";
 import { LAYOUT_EASING, LAYOUT_MS } from "./motion/spring.js";
@@ -19,12 +19,11 @@ export const BOARD_H = 150;       // --board-h
 const BORDER = 4;                 // --print-border
 export const PIN_Y = 7;           // pin centre, from a print's top (--pin-y in print.css)
 
-export const PRINT_TOP = 13;             // prints hang from a common line this far below the screen edge
+export const PRINT_TOP = 13;      // prints hang from this line, below the screen edge
 const PHOTO_MAX_W = 160;          // long side at most 160 px (design.md)
 const PHOTO_MAX_H = 100;          // leaves room for the age caption under the tallest print
 const PHOTO_MIN = 40;
-// A paper note is one fixed size, so a row of mixed prints and notes stays
-// calm. Its height leaves room under it for a link's three-line caption.
+// A paper note is one fixed size; its height leaves room for a link's three-line caption.
 const NOTE_W = 136;
 const NOTE_H = 86;
 const PAD = 24;                   // cork left and right of the outermost prints
@@ -65,7 +64,6 @@ export function measure(print) {
   }
   print.slot.style.width = `${print.w}px`;
   print.slot.style.height = `${print.h}px`;
-  // The pin places itself (pin.css), from --pin-size and --pin-y.
 }
 
 /** A stable first colour for a print, from its id. */
@@ -75,9 +73,8 @@ export function colorFor(id) {
   return PALETTE[(h >>> 0) % PALETTE.length];
 }
 
-// Neighbouring pins never share a colour. Kept pins are brass, so only
-// unkept neighbours count. A clash recolours the print that is newer to the
-// board, so pins people have already seen keep theirs.
+// Neighbouring unkept pins never share a colour (kept pins are brass). A
+// clash recolours the newer print so pins already seen keep theirs.
 function fixPinColors(live) {
   for (let i = 1; i < live.length; i++) {
     const a = live[i - 1], b = live[i];
@@ -92,10 +89,9 @@ function fixPinColors(live) {
 }
 
 /**
- * Lays the row out and sizes the board. `instant`: jump, no slides (boot,
- * a new monitor). Slots glide to new places with the CSS transition on
- * their transform; the board's width change plays as a scaleX FLIP on the
- * cork, so nothing animates layout.
+ * Lays the row out and sizes the board. `instant` skips slides (boot, new
+ * monitor). Slots glide via a CSS transition on transform; a width change is
+ * a scaleX FLIP on the cork, so layout itself is never animated.
  */
 export function layout({ instant = false } = {}) {
   const live = state.order.map((id) => state.prints.get(id)).filter(Boolean);
@@ -157,10 +153,7 @@ export function showPrint(print) {
   return scrollIntoView(print.x + viewW / 2, print.x + print.w + viewW / 2, viewW);
 }
 
-/**
- * Where the row rests when the board comes down: at the start, unless the
- * kept prints fill the view, then just far enough to show the newest print.
- */
+/** Where the row rests when the board comes down: the start, or just far enough to show the newest print if kept prints fill the view. */
 export function restScroll() {
   scrollTo(0, true);
   if (fits) return;
@@ -170,10 +163,8 @@ export function restScroll() {
   if (right > viewW) scrollTo(right - viewW, true);
 }
 
-// ---------------------------------------------------------------- board rect
-// In physical px relative to the window, for click-through. Scrolling moves
-// the prints inside the board, never the board, so the rect only follows the
-// width. While the cork's width animates, the rect covers old and new.
+// Board rect in physical px relative to the window, for click-through. It only
+// follows the width; while the cork animates it covers old and new.
 let rectTimer = 0, rectSettle = 0, lastRect = "";
 let rectPrevW = 0;
 let extraRect = null;             // an unfolded note's sheet, CSS px relative to the window
@@ -188,11 +179,7 @@ export function sendRect(instant = false) {
   }, 16);
 }
 
-/**
- * Something hangs below the board that must take clicks and wheel turns too
- * (an unfolded note): `r` in CSS px relative to the window, or null. The
- * rect sent is the union of the board and it.
- */
+/** Extends the click rect to something hanging below the board (an unfolded note): `r` in CSS px relative to the window, or null. */
 export function setExtraRect(r) {
   extraRect = r;
   pushRect(Math.max(rectPrevW, state.boardW));
@@ -226,7 +213,7 @@ function pushRect(w) {
   ipc.setBoardRect(r);
 }
 
-/** Cancels pending rect updates (tuck): no timers while tucked. */
+/** Cancels pending rect updates on tuck. */
 export function stopRectTimers() {
   if (rectTimer) { clearTimeout(rectTimer); rectTimer = 0; }
   if (rectSettle) { clearTimeout(rectSettle); rectSettle = 0; rectPrevW = state.boardW; pushRect(state.boardW); }

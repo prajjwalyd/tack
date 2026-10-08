@@ -4,7 +4,7 @@
 
 html, body { width: 960px; height: 540px; }
 
-/* ---------------------------------------------------------------- the window */
+/* ---- the window ---- */
 #app {
   position: fixed;
   left: 452px; top: 186px; width: 470px; height: 290px;
@@ -31,7 +31,7 @@ html, body { width: 960px; height: 540px; }
 #app .caption .close::before { content: "\00d7"; font-size: 17px; line-height: 1; opacity: .75; }
 #app canvas { display: block; width: 470px; height: 260px; }
 
-/* ---------------------------------------------------------------- the snip */
+/* ---- the snip ---- */
 #snip { position: fixed; inset: 0; z-index: 900; pointer-events: none; overflow: hidden; }
 /* The dim is the selection's own shadow, so inside it the screen stays clear. */
 #snip .sel {
@@ -53,7 +53,7 @@ html, body { width: 960px; height: 540px; }
   opacity: 0;
 }
 
-/* ---------------------------------------------------------------- the trail */
+/* ---- the trail ---- */
 #trail { position: fixed; left: 0; top: 0; width: 960px; height: 540px; z-index: 999; pointer-events: none; }
 
 /* The brass glint again as the new print is tacked in (in the app it plays

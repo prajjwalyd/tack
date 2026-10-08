@@ -20,8 +20,8 @@ pub const PRINT_DRAG_ENDED: &str = "board:print-drag-ended";
 pub const REVEAL: &str = "board:reveal";
 pub const TUCK: &str = "board:tuck";
 pub const WARM_UP: &str = "board:warm-up";
-// `board:gust` is part of the contract too, but the backend never sends it
-// today: the UI schedules its own gusts (the preview harness sends it).
+// `board:gust` is in the contract but only the preview harness sends it; the
+// UI schedules its own gusts.
 pub const SETTINGS: &str = "board:settings";
 pub const POINTER_LEFT: &str = "board:pointer-left";
 pub const NOTICE: &str = "board:notice";

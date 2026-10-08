@@ -16,24 +16,23 @@
 //! pixels before the clipboard update came), the corners are nudged around
 //! within [`RADIUS`].
 //!
-//! Pure maths, no Win32: `tack_windows::capture_origin` grabs the screen and
-//! calls in here, so all of this is tested with made-up screens.
+//! No Win32 here: `tack_windows::capture_origin` grabs the screen and calls
+//! in, so all of this is tested with made-up screens.
 
 use crate::view::Rect;
 
 /// Samples per side of the comparison grid.
-pub const GRID: u32 = 32;
+const GRID: u32 = 32;
 /// An exact candidate this good ends the search at once.
-pub const SURE: f64 = 0.97;
+const SURE: f64 = 0.97;
 /// The least a candidate must score to be believed at all.
-pub const ACCEPT: f64 = 0.86;
+const ACCEPT: f64 = 0.86;
 /// How far, in physical px, a corner is nudged looking for the picture when
 /// the pointer has moved since the drag ended.
-pub const RADIUS: i32 = 12;
+const RADIUS: i32 = 12;
 /// Half the side of the square around the pointer that a quick look
-/// compares (see [`focus`]). Reading the screen costs about 15 ms however
-/// little is read, and more the more is read; a patch this size next to the
-/// pointer is plenty to tell the candidates apart.
+/// compares (see [`focus`]). Reading less of the screen is quicker, and a
+/// patch this size next to the pointer is plenty to tell candidates apart.
 pub const FOCUS: i32 = 256;
 /// Below this [`Samples::detail`] a patch is too plain to tell candidates
 /// apart: compare the whole picture instead.
@@ -163,7 +162,7 @@ impl Samples {
 /// The grid's positions in a `w` x `h` picture: the centres of a
 /// [`GRID`] x [`GRID`] split, so none lies on an edge (where Snipping Tool
 /// may still be drawing the selection's outline).
-pub fn grid_points(w: u32, h: u32) -> Vec<(u32, u32)> {
+fn grid_points(w: u32, h: u32) -> Vec<(u32, u32)> {
     if w == 0 || h == 0 {
         return Vec::new();
     }
@@ -174,7 +173,7 @@ pub fn grid_points(w: u32, h: u32) -> Vec<(u32, u32)> {
 /// How well the screen at `at` (the top-left of a candidate) matches the
 /// picture: 1.0 for the same pixels, toward 0.0 for unrelated ones. Samples
 /// off the screen grab count as wholly different.
-pub fn score(samples: &Samples, screen: &impl Pixels, at: (i32, i32)) -> f64 {
+fn score(samples: &Samples, screen: &impl Pixels, at: (i32, i32)) -> f64 {
     score_above(samples, screen, at, f64::MIN).unwrap_or(0.0)
 }
 

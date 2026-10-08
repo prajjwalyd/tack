@@ -1,14 +1,9 @@
-/* Pins: small domed heads of glossy plastic lit from above, with one crisp
-   specular point, a soft sheen below it, a darker rim, a little light
-   bounced back up from the paper and a precise little shadow falling
-   straight down, in bright push-pin colours (tomato, cobalt, lemon, violet,
-   white; see tokens.css) that never repeat between neighbours. As a pin
-   drives in, its contact shadow spreads.
-   A kept item's pin is polished brass, the same on every kept print and
-   note so they are found at a glance, and a little larger: the brass head
-   sits on top and fades in, so the change never repaints the head, and a
-   glint crosses the brass as it turns (and each time the board swings into
-   the light). */
+/* Pins: glossy domed plastic heads with a specular point, rim, bounce light
+   and a small falling shadow, in the five colours from tokens.css (never
+   repeated between neighbours). A kept item's pin is polished brass and a
+   little larger: the brass head sits on top and fades in so the head never
+   repaints, and a glint crosses it (and again each time the board swings into
+   the light). Driving a pin in spreads its contact shadow. */
 
 .pin {
   --c: var(--pin-graphite);
@@ -19,16 +14,14 @@
   z-index: 4;
   pointer-events: none;
 }
-/* Where it sits: centred on the print's (or note's) top edge, its centre
-   --pin-y (7 px) below it, whatever its size, so --pin-scale alone resizes
-   the pin. (.flight > .pin is the flight's stand-in, a clone of the print's
-   pin.) */
+/* Centred on the top edge with its centre --pin-y below it, so --pin-scale alone
+   resizes it. .flight > .pin is the flight stand-in's clone. */
 .slot > .pin,
 .flight > .pin {
   left: calc(50% - var(--pin-size) / 2);
   top: calc(var(--pin-y) - var(--pin-size) / 2);
 }
-/* The pin's soft contact shadow, where its head meets the paper. */
+/* Contact shadow where the head meets the paper. */
 .pin::before {
   content: "";
   position: absolute;
@@ -37,8 +30,7 @@
   background: radial-gradient(closest-side at 50% 58%, var(--pin-cast) 0, transparent 100%);
   opacity: .9;
 }
-/* Pin-on: as the pin drives in (print.js lands it ~250 ms into the arrival,
-   its squash peaks ~100 ms later) the contact shadow spreads and settles. */
+/* Pin-on: timed to land with the pin's squash (print.js lands it ~250 ms in). */
 .slot.arriving .pin::before {
   animation: pin-dimple 300ms cubic-bezier(.2, .7, .3, 1) 330ms backwards;
 }
@@ -67,9 +59,6 @@
 }
 .pin-brass {
   overflow: hidden;
-  /* Polished metal: a hard specular point, a bright cap, a dark band where
-     the dome turns away and a bright rim below it, catching the light
-     again. */
   background:
     radial-gradient(circle at 37% 25%, rgba(255, 255, 255, 1) 0, rgba(255, 255, 255, .75) calc(var(--pin-u) * .7), rgba(255, 255, 255, 0) calc(var(--pin-u) * 2.2)),
     radial-gradient(circle at 42% 32%, var(--brass-hi) 0, var(--brass) 20%, var(--brass-mid) 46%, var(--brass-d) 70%, var(--brass-rim) 88%, var(--brass-mid) 100%);
@@ -82,14 +71,13 @@
   transition: opacity 180ms ease;
 }
 .slot.kept .pin-brass { opacity: 1; }
-/* Kept pins are a little larger, everywhere: in the row and on an unfolded
-   note (whose brass note.js shows inline). `scale` composes with the keep
-   press's transform. It grows with the brass fade, only while the board is
-   out. */
+/* Kept pins are larger in the row and on an unfolded note (whose brass note.js
+   shows inline). `scale` composes with the keep press's transform; it animates
+   only while the board is out. */
 .slot.kept > .pin,
 .sheet .pin:has(> .pin-brass[style*="opacity"]) { scale: var(--kept-pin-scale); }
 #board:not(.tucked) .slot > .pin { transition: scale 180ms ease; }
-/* The glint: a narrow band of light crossing the brass once. */
+/* Glint: a band of light crossing the brass once. */
 .pin-brass::after {
   content: "";
   position: absolute;

@@ -34,7 +34,7 @@ body { background: var(--wp-base) !important; }
 .ribbons { position: absolute; inset: 0; width: 100%; height: 100%; }
 .r1a { stop-color: var(--wp-r1a); } .r1b { stop-color: var(--wp-r1b); } .r1c { stop-color: var(--wp-r1c); }
 .r2a { stop-color: var(--wp-r2a); } .r2b { stop-color: var(--wp-r2b); }
-/* ---------------------------------------------------------------- ?card */
+/* ---- ?card ---- */
 /* The social preview: the board, then the headline and the name. */
 :root.card .taskbar { display: none; }
 #card {

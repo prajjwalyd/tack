@@ -1,26 +1,8 @@
 //! Where on screen a Snipping Tool capture was taken, so the new print can
-//! fly up to the board from exactly there.
-//!
-//! The pointer is read the moment the clipboard update arrives
-//! ([`pointer`]): it is normally still on the corner of the selection where
-//! the drag ended. [`find`] then grabs the screen around it with GDI and
-//! lets `tack_core::origin` decide which candidate rectangle shows the
-//! captured picture. Everything is in physical pixels, as the picture is.
-//!
-//! The grab is compared in memory and freed at once; it is never saved,
-//! logged or sent anywhere.
-//!
-//! Reading the screen costs about 15 ms however little is read, and more the
-//! more is read (about 85 ms for a whole 2880 x 1800 screen), so the first
-//! look reads only a square around the pointer and compares each candidate
-//! by the part of the picture that falls in it. Only if that part is too
-//! plain to tell, or nothing matches, does a second look compare the whole
-//! picture.
-//!
-//! When the update arrives Snipping Tool's overlay may still be fading out.
-//! Inside the selection it shows the frozen screen, undimmed, which is the
-//! picture itself, so the first look usually settles it; if nothing matched,
-//! the second look comes [`RETRY_AFTER`] later, when the overlay is gone.
+//! fly up to the board from there. [`find`] grabs the screen around the
+//! pointer and lets `tack_core::origin` pick the rectangle that shows the
+//! picture, in physical pixels throughout. The grab is compared in memory and
+//! freed at once; it is never saved, logged or sent anywhere.
 
 use std::time::{Duration, Instant};
 
@@ -34,13 +16,17 @@ use windows::Win32::Graphics::Gdi::{
     BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, SRCCOPY,
 };
 use windows::Win32::System::Threading::{GetCurrentThread, GetThreadTimes};
-use windows::Win32::UI::HiDpi::{SetThreadDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
+use windows::Win32::UI::HiDpi::{
+    SetThreadDpiAwarenessContext, DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+    DPI_AWARENESS_CONTEXT_UNAWARE,
+};
 use windows::Win32::UI::WindowsAndMessaging::{GetAncestor, GetPhysicalCursorPos, WindowFromPhysicalPoint, GA_ROOT};
 
 use crate::overlay;
 
-/// The second look, if the first found nothing.
-pub const RETRY_AFTER: Duration = Duration::from_millis(150);
+/// Wait before the second look, if the first found nothing: Snipping Tool's
+/// overlay may still be fading out when the capture arrives.
+const RETRY_AFTER: Duration = Duration::from_millis(150);
 /// Long side of the rectangle a print flies from when its picture was not
 /// found on screen, in physical px at 100% (scaled with the monitor).
 const FALLBACK_SIDE: f64 = 96.0;
@@ -81,29 +67,26 @@ pub struct Lookup {
 }
 
 /// Finds where on screen `picture` was taken, with the pointer at `pointer`
-/// (physical px) when the capture arrived. Blocks for up to about
-/// [`RETRY_AFTER`] plus two looks, so call it off the UI thread.
+/// (physical px) when the capture arrived. Blocks for up to two looks and
+/// the wait between them, so call it off the UI thread.
 pub fn find(picture: &DynamicImage, pointer: (i32, i32)) -> Lookup {
     let started = Instant::now();
     let cpu_before = thread_cpu();
+    let (w, h) = picture.dimensions();
     // Physical coordinates for the grab and the window frame, whatever the
     // process's own awareness.
-    let previous = unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
-    let (w, h) = picture.dimensions();
-    let mut tries = 1;
-    let mut found = look(picture, pointer, true);
-    if found.is_none_or(|f| f.detail < PLAIN) {
+    let (found, tries) = with_thread_dpi(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, || {
+        let found = look(picture, pointer, true);
+        if !found.is_none_or(|f| f.detail < PLAIN) {
+            return (found, 1);
+        }
         // Nothing yet (wait for the overlay to go), or too plain to tell:
         // the whole picture this time.
         if found.is_none() {
             std::thread::sleep(RETRY_AFTER);
         }
-        tries = 2;
-        found = look(picture, pointer, false).or(found);
-    }
-    if !previous.is_invalid() {
-        unsafe { SetThreadDpiAwarenessContext(previous) };
-    }
+        (look(picture, pointer, false).or(found), 2)
+    });
     let rect = match found {
         Some(f) => f.rect,
         None => {
@@ -115,8 +98,10 @@ pub fn find(picture: &DynamicImage, pointer: (i32, i32)) -> Lookup {
     Lookup { found, rect, tries, cpu: thread_cpu().saturating_sub(cpu_before), took: started.elapsed() }
 }
 
-/// One look at the screen: `quick` reads and compares only the square
-/// around the pointer, else the whole picture is compared.
+/// One look at the screen. Reading the screen costs more the more is read,
+/// so `quick` reads only a square around the pointer and compares each
+/// candidate by the part of the picture inside it; otherwise the whole
+/// picture is compared.
 fn look(picture: &DynamicImage, pointer: (i32, i32), quick: bool) -> Option<Found> {
     let mon = overlay::monitor_at(POINT { x: pointer.0, y: pointer.1 });
     let monitor = rect_of(mon.monitor);
@@ -244,15 +229,13 @@ fn thread_cpu() -> Duration {
 /// Debug builds: the screen inside `area` as a picture, as Snipping Tool
 /// would have captured it, for the debug control's simulated snips.
 pub fn grab_picture(area: Rect) -> Option<DynamicImage> {
-    let previous = unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
-    let img = with_grab(area, |grab| {
-        image::RgbImage::from_fn(area.w as u32, area.h as u32, |x, y| {
-            image::Rgb(grab.rgb(area.x + x as i32, area.y + y as i32).unwrap_or([0, 0, 0]))
+    let img = with_thread_dpi(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, || {
+        with_grab(area, |grab| {
+            image::RgbImage::from_fn(area.w as u32, area.h as u32, |x, y| {
+                image::Rgb(grab.rgb(area.x + x as i32, area.y + y as i32).unwrap_or([0, 0, 0]))
+            })
         })
     });
-    if !previous.is_invalid() {
-        unsafe { SetThreadDpiAwarenessContext(previous) };
-    }
     img.map(DynamicImage::ImageRgb8)
 }
 
@@ -260,8 +243,13 @@ pub fn grab_picture(area: Rect) -> Option<DynamicImage> {
 /// "unaware", where Windows scales coordinates to 96 DPI, to check that the
 /// lookup still works in physical pixels.
 pub fn as_dpi_unaware_thread<R>(f: impl FnOnce() -> R) -> R {
-    use windows::Win32::UI::HiDpi::DPI_AWARENESS_CONTEXT_UNAWARE;
-    let previous = unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE) };
+    with_thread_dpi(DPI_AWARENESS_CONTEXT_UNAWARE, f)
+}
+
+/// Runs `f` with the calling thread's DPI awareness set to `context`, then
+/// puts the previous awareness back.
+fn with_thread_dpi<R>(context: DPI_AWARENESS_CONTEXT, f: impl FnOnce() -> R) -> R {
+    let previous = unsafe { SetThreadDpiAwarenessContext(context) };
     let out = f();
     if !previous.is_invalid() {
         unsafe { SetThreadDpiAwarenessContext(previous) };

@@ -60,9 +60,9 @@ export const COMMANDS = Object.freeze({
  *             kept: boolean, keptAt: number | null, pinnedAt: number,
  *             kind?: "image" | "note", note?: Note | null }} Print
  * Times are ms since the epoch. The backend sends prints in display order:
- * kept first (by keptAt), then the rest newest first. `kind` is absent on
- * old payloads: treat that as "image". A note has `thumb` "", `width` and
- * `height` 0, and a name like "Note 2026-10-08 141530.txt".
+ * kept first (by keptAt), then the rest newest first. A missing `kind` means
+ * "image". A note has `thumb` "", `width` and `height` 0, and a name like
+ * "Note 2026-10-08 141530.txt".
  *
  * @typedef {{ text: string, link: string | null, domain: string | null,
  *             truncated: boolean }} Note
@@ -152,11 +152,7 @@ export const forgetDevice = (key) => invoke(COMMANDS.FORGET_DEVICE, { key });
 export const openNetbirdDownload = () => invoke(COMMANDS.OPEN_NETBIRD_DOWNLOAD);
 export const closePhoneLink = () => invoke(COMMANDS.CLOSE_PHONE_LINK);
 
-/**
- * Debug builds only: tells the backend's stress test what the page just did
- * ("reveal", "pin-on", "tock"). Does nothing unless the backend has set
- * `window.__tackDebug`, which release builds never do.
- */
+/** Debug builds only: tells the backend's stress test what the page just did ("reveal", "pin-on", "tock"). No-op unless `window.__tackDebug` is set. */
 export function debugAck(what, { id = null, queued = null } = {}) {
   if (window.__tackDebug) invoke("debug_ack", { what, id, queued });
 }

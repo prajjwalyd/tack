@@ -13,8 +13,8 @@
 //! - Only GET and POST; bodies have a size cap, a type allowlist and a rate
 //!   limit per device.
 //!
-//! Plain HTTP: NetBird's WireGuard tunnel encrypts it end to end, and NetBird
-//! gives peers no certificates. The phone's browser still says "Not secure".
+//! Plain HTTP: the WireGuard tunnel encrypts it end to end, and NetBird gives
+//! peers no certificates (so the phone's browser says "Not secure").
 
 use std::collections::{HashMap, VecDeque};
 use std::io::Read;
@@ -193,8 +193,7 @@ fn handle(app: &AppHandle, shared: &Shared, request: Request) {
         return deny(request, 403);
     }
 
-    let method = request.method().clone();
-    let path = request.url().split('?').next().unwrap_or("/").to_string();
+    let (method, path) = route(&request);
     match (&method, path.as_str()) {
         (Method::Get, "/") => send(request, Response::from_string(PAGE), "text/html; charset=utf-8"),
         (Method::Get, "/phone.js") => send(request, Response::from_string(SCRIPT), "text/javascript; charset=utf-8"),
@@ -224,8 +223,7 @@ fn gated(app: &AppHandle, shared: &Shared, request: Request, me: &Status, peer: 
 
 /// The board, a print's picture, or a pin, for an allowed device.
 fn serve_api(app: &AppHandle, shared: &Shared, mut request: Request, me: &Status, peer: &Peer) {
-    let method = request.method().clone();
-    let path = request.url().split('?').next().unwrap_or("/").to_string();
+    let (method, path) = route(&request);
     match (&method, path.as_str()) {
         (Method::Get, "/api/board") => {
             let body = serde_json::to_string(&board(app, me, peer)).unwrap_or_default();
@@ -343,6 +341,11 @@ fn print_file(app: &AppHandle, request: Request, id: &str) {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     let kind = if ext == "png" { "image/png" } else { "image/jpeg" };
     send(request, Response::from_data(bytes), kind);
+}
+
+/// The request's method and path, without the query.
+fn route(request: &Request) -> (Method, String) {
+    (request.method().clone(), request.url().split('?').next().unwrap_or("/").to_string())
 }
 
 fn header(request: &Request, name: &str) -> Option<String> {

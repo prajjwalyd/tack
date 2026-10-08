@@ -1,7 +1,4 @@
-//! The native right-click menu on a print: Copy, Open, Edit, Show in
-//! Explorer, (Save to Pictures, for a capture), Keep or Stop keeping, Unpin,
-//! Move to Recycle Bin. On a note: Copy (Copy link), Open link (for a link),
-//! Open or Edit the text file, and the rest. Menu item ids are
+//! The native right-click menu on a print. Item ids are
 //! `ctx:<action>:<print id>`. It opens at the pointer, or under the focused
 //! print when the keyboard asked for it (Shift+F10, the Menu key).
 

@@ -1,22 +1,7 @@
 //! Pinning the selection (Win+Alt+C): Tack asks the app in front to copy
 //! what is selected, reads the copy, and puts the user's clipboard back as
-//! it was.
-//!
-//! 1. The shortcut's keys are still down when it fires. While Alt or Win is
-//!    held, a no-op key goes in first ([`mask_menu`]), so letting go of Alt
-//!    does not open the app's menu bar (and Win does not open Start).
-//! 2. Tack waits until every modifier is released ([`ReleaseWait`]), so the
-//!    Ctrl+C it sends is not read as Win+Alt+Ctrl+C.
-//! 3. It notes the clipboard's sequence number, keeps a [`Snapshot`] of what
-//!    is there, sends Ctrl+C with `SendInput` and waits up to
-//!    [`COPY_PATIENCE`] for the number to change. No change: nothing was
-//!    selected (or the app does not copy on Ctrl+C).
-//! 4. It reads the copy ([`clipboard::read`]): text, a picture or files.
-//!    Content marked private is never returned.
-//! 5. It restores the snapshot, so the user's clipboard is as it was.
-//!
-//! Only this module, on the user's shortcut, ever reads text from the
-//! clipboard; the snipping listener ignores everything while it runs.
+//! it was. Before sending Ctrl+C it waits for the shortcut's own keys to be
+//! let go, so the app does not read Win+Alt+Ctrl+C.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -35,13 +20,13 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WNDCLASSW,
 };
 
-use crate::clipboard::{self, Content, Snapshot};
+use crate::clipboard::{self, Content};
 use crate::pointer;
 
 /// How long the app in front gets to copy after Ctrl+C.
-pub const COPY_PATIENCE: Duration = Duration::from_millis(400);
+const COPY_PATIENCE: Duration = Duration::from_millis(400);
 /// How long to wait for the shortcut's keys to be let go.
-pub const RELEASE_PATIENCE: Duration = Duration::from_millis(1500);
+const RELEASE_PATIENCE: Duration = Duration::from_millis(1500);
 /// The keys must stay up this long before Ctrl+C goes out.
 const RELEASE_SETTLE: Duration = Duration::from_millis(30);
 /// A key code Windows leaves unassigned: pressing it does nothing anywhere,
@@ -54,7 +39,7 @@ const POLL: Duration = Duration::from_millis(10);
 static GRABBING: AtomicBool = AtomicBool::new(false);
 
 /// Whether a grab is changing the clipboard right now.
-pub fn grabbing() -> bool {
+pub(crate) fn grabbing() -> bool {
     GRABBING.load(Ordering::SeqCst)
 }
 
@@ -79,8 +64,8 @@ pub struct Grab {
     pub restored: Option<Result<(), String>>,
 }
 
-/// Step 1, the moment the shortcut fires (on the hotkey thread): while Alt
-/// or Win is held, a press of an unassigned key keeps their release from
+/// Call the moment the shortcut fires (on the hotkey thread): while Alt or
+/// Win is held, a press of an unassigned key keeps their release from
 /// opening the menu bar of the app in front, or Start.
 pub fn mask_menu() {
     let held = [VK_MENU, VK_LWIN, VK_RWIN].iter().any(|vk| pointer::key_down(vk.0));
@@ -89,8 +74,9 @@ pub fn mask_menu() {
     }
 }
 
-/// Steps 2 to 5. Blocks for up to about two seconds; call it on a thread of
-/// its own, never the UI thread. With `only`, Ctrl+C is sent only if the
+/// Waits for the shortcut's keys to be let go, then copies the selection,
+/// reads it and restores the clipboard. Blocks for up to about two seconds;
+/// call it on a thread of its own, never the UI thread. With `only`, Ctrl+C is sent only if the
 /// window in front belongs to that process (for tests: never anyone else's).
 pub fn grab(only: Option<u32>) -> Grab {
     let mut wait = ReleaseWait::new(Instant::now());
@@ -144,7 +130,7 @@ fn copy_and_read(owner: HWND, only: Option<u32>) -> Grab {
         Content::Empty => Grabbed::Nothing,
     };
     let restored = Some(match &before {
-        Some(snapshot) => restore(owner, snapshot),
+        Some(snapshot) => clipboard::restore(owner, snapshot),
         None => Err("the clipboard could not be read before the copy".into()),
     });
     Grab { what, restored }
@@ -155,10 +141,6 @@ fn log(why: &str) {
     if cfg!(debug_assertions) {
         eprintln!("tack: pin selection: {why}");
     }
-}
-
-fn restore(owner: HWND, snapshot: &Snapshot) -> Result<(), String> {
-    clipboard::restore(owner, snapshot)
 }
 
 /// Any modifier key is down.
@@ -239,7 +221,7 @@ impl Drop for Owner {
 
 /// Where waiting for the shortcut's keys to be let go stands.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Release {
+enum Release {
     /// Every modifier has been up for a moment: send Ctrl+C.
     Ready,
     /// Look again shortly.
@@ -251,18 +233,18 @@ pub enum Release {
 /// Waits for the modifiers to be released and to stay released for
 /// [`RELEASE_SETTLE`], giving up after [`RELEASE_PATIENCE`]. Fed one
 /// reading at a time, so it can be tested without a keyboard.
-pub struct ReleaseWait {
+struct ReleaseWait {
     started: Instant,
     up_since: Option<Instant>,
 }
 
 impl ReleaseWait {
-    pub fn new(now: Instant) -> ReleaseWait {
+    fn new(now: Instant) -> ReleaseWait {
         ReleaseWait { started: now, up_since: None }
     }
 
     /// `held`: any modifier is down at `now`.
-    pub fn step(&mut self, held: bool, now: Instant) -> Release {
+    fn step(&mut self, held: bool, now: Instant) -> Release {
         if held {
             self.up_since = None;
             return if now.saturating_duration_since(self.started) >= RELEASE_PATIENCE {

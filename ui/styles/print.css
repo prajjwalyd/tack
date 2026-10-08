@@ -1,14 +1,13 @@
-/* A print: one screenshot on photo paper with an even thin border, pinned at
-   a small angle. The layers (.slot > .drop > .swing > .card) are described in
+/* A print: a screenshot on photo paper with a thin even border, pinned at a
+   small angle. Layers (.slot > .drop > .swing > .card) are described in
    scripts/print.js; hover, press, drag and kept are classes on .slot.
-   Everything that moves does so with transform or opacity: the hover shadow
-   is its own layer (.shade) that fades in, never an animated box-shadow.
+   Everything moves with transform or opacity: the hover shadow is its own
+   layer (.shade) that fades in, never an animated box-shadow.
 
-   While hovered, the card pivots a little on its pin toward the pointer and
-   a sheen follows the pointer across the photo: gestures.js sets --lean
-   (degrees) and --sheen-x/y (-1..1). All 2D. The one 3D moment is the peel
-   as a drag starts: only then does .swing get a perspective, so no print is
-   ever a 3D layer otherwise (each would cost a compositor surface). */
+   While hovered, the card leans toward the pointer and a sheen follows it
+   (gestures.js sets --lean in degrees and --sheen-x/y in -1..1). All 2D except
+   the peel as a drag starts: only then does .swing get a perspective, since a
+   3D layer per print would cost a compositor surface each. */
 
 .slot {
   --pin-y: 7px;
@@ -27,9 +26,7 @@
 .slot.leaving { z-index: 30; pointer-events: none; }
 .slot.awaiting { visibility: hidden; }
 
-.drop, .swing { position: absolute; inset: 0; }
-.drop { transform-origin: 50% var(--pin-y); }
-.swing { transform-origin: 50% var(--pin-y); }
+.drop, .swing { position: absolute; inset: 0; transform-origin: 50% var(--pin-y); }
 .slot.dragging .swing {
   perspective: var(--print-perspective);
   perspective-origin: 50% var(--pin-y);
@@ -46,8 +43,6 @@
     rotate var(--dur-hover-out) var(--ease-settle),
     opacity var(--dur-fade) ease;
 }
-/* Hover: lifts off the felt and leans a little on its pin toward the
-   pointer; the neighbours stay put. */
 .slot.hover .card {
   transform: translateY(-2px) rotate(calc(var(--tilt) * .2));
   rotate: var(--lean, 0deg);
@@ -61,8 +56,7 @@
   rotate: none;
   transition: transform var(--dur-press) cubic-bezier(.3, 0, .2, 1), rotate 200ms ease, opacity var(--dur-fade) ease;
 }
-/* The drag starts: the print peels off the felt from its free edge, like
-   paper pulled toward you, and then waits faintly while it is away. */
+/* Drag start: the print peels off the felt from its free edge, then waits faintly. */
 .slot.dragging .card {
   opacity: .45;
   transform: translateY(-3px) rotate(calc(var(--tilt) * .2));
@@ -72,8 +66,7 @@
     rotate 260ms var(--ease-out),
     opacity 220ms ease 140ms;
 }
-/* The curl's shading: the lifted edge turns away from the light. Only
-   there while dragging, so resting prints carry no extra layer to raster. */
+/* The curl's shading; present only while dragging so resting prints carry no extra layer. */
 .slot.dragging .card::after {
   content: "";
   position: absolute;
@@ -86,10 +79,9 @@
 }
 @keyframes curl-in { from { opacity: 0; } }
 
-/* Keyboard focus (keyboard.js): a light ring with dark hairlines, drawn on
-   the card so it tilts, lifts and swings with the print. Shown only in
-   keyboard mode (#board.kbd), never for the pointer; the slot itself keeps
-   no outline, since its box does not turn with the print. */
+/* Keyboard focus (keyboard.js): drawn on the card so it tilts and swings with
+   the print, only in keyboard mode (#board.kbd). The slot has no outline since
+   its box does not turn with the print. */
 .slot:focus { outline: none; }
 #board.kbd .slot.focused .card::before {
   content: "";
@@ -120,10 +112,8 @@
   inset: 0;
   padding: var(--print-border);
   border-radius: var(--print-radius);
-  /* Matte photo paper: a fine fibre texture (a 64 px bitmap tile drawn at
-     half size, so it stays fine on high-DPI screens and decodes once; an SVG
-     noise filter here would be re-run on every raster), a touch brighter at
-     the top where the light falls. */
+  /* Fibre texture: a 64 px bitmap tile drawn at half size (fine on high-DPI,
+     decoded once; an SVG noise filter would re-run on every raster). */
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .5), rgba(255, 255, 255, 0) 45%, rgba(60, 40, 20, .035)),
     url("data:image/png;base64,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") 0 0 / 32px 32px,
@@ -144,7 +134,7 @@
   height: 100%;
   object-fit: cover;
 }
-/* A hairline where photo meets paper, so light screenshots keep their edge. */
+/* Hairline where photo meets paper, so light screenshots keep their edge. */
 .photo::after {
   content: "";
   position: absolute;
@@ -153,10 +143,7 @@
   box-shadow: inset 0 0 0 .5px var(--photo-edge);
   pointer-events: none;
 }
-/* The sheen: a soft diagonal band of reflected light that slides over the
-   photo with the pointer while it is hovered, like glossy paper turned
-   toward a window. Moved with transform only (gestures.js sets
-   --sheen-x/y, in -1..1). */
+/* Sheen: a diagonal band of light that follows the pointer while hovered. Transform only. */
 .photo::before {
   content: "";
   position: absolute;
@@ -173,7 +160,6 @@
 }
 .slot.hover:not(.pressing) .photo::before { opacity: 1; transition: opacity var(--dur-hover) ease, transform 160ms var(--ease-out); }
 
-/* ---------------------------------------------------------------- × and Keep */
 .btn {
   position: absolute;
   top: calc(var(--print-border) + var(--button-inset));
@@ -184,9 +170,8 @@
   border: 0;
   border-radius: 50%;
   background: var(--button-bg);
-  /* Frosted only while it shows (below): a backdrop filter is a compositor
-     layer of its own, and under the board's 3D swing every one of them
-     would cost a board-sized surface. */
+  /* Frosted only while shown (below): each backdrop filter is its own
+     compositor layer, and under the 3D swing that is a board-sized surface each. */
   box-shadow: 0 0 0 .5px var(--button-edge), var(--shadow-button);
   color: var(--button-ink);
   cursor: default;
@@ -219,10 +204,7 @@
 .slot.kept .keep { color: var(--button-ink-kept); }
 .slot.kept .keep .fill { fill: currentColor; }
 
-/* ---------------------------------------------------------------- caption */
-/* The print's age, the only text on the board besides notes. Straight,
-   under the print. A link note's caption also carries its full address
-   (note.css). */
+/* The print's age, under the print. A link note's caption also carries its address (note.css). */
 .caption {
   position: absolute;
   left: 50%;
@@ -244,7 +226,6 @@
   transition: opacity var(--dur-caption) ease var(--delay-buttons), transform var(--dur-caption) var(--ease-out) var(--delay-buttons);
 }
 
-/* ---------------------------------------------------------------- copied */
 .badge {
   position: absolute;
   left: 50%;

@@ -1,16 +1,14 @@
 // Notices: a short, quiet message under the board ("Nothing selected",
-// "Already pinned"...), from the backend (board:notice) or from the page
-// itself (a drop it cannot pin). A small frosted pill hangs centred in the
-// overhang for about 1.8 s, and the live region says it too.
+// "Already pinned"...), from the backend (board:notice) or the page itself (a
+// drop it cannot pin). A frosted pill hangs centred in the overhang for about
+// 1.8 s; the live region says it too.
 //
-// The backend reveals the board just before a notice, but the two events
-// can race: a notice that comes while the board is tucked is held, and
-// shown right after the next reveal, unless that reveal is more than ~2 s
-// away (then it is stale and dropped). No timer waits for that.
+// The backend reveals the board just before a notice but the events can race:
+// a notice arriving while tucked is held and shown after the next reveal,
+// unless that reveal is over ~2 s away (then it is stale and dropped).
 //
-// The pill is outside #board, so it never turns with the board's swing; it
-// shows only once the board is at rest, since it is frosted (a backdrop
-// filter) and nothing frosted exists while the board swings (print.css).
+// The pill is outside #board so it never turns with the swing. It shows only
+// once the board is at rest, since nothing frosted exists mid-swing (print.css).
 
 import { announce } from "./announce.js";
 import { REVEAL_MS } from "./motion/spring.js";

@@ -1,6 +1,6 @@
-// Pendulum motion for prints on their pins. One damped oscillator drives
-// every swing: the nudge after a copy, the settle after pin-on, and the
-// breeze, a rare, faint ripple along the row while the board is out.
+// Pendulum motion for prints on their pins. One damped oscillator drives every
+// swing: the nudge after a copy, the settle after pin-on, and the breeze, a
+// rare faint ripple along the row while the board is out.
 
 import { inView } from "../layout.js";
 import { later, rand, state } from "../state.js";
@@ -23,10 +23,7 @@ function swingAngle(sw, now) {
   };
 }
 
-/**
- * Gives a print a push that peaks at roughly `amp` degrees. Pushes add to the
- * motion the print already has, so overlapping nudges blend instead of jumping.
- */
+/** Pushes a print to peak at roughly `amp` degrees. Adds to existing motion, so overlapping nudges blend. */
 export function swing(print, amp) {
   if (state.reduced || print.leaving || !state.revealed) return;
   const now = performance.now();
@@ -48,8 +45,6 @@ export function swing(print, amp) {
   print.swAnim = print.swingLayer.animate(frames, { duration: dur * 1000, easing: "linear" });
   print.swAnim.onfinish = () => { if (print.sw === sw) { print.sw = null; print.swAnim = null; } };
 }
-
-// ---------------------------------------------------------------- the breeze
 
 /** Plans the next breeze while the board is revealed. */
 export function scheduleGust() {

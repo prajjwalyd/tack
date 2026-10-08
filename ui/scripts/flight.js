@@ -1,27 +1,12 @@
-// The capture flight: a new snip lifts off the screen exactly where it was
-// taken and flies up into its place on the board. Then the one-time tip
-// that may hang under the board after the first one.
+// Capture flight: a new snip lifts off the screen where it was taken and
+// flies into its slot on the board, plus the one-time tip under the board.
+// Used by print.js. Only transform and opacity, precomputed and run through
+// WAAPI, so a busy main thread can delay the tock but never leave the print
+// hanging in the air.
 //
-// The backend sends where the snip was (`flight.from`, CSS px relative to
-// this window, which covers the monitor's work area) and a sharp picture of
-// it with `board:print-added` (docs/ipc.md). The print's slot stays hidden
-// while a stand-in, `.flight` (styles/flight.css), is laid out exactly
-// where the print will rest and transformed, about the pin point, from the
-// snip's rectangle to the print's "held" pose (just above the cork, scaled
-// 1.06 and leaning, where print.js's pin-on starts), and then pressed onto
-// the cork. As it touches, the print takes its place and the pin drives in.
-//
-//   lift    ~110 ms  the snip rises off the screen in place: a shadow grows
-//                    under it and it swells a little
-//   travel  ~560 ms  along a gentle arc to the slot, shrinking to print size
-//                    and turning toward its resting angle; its paper border
-//                    fades in on the way
-//   press   ~220 ms  pressed onto the cork; the pin goes in as it touches
-//
-// Transform and opacity only, every frame computed up front and handed to
-// the compositor (WAAPI), hand-over and pin included, so nothing it shows
-// waits for the main thread: a page busy on its first reveal after a long
-// sleep can only make the tock late, never the print hang in the air.
+//   lift    ~110 ms  rises in place, shadow grows
+//   travel  ~560 ms  arcs to the slot, shrinking and turning to its angle
+//   press   ~220 ms  pressed onto the cork; the pin drives in at the touch
 
 import * as ipc from "./ipc.js";
 import { PIN_Y } from "./layout.js";
@@ -31,25 +16,20 @@ const LIFT_MS = 110;
 const TRAVEL_MS = 560;
 const PRESS_MS = 220;
 const FLIGHT_MS = LIFT_MS + TRAVEL_MS + PRESS_MS;
-const PIN_MS = 170;           // the pin's drop, as in print.js's pin-on
+const PIN_MS = 170;           // pin drop, as in print.js's pin-on
 const PIN_TOUCH = 100;        // ms into it the head meets the paper
-const LIFT_SWELL = 1.025;     // how much the snip swells as it lifts off
-const HELD_Y = -6;            // print.js pin-on's held pose: raised,
-const HELD_SCALE = 1.06;      // scaled,
+const LIFT_SWELL = 1.025;
+const HELD_Y = -6;            // print.js pin-on's held pose
+const HELD_SCALE = 1.06;
 const BORDER = 4;             // --print-border
 const FRAMES = 72;            // keyframes per flight (linear between them)
-const DECODE_WAIT = 120;      // ms the flight waits for its picture before using the thumbnail
+const DECODE_WAIT = 120;      // ms to wait for the picture before using the thumbnail
 const TIP_DELAY = 380;        // ms after landing
 
-/** Flights in progress, by print id: { el, anims }. */
+/** Flights in progress, by print id. */
 const flying = new Map();
 
-// ---------------------------------------------------------------- setup
-
-/**
- * The backend's `flight` for a print that has just arrived, with its picture
- * already loading, or null if there is none.
- */
+/** The backend's `flight` for a new print with its picture loading, or null. */
 export function prepareFlight(flight) {
   const f = flight?.from;
   if (!f || !(f.w > 0 && f.h > 0) || !flight.image) return null;
@@ -63,10 +43,9 @@ export function prepareFlight(flight) {
 }
 
 /**
- * Where the print will rest: its slot's box in viewport px. The board may
- * be folded up or mid-swing, so it is held flat for the read; all within
- * this task, so that is never painted. While a swing is running it is read
- * as it is (holding it flat would cancel the swing).
+ * The slot's box in viewport px. The board may be folded up, so it is held
+ * flat for the read (never painted). Mid-swing it is read as is, since
+ * flattening would cancel the swing.
  */
 export function restingBox(print) {
   const b = dom.board;
@@ -84,25 +63,20 @@ export function restingBox(print) {
   return { left: r.left, top: r.top, w: r.width, h: r.height };
 }
 
-// ---------------------------------------------------------------- the flight
-
 /**
- * Flies `print` in. `rest` is where it lands (restingBox). `land` is told
- * what happens, for what only print.js does: `pin()` as the pin drives in
- * (the sound), `settled()` once it is all over, and `skipped()` if it never
- * took off (the board went up, or the print away, before the picture was
- * ready).
+ * Flies `print` in to `rest` (restingBox). Calls back `land.pin()` as the
+ * pin drives in, `land.settled()` at the end, `land.skipped()` if it never
+ * took off.
  */
 export async function launch(print, flight, rest, land) {
-  // A sharp first frame: wait (briefly) for the flight's own picture.
+  // Wait briefly for the sharp picture so the first frame is not a thumbnail.
   const decoded = await Promise.race([flight.ready, new Promise((r) => setTimeout(() => r(false), DECODE_WAIT))]);
   if (print.leaving || !state.revealed) { releaseImage(flight.img); land.skipped(); return; }
   if (!decoded) { flight.img.src = print.data.thumb; }
 
   const lean = Math.sign(print.tilt || 1) * rand(0.8, 1.6);
   const frames = keyframes(flight.from, rest, print.tilt || 0, lean, flight.found);
-  // Gone on the very frame the print takes over (its last frame is the
-  // print's resting pose exactly).
+  // Hidden on the frame the print takes over; the last frame is its resting pose.
   const last = frames[frames.length - 1];
   frames.splice(frames.length - 1, 0, { ...last, offset: 1 - 0.5 / FLIGHT_MS, opacity: 1 });
   last.opacity = 0;
@@ -115,9 +89,7 @@ export async function launch(print, flight, rest, land) {
   });
   el.innerHTML = `<div class="flight-shade"></div><div class="flight-paper"></div><div class="flight-photo"></div>`;
   el.querySelector(".flight-photo").appendChild(flight.img);
-  // The pin starts to drive in just before the print touches, while the
-  // stand-in still covers it: the stand-in carries a copy, and the print's
-  // own pin, in step with it, carries on from the hand-over.
+  // The stand-in carries a pin copy; the print's own pin carries on from the hand-over.
   const pin = print.pin.cloneNode(true);
   el.appendChild(pin);
   document.body.appendChild(el);
@@ -125,28 +97,23 @@ export async function launch(print, flight, rest, land) {
   const at = (ms) => ms / FLIGHT_MS;
   const pressAt = LIFT_MS + TRAVEL_MS;
   const pinAt = FLIGHT_MS - PIN_TOUCH;
-  // All started in this task, so they share one start time and the
-  // compositor keeps them in step.
+  // Started in one task so they share a start time on the compositor.
   const anims = [
     el.animate(frames, { duration: FLIGHT_MS, easing: "linear", fill: "forwards" }),
-    // The shadow grows as it lifts off, then goes as it is pressed down.
     el.querySelector(".flight-shade").animate([
       { opacity: 0 },
       { offset: at(LIFT_MS), opacity: 0.75, easing: "ease-in-out" },
       { offset: at(pressAt), opacity: 1, easing: "cubic-bezier(.5, 0, .3, 1)" },
       { opacity: 0 },
     ], { duration: FLIGHT_MS, fill: "forwards" }),
-    // The paper border appears once it is on its way.
     el.querySelector(".flight-paper").animate([
       { opacity: 0 },
       { offset: at(LIFT_MS + TRAVEL_MS * 0.12), opacity: 0, easing: "ease-in-out" },
       { offset: at(LIFT_MS + TRAVEL_MS * 0.6), opacity: 1 },
       { opacity: 1 },
     ], { duration: FLIGHT_MS, fill: "forwards" }),
-    // The print itself waits, unseen, and takes over on the frame the
-    // stand-in touches the cork...
+    // The print waits unseen and takes over as the stand-in touches the cork.
     print.drop.animate([{ opacity: 0 }, { opacity: 0 }], { duration: FLIGHT_MS }),
-    // ...as the pin drives in.
     ...[pin, print.pin].map((p) => p.animate(PIN_DROP, {
       duration: PIN_MS, delay: pinAt, easing: "cubic-bezier(.5, 0, .9, .4)", fill: "backwards",
     })),
@@ -156,7 +123,7 @@ export async function launch(print, flight, rest, land) {
   flying.set(print.id, { el, anims, timers, img: flight.img });
   ipc.debugAck("flight", { id: print.id });
 
-  // The rest only sounds or settles, so a late timer shows nothing wrong.
+  // These only sound or settle, so a late timer shows nothing wrong.
   const step = (fn, ms) => timers.push(later(fn, ms));
   step(() => print.slot.classList.add("arriving", "landing"), pinAt);
   step(() => land.pin(), pinAt + 95);
@@ -170,14 +137,13 @@ export async function launch(print, flight, rest, land) {
   }, FLIGHT_MS + 60);
 }
 
-/** The pin driving in, as in print.js's pin-on. */
 const PIN_DROP = [
   { opacity: 0, transform: "translateY(-4px) scale(1.7)" },
   { offset: 0.6, opacity: 1, transform: "scale(.9)", easing: "cubic-bezier(.3, 1.4, .5, 1)" },
   { opacity: 1, transform: "none" },
 ];
 
-/** Ends a flight at once (the board is tucking, or the print is going). */
+/** Ends a flight at once. */
 export function abortFlight(print) {
   const f = flying.get(print.id);
   if (!f) return;
@@ -189,11 +155,7 @@ export function abortFlight(print) {
   print.slot?.classList.remove("arriving", "landing");
 }
 
-/**
- * Lets go of a flight's picture, a snip up to 1600 px wide, once it is
- * done with: out of the page, and its source dropped so the decoded image
- * goes with it rather than waiting for the next garbage collection.
- */
+/** Drops the picture's source so the decoded image (up to 1600 px wide) is freed now, not at the next GC. */
 function releaseImage(img) {
   if (!img) return;
   img.remove();
@@ -206,14 +168,11 @@ export function abortFlights() {
 }
 
 /**
- * Every frame of a flight from the snip `from` to the held pose over `rest`,
- * then pressed down to the print's resting pose there.
- *
- * The stand-in is laid out at `rest` and turns and scales about the pin
- * point O, like the print's own layers, so its transform is
- * translate(t) rotate(r) scale(sx, sy) with t chosen to put the photo's
- * centre on the flight path. At the start the photo (inset by the border)
- * covers `from` exactly: scale (from.w / photo w, from.h / photo h), no turn.
+ * Keyframes from the snip `from` to the held pose over `rest`, then pressed
+ * down to the resting pose. The stand-in is laid out at `rest` and turns and
+ * scales about the pin point O, so its transform is translate(t) rotate(r)
+ * scale(sx, sy) with t chosen to put the photo's centre on the flight path.
+ * At the start the photo (inset by the border) covers `from` exactly.
  */
 function keyframes(from, rest, tilt, lean, found) {
   const O = { x: rest.left + rest.w / 2, y: rest.top + PIN_Y };
@@ -234,28 +193,25 @@ function keyframes(from, rest, tilt, lean, found) {
     const ms = (i / FRAMES) * FLIGHT_MS;
     let c, sx, sy, r, opacity = 1;
     if (ms > LIFT_MS + TRAVEL_MS) {
-      // Pressed onto the cork, straightening to its resting angle.
       const k = press((ms - LIFT_MS - TRAVEL_MS) / PRESS_MS);
       c = { x: C1.x + (C2.x - C1.x) * k, y: C1.y + (C2.y - C1.y) * k };
       sx = sy = HELD_SCALE + (1 - HELD_SCALE) * k;
       r = r1 + (tilt - r1) * k;
     } else if (ms <= LIFT_MS) {
-      // Lifting off in place.
       const k = easeOut(ms / LIFT_MS);
       const swell = 1 + (LIFT_SWELL - 1) * k;
       c = C0; sx = sx0 * swell; sy = sy0 * swell; r = 0;
     } else {
       const u = travel((ms - LIFT_MS) / TRAVEL_MS);
       c = bezier(C0, P1, C1, u);
-      // Shrinks a little ahead of the travel, as a thing moving away does.
+      // Shrinks slightly ahead of the travel.
       const us = Math.min(1, u * 1.08);
       sx = geo(sx0 * LIFT_SWELL, HELD_SCALE, us);
       sy = geo(sy0 * LIFT_SWELL, HELD_SCALE, us);
-      // Turns to its resting angle in the second half.
       r = r1 * smooth(0.25, 1, u);
     }
     if (!found) {
-      // Not found on screen: it grows out of the pointer instead.
+      // Not found on screen: grows out of the pointer instead.
       const k = easeOut(Math.min(1, ms / 220));
       opacity = k;
       const grow = 0.55 + 0.45 * k;
@@ -272,11 +228,7 @@ function keyframes(from, rest, tilt, lean, found) {
   return frames;
 }
 
-/**
- * The arc's control point: most of the way across early, so the print
- * swings over and rises into its slot from below. Straight below the slot
- * it still bows a little to the side.
- */
+/** Arc control point: most of the way across early, so the print rises into its slot from below; bows sideways when straight below. */
 function control(a, b) {
   const dx = b.x - a.x, dy = b.y - a.y;
   const p = { x: a.x + dx * 0.7, y: a.y + dy * 0.2 };
@@ -303,9 +255,7 @@ function smooth(e0, e1, x) {
   return t * t * (3 - 2 * t);
 }
 
-/** The travel's pace: away briskly, a soft arrival. */
 const travel = cubicBezier(0.5, 0, 0.25, 1);
-/** The press onto the cork, as print.js's pin-on. */
 const press = cubicBezier(0.45, 0, 0.25, 1);
 
 function cubicBezier(x1, y1, x2, y2) {
@@ -323,17 +273,11 @@ function cubicBezier(x1, y1, x2, y2) {
   };
 }
 
-// ---------------------------------------------------------------- the tip
-
 const CLOSE_SVG = `<svg viewBox="0 0 18 18" aria-hidden="true"><path d="M6.4 6.4l5.2 5.2M11.6 6.4l-5.2 5.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>`;
 
 let tip = null;
 
-/**
- * Pins the one-time tip under the board, and tells the backend where it is
- * (so it takes clicks, and the board stays down to read it; the backend
- * also remembers it has been shown).
- */
+/** Pins the one-time tip under the board and tells the backend where it is, so it takes clicks and the board stays down. */
 export function showTip() {
   if (tip || !state.revealed) return;
   const el = document.createElement("div");
@@ -345,7 +289,7 @@ export function showTip() {
   el.querySelector(".tip-close").addEventListener("click", closeTip);
   dom.board.appendChild(el);
   tip = el;
-  // Where it rests, before the entrance moves it.
+  // Measured at rest, before the entrance animation moves it.
   const r = el.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
   ipc.setTip({
@@ -356,7 +300,6 @@ export function showTip() {
     el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: "ease-out" });
     return;
   }
-  // Dropped onto the board's edge and pinned: it swings once and settles.
   el.animate([
     { opacity: 0, transform: "translateY(-10px) rotate(-2.4deg)" },
     { offset: 0.45, opacity: 1, transform: "translateY(1px) rotate(.4deg)" },
@@ -365,7 +308,7 @@ export function showTip() {
   ], { duration: 520, easing: "cubic-bezier(.3, .7, .4, 1)" });
 }
 
-/** The tip's ×: it lifts away, and the board may go back up as usual. */
+/** The tip's close button. */
 function closeTip() {
   const el = tip;
   if (!el) return;
@@ -378,7 +321,7 @@ function closeTip() {
   a.onfinish = () => el.remove();
 }
 
-/** Takes the tip away at once (the board is tucking; the backend knows). */
+/** Removes the tip at once. */
 export function dropTip() {
   if (!tip) return;
   tip.remove();

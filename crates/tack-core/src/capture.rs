@@ -19,7 +19,7 @@ use crate::recycle::{recycle_file, Recycler};
 
 /// One copy can change the clipboard several times (OLE sets it, then
 /// flushes it); the same pixels again this soon are the same capture.
-pub const REPEAT_WINDOW: Duration = Duration::from_secs(5);
+const REPEAT_WINDOW: Duration = Duration::from_secs(5);
 
 /// Where captures are saved: `%LOCALAPPDATA%\Tack\Captures`.
 pub fn captures_folder() -> PathBuf {
@@ -34,12 +34,11 @@ pub fn in_captures(path: &Path) -> bool {
 
 /// A capture this young is never swept, pinned or not: it may have been
 /// saved just before a crash, before board.json could mention it.
-pub const SWEEP_GRACE: Duration = Duration::from_secs(10 * 60);
+pub(crate) const SWEEP_GRACE: Duration = Duration::from_secs(10 * 60);
 
 /// Recycles the leftover captures in `folder`: images no print in `pinned`
-/// refers to (for example after a crash), half-written ones, and nothing
-/// modified within
-/// [`SWEEP_GRACE`] of `now`. Returns the files that went.
+/// refers to (for example after a crash) and half-written ones, but nothing
+/// modified within [`SWEEP_GRACE`] of `now`. Returns the files that went.
 ///
 /// Only call this when board.json was read and fully understood: if Tack
 /// cannot say for sure which captures are pinned, every one of them would
@@ -50,7 +49,7 @@ pub fn sweep(folder: &Path, pinned: &[PathBuf], now: SystemTime, bin: &dyn Recyc
 
 /// [`sweep`] for any folder of Tack's own files: `ours` says which files in
 /// it Tack wrote (half-written ones always count).
-pub fn sweep_where(
+pub(crate) fn sweep_where(
     folder: &Path,
     pinned: &[PathBuf],
     now: SystemTime,
@@ -68,7 +67,6 @@ pub fn sweep_where(
         .flatten()
         .map(|e| e.path())
         .filter(|path| {
-            // A partial file left behind by a crash mid-write counts too.
             path.is_file() && (ours(path) || is_partial(path)) && !keep.contains(&path_key(path)) && old_enough(path)
         })
         .filter(|path| recycle_file(path, bin))
@@ -91,8 +89,8 @@ pub fn discard_owned(path: &Path, bin: &dyn Recycler) {
     }
 }
 
-/// Recycles a capture file Tack no longer needs, if it lies in `folder`.
-pub fn discard_path(path: &Path, folder: &Path, bin: &dyn Recycler) {
+/// Recycles a file Tack no longer needs, if it lies in `folder`.
+fn discard_path(path: &Path, folder: &Path, bin: &dyn Recycler) {
     if path.parent().is_some_and(|dir| path_key(dir) == path_key(folder)) {
         recycle_file(path, bin);
     }
@@ -165,7 +163,7 @@ impl Timestamp {
 /// Appended to a capture's file name while Tack is still writing it. Not an
 /// image extension, so the folder watcher and the board never mistake a
 /// half-written capture for a picture.
-pub const PARTIAL: &str = ".part";
+const PARTIAL: &str = ".part";
 
 /// Where a capture is written before it is moved to `path`.
 pub fn partial_path(path: &Path) -> PathBuf {
@@ -189,7 +187,7 @@ pub fn reserve(dir: &Path, at: Timestamp) -> std::io::Result<PathBuf> {
 
 /// [`reserve`] for any name: `<stem>.<ext>` in `dir`, or `<stem> (2).<ext>`
 /// and so on if that is taken.
-pub fn reserve_as(dir: &Path, stem: &str, ext: &str) -> std::io::Result<PathBuf> {
+pub(crate) fn reserve_as(dir: &Path, stem: &str, ext: &str) -> std::io::Result<PathBuf> {
     std::fs::create_dir_all(dir)?;
     for n in 1.. {
         let name = if n == 1 { format!("{stem}.{ext}") } else { format!("{stem} ({n}).{ext}") };
@@ -216,7 +214,7 @@ pub fn write_reserved(img: &DynamicImage, path: &Path) -> std::io::Result<()> {
 
 /// Writes `bytes` into the partial file [`reserve_as`] made for `path`, then
 /// moves it into place. On failure the partial file is removed.
-pub fn write_reserved_bytes(bytes: &[u8], path: &Path) -> std::io::Result<()> {
+pub(crate) fn write_reserved_bytes(bytes: &[u8], path: &Path) -> std::io::Result<()> {
     let partial = partial_path(path);
     let written = (|| {
         let mut file = OpenOptions::new().write(true).truncate(true).open(&partial)?;

@@ -2,17 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <!-- docs/screenshots/icon-sizes.png is rendered from this page at 100%
-       (device pixel ratio 1, so every icon shows at its real size): the
-       master and the hand-tuned sizes at 1x and zoomed, on a light and a dark
-       Windows 11-like taskbar, in a Start-like grid beside generic icons, and
-       the tray icon at each notification-area scale. It reads the icons from
-       crates/tack-app/icons, so serve the repository root, not ui/:
-       python -m http.server 5191, then /ui/dev/icon-sheet.html. -->
+  <!-- docs/screenshots/icon-sizes.png is rendered from this page at device pixel
+       ratio 1 so every icon shows at its real size: the master and hand-tuned
+       sizes on light and dark taskbars, in a Start-like grid beside generic
+       icons, and the tray icon at each scale. It reads crates/tack-app/icons,
+       so serve the repository root, not ui/ (python -m http.server 5191, then
+       /ui/dev/icon-sheet.html). -->
   <title>Tack icon sheet</title>
   <link rel="stylesheet" href="taskbar.css">
   <style>
-    :root { --ic: ../../crates/tack-app/icons/; }
     * { box-sizing: border-box; }
     body { margin: 0; width: 1600px; background: #e9ebef; font: 13px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: #1b1b1f; -webkit-font-smoothing: antialiased; }
     h1 { font: 600 22px/1 "Segoe UI Variable Display", "Segoe UI", sans-serif; margin: 0 0 4px; letter-spacing: -.2px; }

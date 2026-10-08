@@ -10,7 +10,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     IDC_SIZENWSE, IDC_SIZEWE,
 };
 
-pub use windows::Win32::UI::Input::KeyboardAndMouse::{VK_LBUTTON, VK_RBUTTON};
+pub(crate) use windows::Win32::UI::Input::KeyboardAndMouse::{VK_LBUTTON, VK_RBUTTON};
 
 pub fn cursor_pos() -> POINT {
     let mut pt = POINT::default();
@@ -21,13 +21,13 @@ pub fn cursor_pos() -> POINT {
 }
 
 /// The key or mouse button is held right now.
-pub fn key_down(vk: u16) -> bool {
+pub(crate) fn key_down(vk: u16) -> bool {
     unsafe { (GetAsyncKeyState(vk as i32) as u16 & 0x8000) != 0 }
 }
 
 /// The taskbar (any monitor's) or the notification area overflow is under
 /// the point.
-pub fn on_taskbar(pt: POINT) -> bool {
+pub(crate) fn on_taskbar(pt: POINT) -> bool {
     const CLASSES: [&str; 4] =
         ["Shell_TrayWnd", "Shell_SecondaryTrayWnd", "NotifyIconOverflowWindow", "TopLevelWindowForOverflowXamlIsland"];
     unsafe {
@@ -43,7 +43,7 @@ pub fn on_taskbar(pt: POINT) -> bool {
 
 /// What the pointer looks like, as far as telling a drag goes.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum CursorKind {
+pub(crate) enum CursorKind {
     /// The plain arrow: moving a window, a scroll bar, a slider.
     Arrow,
     /// The text cursor: selecting text.
@@ -58,14 +58,14 @@ pub enum CursorKind {
 impl CursorKind {
     /// Whether a drag of something between apps may be under way: then
     /// Windows shows its own drag cursors, never these.
-    pub fn may_be_dragging(self) -> bool {
+    pub(crate) fn may_be_dragging(self) -> bool {
         self == CursorKind::Other
     }
 }
 
 /// The current pointer's kind. Standard cursors are shared, so comparing
 /// handles with the system's own tells them apart.
-pub fn cursor_kind() -> CursorKind {
+pub(crate) fn cursor_kind() -> CursorKind {
     unsafe {
         let mut info = CURSORINFO { cbSize: std::mem::size_of::<CURSORINFO>() as u32, ..Default::default() };
         if GetCursorInfo(&mut info).is_err() || info.hCursor.is_invalid() {
@@ -86,7 +86,7 @@ pub fn cursor_kind() -> CursorKind {
 
 /// Whether the window in front is being moved or sized right now (dragged
 /// by its title bar, perhaps to snap it to the top of the screen).
-pub fn window_moving() -> bool {
+pub(crate) fn window_moving() -> bool {
     unsafe {
         let mut info = GUITHREADINFO { cbSize: std::mem::size_of::<GUITHREADINFO>() as u32, ..Default::default() };
         // Thread 0: the foreground thread.

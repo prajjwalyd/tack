@@ -1,9 +1,8 @@
 // What a screen reader hears. The board is a listbox of prints and notes
-// (keyboard.js moves the focus); each one's label says what it is and how
-// old it is, spelled out for speech ("Screenshot, 2 minutes ago, kept",
-// "Note: buy milk on the way home, 5 minutes ago", "Link: github.com, just
-// now"). Things that happen without moving the focus ("Copied", "Pinned",
-// notices) go through one visually hidden polite live region.
+// (keyboard.js moves the focus); each label says what it is and how old it
+// is ("Screenshot, 2 minutes ago, kept", "Link: github.com, just now"). Things
+// that happen without moving the focus ("Copied", "Pinned", notices) go
+// through one visually hidden polite live region.
 
 const region = document.createElement("div");
 region.id = "announce";
@@ -19,18 +18,16 @@ let clearTimer = 0;
 export function announce(text) {
   if (!text) return;
   clearTimeout(clearTimer);
-  // Emptied first, then filled on the next task: a live region only speaks
-  // when its content changes.
+  // Empty first, fill on the next task: a live region speaks only on change.
   region.textContent = "";
   clearTimer = setTimeout(() => {
     region.textContent = text;
-    // Emptied again a little later, so a stale "Copied" is never read out
-    // by someone browsing the page; nothing else runs meanwhile.
+    // Cleared later so a stale "Copied" is never read out by browsing.
     clearTimer = setTimeout(() => { clearTimer = 0; region.textContent = ""; }, 4000);
   }, 40);
 }
 
-/** The board tucked: nothing left to say, and no timer left behind. */
+/** The board tucked: clear the region and its timer. */
 export function hush() {
   clearTimeout(clearTimer);
   clearTimer = 0;

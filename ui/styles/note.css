@@ -1,18 +1,13 @@
-/* Paper notes: text and links pinned in the row like prints (scripts/note.js).
-   A note is a print (.slot.is-note) with the same layers, pin, tilt, hover,
-   buttons, caption and motion; only its .paper differs: a small sheet with
-   the prints' matte fibre texture (the .paper rule in print.css, with
-   --paper swapped), the same light from above (brighter at the top, shadow
-   straight down), and a free corner that stands a hair proud of the felt.
-   Its text is clamped to a few lines in Segoe UI Variable Text; a link
-   shows its address and, small at the bottom, its domain.
+/* Paper notes (scripts/note.js). A note is a print (.slot.is-note) with the
+   same layers, pin, tilt, hover, buttons, caption and motion; only its .paper
+   differs: the prints' fibre texture (the .paper rule in print.css, --paper
+   swapped) and a free corner standing a hair proud of the felt. Text is
+   clamped to a few lines; a link shows its address and, small at the bottom,
+   its domain. Paper colour, ink and anything printed on it come from the
+   --note-* tokens in notes/, picked in tokens.css.
 
-   The paper itself (colour, ink, anything printed on it such as an index
-   card's rules, its extra shadow) is a set of --note-* tokens from
-   styles/notes/, picked in tokens.css.
-
-   A text note can also be unfolded (.sheet): a bigger sheet of the same
-   paper hanging from the note's pin down into the overhang, scrollable. */
+   A text note can be unfolded (.sheet): a bigger scrollable sheet of the same
+   paper hanging from the note's pin into the overhang. */
 
 .slot.is-note { --paper: var(--note-paper); }
 
@@ -23,8 +18,7 @@
   overflow: hidden;
   isolation: isolate;                /* keeps the face (below) under the text */
 }
-/* What is printed on the paper (an index card's rules, a sticky note's
-   shading), between the paper and the text. */
+/* What is printed on the paper (card rules, sticky shading), under the text. */
 .slot.is-note .paper::before,
 .sheet .paper::before {
   content: "";
@@ -36,7 +30,7 @@
   pointer-events: none;
 }
 .sheet .paper::before { background: var(--note-sheet-face); }
-/* The free corner: the faintest shade where the paper curls away from the light. */
+/* Free corner: a faint shade where the paper curls away from the light. */
 .slot.is-note .paper::after {
   content: "";
   position: absolute;
@@ -82,8 +76,7 @@
 .note-domain svg { flex: none; width: 10px; height: 10px; }
 .note-domain span { overflow: hidden; text-overflow: ellipsis; }
 
-/* A link's hover caption: the full address (two lines at most) over the
-   age. Sized so all three lines stay on the felt under the note. */
+/* A link's hover caption: address (two lines at most) over the age, sized to stay on the felt. */
 .caption.link {
   width: max-content;
   max-width: 184px;
@@ -102,8 +95,7 @@
 }
 .caption.link .cap-age { display: block; }
 
-/* ---------------------------------------------------------------- unfolded */
-/* The unfolded note hides its own print, which it covers anyway. */
+/* The sheet covers its own print, so hide it. */
 .slot.unfolded .drop,
 .slot.unfolded > .pin,
 .slot.unfolded .caption { visibility: hidden; }
@@ -147,7 +139,7 @@
   top: calc(var(--pin-y) - var(--pin-size) / 2);
   left: calc(var(--pin-x) - var(--pin-size) / 2);
 }
-/* Keyboard focus inside the sheet (it scrolls with the arrow keys). */
+/* Keyboard focus inside the sheet, which scrolls with the arrow keys. */
 #board.kbd .sheet:focus-within::before {
   content: "";
   position: absolute;

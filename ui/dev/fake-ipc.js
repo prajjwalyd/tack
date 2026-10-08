@@ -1,10 +1,9 @@
-// The preview harness's stand-in for the Tauri backend. Installs a fake
-// window.__TAURI__ that answers commands locally and fires events the way
-// the real backend would, draws placeholder screenshots on a canvas, makes
-// paper notes (preview.html starts with a few; ?notes=0 for none), pins
-// what is dropped on the board (pin_text, pin_image), and wires the buttons
-// in preview.html (also reachable as window.preview).
-// Uses the same command and event names as the app (../scripts/ipc.js).
+// Preview harness stand-in for the Tauri backend: installs a fake
+// window.__TAURI__ that answers commands locally and fires events like the real
+// backend, draws placeholder screenshots and notes (preview.html starts with a
+// few; ?notes=0 for none), pins what is dropped on the board, and wires the
+// buttons in preview.html (also window.preview). Uses the app's own command and
+// event names (../scripts/ipc.js).
 
 import { COMMANDS, EVENTS } from "../scripts/ipc.js";
 
@@ -22,7 +21,7 @@ const emit = (name, payload) => {
   for (const fn of handlers.get(name) || []) fn({ event: name, payload });
 };
 
-// ---------------------------------------------------------------- placeholder screenshots
+// placeholder screenshots
 let seed = 7;
 const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 const pick = (a) => a[Math.floor(rnd() * a.length)];
@@ -122,7 +121,7 @@ const make = (ago = 0) => {
   };
 };
 
-// ---------------------------------------------------------------- placeholder notes
+// placeholder notes
 const NOTE_MAX = 20 * 1024;     // the backend keeps at most 20 KB of a note's text
 const stampOf = (d) => d.toISOString().slice(0, 19).replace("T", " ").replace(/:/g, "");
 let noteCounter = 0;
@@ -168,20 +167,18 @@ const SAMPLE_LINKS = [
   "https://en.wikipedia.org/wiki/Cork_(material)",
 ];
 
-// ---------------------------------------------------------------- the fake backend
+// the fake backend
 // In row order, like the backend: kept first (by keptAt), then newest first.
 const prints = [];
 const MIN = 60_000;
 for (const ago of [3 * 24 * 60, 26 * 60, 2 * 60, 15, 2]) prints.push(make(ago * MIN));
-// The preview starts with a few notes among the prints (?notes=0: none).
-// Other pages (hero.html) only with ?notes=1, for the README's notes image.
+// preview.html starts with a few notes (?notes=0: none); other pages only with ?notes=1.
 const params = new URLSearchParams(location.search);
 const withNotes = location.pathname.endsWith("/preview.html") ? params.get("notes") !== "0" : params.get("notes") === "1";
 if (withNotes) {
   for (const [text, ago] of SAMPLE_NOTES) prints.push(makeNote(text, ago * MIN));
 }
-// ?notes=compare: a short note, a long one and a link, each between prints
-// (the note paper study, docs/design.md section 8).
+// ?notes=compare: a short note, a long one and a link (the note paper study, docs/design.md section 8).
 if (params.get("notes") === "compare") {
   for (const [text, ago] of [["Call Sam back at 4.", 5], [SAMPLE_NOTES[1][0], 40], [SAMPLE_NOTES[0][0], 3 * 60]]) {
     prints.push(makeNote(text, ago * MIN));
@@ -267,8 +264,7 @@ function add(animate) {
 function pin(print, animate = true) {
   prints.unshift(print);
   arrange();
-  // The history holds 50 unkept prints; the oldest ages out. Like the
-  // backend, it is gone from the order at once and falls a moment later.
+  // History holds 50 unkept prints; the oldest leaves the order at once and falls a moment later, as in the backend.
   const unkept = prints.filter((x) => !x.kept);
   const aged = unkept.length > 50 ? unkept[unkept.length - 1] : null;
   if (aged) prints.splice(prints.indexOf(aged), 1);
@@ -295,7 +291,7 @@ window.__TAURI__ = {
   },
 };
 
-// ---------------------------------------------------------------- the buttons
+// the buttons
 const anyPrint = () => prints[Math.floor(Math.random() * prints.length)];
 const preview = {
   emit, add, remove, prints, pin, makeNote,
@@ -331,8 +327,7 @@ const preview = {
     }
     emitOrder();
   },
-  // Not something the backend does: a shuffled row, to watch the reorder.
-  // The next real order-changed (keep, add) puts it back.
+  // Harness only: shuffles the row to watch a reorder; the next real order-changed restores it.
   shuffle: () => {
     const ids = prints.map((x) => x.id);
     for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }

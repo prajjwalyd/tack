@@ -1,18 +1,8 @@
-//! Polls the pointer to decide when the board should come down from the top
-//! edge and when it should go back up, and flips the window's click-through
-//! as the pointer crosses the board's border.
-//!
-//! The edge also opens for a drag: something (text, a link, a picture,
-//! files) carried from another app to the top edge with the button held,
-//! to be dropped on the board. [`DragGate`] tells that from a press at the
-//! top (a title bar, a tab) and from a window being moved there to snap:
-//! the press must start well below the edge and arrive quickly, the pointer
-//! must show one of Windows' drag cursors (not the arrow, text or resize
-//! cursor), and the window in front must not be in a move or size.
-//!
-//! A plain polling thread: global mouse hooks would cost every app on the
-//! system a little latency. The poller reads and updates the shared
-//! [`View`] through an [`EdgeHost`], which also carries out what it decides.
+//! Polls the pointer to decide when the board comes down from the top edge
+//! and when it tucks away, and flips the window's click-through as the
+//! pointer crosses the board. A drag carried from another app to the edge
+//! opens it too ([`DragGate`]). A polling thread rather than a global mouse
+//! hook, which would add latency to every app on the system.
 
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
@@ -55,7 +45,7 @@ pub trait EdgeHost: Send + 'static {
     /// Make the window click-through (`true`) or not.
     fn set_click_through(&self, ignore: bool);
     /// The window just became click-through, so the UI may never see the
-    /// pointer leave a print; tell it.
+    /// pointer leave a print (which would stay in its hover state); tell it.
     fn pointer_left(&self);
 }
 
@@ -264,8 +254,6 @@ impl Poller {
         if let Some(ignore) = click_through {
             host.set_click_through(ignore);
             if ignore {
-                // Once click-through, the webview may never see the pointer
-                // leave, which would leave a print stuck in its hover state.
                 host.pointer_left();
             }
         }
@@ -293,7 +281,7 @@ const DRAG_APPROACH: Duration = Duration::from_millis(700);
 /// whether the pointer is at the very top. Pure, so it is tested without a
 /// mouse; the cursor and window-move checks are the poller's.
 #[derive(Debug, Default)]
-pub struct DragGate {
+pub(crate) struct DragGate {
     /// How far below the top the button was first seen held.
     press_depth: Option<i32>,
     /// Recent depths while held, newest last.
@@ -305,7 +293,7 @@ pub struct DragGate {
 impl DragGate {
     /// Takes one reading; true while a drag that came up from below is held
     /// at the edge.
-    pub fn sample(&mut self, now: Instant, depth: i32, held: bool, at_top: bool) -> bool {
+    pub(crate) fn sample(&mut self, now: Instant, depth: i32, held: bool, at_top: bool) -> bool {
         if !held {
             *self = DragGate::default();
             return false;

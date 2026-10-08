@@ -1,9 +1,7 @@
-//! Tack never destroys a file outright. Whenever it cleans up one of its own
-//! captures (unpinned, aged out, left over from an earlier session), the file
-//! goes to the Recycle Bin, where the user can still get it back.
-//!
-//! The bin sits behind the [`Recycler`] trait so the cleanup rules can be
-//! tested without filling the real Recycle Bin.
+//! Tack never destroys a file outright: when it cleans up one of its own
+//! files (unpinned, aged out, left over from an earlier session), the file
+//! goes to the Recycle Bin, where the user can still get it back. The bin
+//! sits behind [`Recycler`] so the cleanup rules can be tested without it.
 
 use std::path::Path;
 
@@ -32,7 +30,7 @@ impl Recycler for RecycleBin {
 
 /// Recycles one file if it still exists. A failure is logged and the file
 /// stays put: there is no fallback to deleting it. Returns whether it went.
-pub fn recycle_file(path: &Path, bin: &dyn Recycler) -> bool {
+pub(crate) fn recycle_file(path: &Path, bin: &dyn Recycler) -> bool {
     if !path.exists() {
         return false;
     }

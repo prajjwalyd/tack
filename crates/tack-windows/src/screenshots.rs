@@ -1,10 +1,7 @@
-//! The Screenshots folder: where it is, and what happens in it. Tack has no
-//! capture tool of its own; whatever saves into this folder (Snipping Tool,
-//! Print Screen, third-party tools) is what ends up on the board.
-//!
-//! The watcher only reports what changed; deciding what that means for the
-//! board (pin it, redraw it, unpin it) is the caller's business. The same
-//! watcher is used for Tack's own captures folder.
+//! The Screenshots folder: where it is, and a watcher that reports what
+//! happens in it (also used for Tack's own captures folder). Tack has no
+//! capture tool of its own; whatever saves into this folder ends up on the
+//! board. Deciding what an event means for the board is the caller's job.
 
 use std::path::PathBuf;
 

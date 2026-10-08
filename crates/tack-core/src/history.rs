@@ -25,14 +25,14 @@ pub fn now_ms() -> u64 {
 }
 
 /// A file time as ms since the Unix epoch.
-pub fn epoch_ms(time: SystemTime) -> Option<u64> {
+pub(crate) fn epoch_ms(time: SystemTime) -> Option<u64> {
     time.duration_since(UNIX_EPOCH).ok().map(|d| d.as_millis() as u64)
 }
 
 /// Where a print sorts in the row: kept prints first, by when they were
 /// kept; then unkept prints, newest first. Sort with a stable sort, so prints
 /// that tie keep their relative order.
-pub fn row_key(kept_at: Option<u64>, pinned_at: u64) -> (bool, u64, Reverse<u64>) {
+pub(crate) fn row_key(kept_at: Option<u64>, pinned_at: u64) -> (bool, u64, Reverse<u64>) {
     match kept_at {
         Some(kept_at) => (false, kept_at, Reverse(0)),
         None => (true, 0, Reverse(pinned_at)),
@@ -45,7 +45,7 @@ pub fn row_key(kept_at: Option<u64>, pinned_at: u64) -> (bool, u64, Reverse<u64>
 /// ago, or when [`MAX_UNKEPT`] newer unkept entries are ahead of it. The
 /// entries may come in any order; among unkept entries pinned at the same
 /// moment, the earlier one in `entries` counts as the newer.
-pub fn aged_out(entries: &[(Option<u64>, u64)], now_ms: u64) -> Vec<bool> {
+fn aged_out(entries: &[(Option<u64>, u64)], now_ms: u64) -> Vec<bool> {
     let mut unkept: Vec<usize> = (0..entries.len()).filter(|&i| entries[i].0.is_none()).collect();
     unkept.sort_by_key(|&i| Reverse(entries[i].1));
     let mut out = vec![false; entries.len()];
@@ -54,6 +54,20 @@ pub fn aged_out(entries: &[(Option<u64>, u64)], now_ms: u64) -> Vec<bool> {
         out[i] = rank >= MAX_UNKEPT || age >= MAX_AGE_MS;
     }
     out
+}
+
+/// Takes the items that have aged out at `now_ms` (see [`aged_out`]) out of
+/// `items` and hands them back, both lists keeping their order. `times`
+/// gives an item's `(kept_at, pinned_at)`.
+pub(crate) fn take_aged<T>(items: &mut Vec<T>, times: impl Fn(&T) -> (Option<u64>, u64), now_ms: u64) -> Vec<T> {
+    let entries: Vec<_> = items.iter().map(times).collect();
+    let gone = aged_out(&entries, now_ms);
+    if !gone.contains(&true) {
+        return Vec::new();
+    }
+    let (aged, stay): (Vec<_>, Vec<_>) = std::mem::take(items).into_iter().zip(gone).partition(|(_, gone)| *gone);
+    *items = stay.into_iter().map(|(item, _)| item).collect();
+    aged.into_iter().map(|(item, _)| item).collect()
 }
 
 #[cfg(test)]

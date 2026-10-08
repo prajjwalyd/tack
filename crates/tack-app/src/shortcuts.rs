@@ -1,15 +1,8 @@
-//! Tack's two global shortcuts, from the app's side: registering them from
-//! the settings at startup, what a press does, telling the tray when one
-//! could not be registered, and the small Shortcuts dialog that changes them.
-//!
-//! - Show or hide the board (Win+Alt+S): a keyboard open, see `keyboard.rs`.
-//! - Pin the selection (Win+Alt+C): see `notes.rs`.
-//!
-//! The dialog is a second, tiny web view window (`ui/shortcuts.html`),
-//! created when it is opened and destroyed when it closes, so it costs
-//! nothing the rest of the time. While it listens for a new chord the
-//! shortcuts are paused, so pressing Tack's own chord there is heard by the
-//! page rather than acted on.
+//! Tack's two global shortcuts, show-or-hide (`keyboard.rs`) and pin the
+//! selection (`notes.rs`): registering them, what a press does, and the
+//! Shortcuts dialog that changes them (`ui/shortcuts.html`, created only
+//! while open). While the dialog listens for a new chord the shortcuts are
+//! paused, so pressing Tack's own chord there reaches the page.
 
 use std::sync::Mutex;
 
@@ -18,10 +11,10 @@ use tack_core::shortcut::{self, Chord, DEFAULT_PIN, DEFAULT_TOGGLE};
 use tack_core::RevealReason;
 use tack_windows::hotkey::{self, Action, Hotkeys, Status};
 use tack_windows::selection;
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, Manager, WindowEvent};
 
 use crate::state::lock;
-use crate::{notes, reveal, tray};
+use crate::{dialogs, notes, reveal, tray};
 
 /// The dialog window's label.
 pub const DIALOG_LABEL: &str = "shortcuts";
@@ -226,28 +219,8 @@ pub fn open_dialog(app: &AppHandle) {
         let _ = window.set_focus();
         return;
     }
-    let board = app.config().app.windows.iter().find(|w| w.label == reveal::WINDOW_LABEL).cloned();
-    let mut builder = WebviewWindowBuilder::new(app, DIALOG_LABEL, WebviewUrl::App("shortcuts.html".into()))
-        .title("Tack shortcuts")
-        .inner_size(460.0, 320.0)
-        .resizable(false)
-        .maximizable(false)
-        .minimizable(false)
-        .center()
-        .focused(true)
-        .visible(true);
-    // The board's web view runtime is shared: the same data folder, and the
-    // same browser arguments (a second set would not be allowed to share it,
-    // and they keep this window off the network too).
-    if let Ok(local) = app.path().local_data_dir() {
-        builder = builder.data_directory(local.join("Tack").join("WebView2"));
-    }
-    if let Some(args) = board.and_then(|w| w.additional_browser_args) {
-        builder = builder.additional_browser_args(&args);
-    }
-    match builder.build() {
+    match dialogs::open(app, DIALOG_LABEL, "shortcuts.html", "Tack shortcuts", (460.0, 320.0)) {
         Ok(window) => {
-            crate::webview_privacy::apply_to(&window);
             window.on_window_event(|event| {
                 if let WindowEvent::Destroyed = event {
                     // Closed while listening: the shortcuts come back.

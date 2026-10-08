@@ -3,10 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <!-- The board on a phone, served by Tack itself over NetBird
-       (crates/tack-app/src/phone/server.rs). No build step, no third-party code.
-       Everything inside <main> is drawn by phone.js; the CSP allows no
-       inline script or style. -->
+  <!-- The board on a phone, served by crates/tack-app/src/phone/server.rs. The CSP allows no inline script or style; phone.js draws everything in <main>. -->
   <meta name="theme-color" content="#1c4234">
   <meta name="color-scheme" content="dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -31,7 +28,7 @@
   </header>
 
   <main>
-    <!-- One-time tip; hidden once dismissed or once the page runs from the home screen. -->
+    <!-- One-time tip; hidden once dismissed or run from the home screen. -->
     <section id="tip" class="card tip" aria-labelledby="tip-title" hidden>
       <span class="pin p2" aria-hidden="true"></span>
       <h2 id="tip-title">Add Tack to your home screen</h2>
@@ -39,7 +36,7 @@
       <button id="tip-close" class="btn quiet" type="button">Dismiss</button>
     </section>
 
-    <!-- Loading, waiting, denied, unreachable and empty: one calm card. -->
+    <!-- Loading, waiting, denied, unreachable and empty states. -->
     <section id="state" class="card" aria-live="polite" hidden></section>
 
     <ul id="board" aria-label="Pinned on the board" hidden></ul>
@@ -53,7 +50,7 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <!-- At the top of the screen, buttons first: the keyboard never covers them. -->
+  <!-- At the top of the screen, buttons first, so the keyboard never covers them. -->
   <dialog id="text-sheet" aria-labelledby="text-title">
     <div class="row">
       <button id="text-cancel" class="btn plain" type="button">Cancel</button>

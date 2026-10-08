@@ -1,20 +1,18 @@
-// The keyboard. The board window is never activated by the pointer, so the
-// keyboard only reaches it after a keyboard open: the hotkey (Win+Alt+S)
-// brings the board down with `board:reveal { reason: "hotkey" }`, the page
-// asks for the focus (take_focus) and puts it on the first print. Any other
-// reveal leaves the focus alone and shows no ring. On the tuck the focus
-// goes back (release_focus).
+// Keyboard use of the board. The window is never activated by the pointer, so
+// the keyboard reaches it only after a keyboard open: the hotkey reveals with
+// `board:reveal { reason: "hotkey" }`, the page calls take_focus and focuses
+// the first print. Other reveals leave the focus alone and show no ring. The
+// tuck gives the focus back (release_focus).
 //
-// The row is a listbox with a roving focus: the focused print has
-// tabindex 0 and aria-selected, the rest -1. It wears a focus ring and the
-// hover look while the keyboard drives (#board.kbd); the pointer drops the
-// ring. Keys:
-//   ← →  Home End        move (the row scrolls to show the print)
+// The row is a listbox with roving focus: the focused print has tabindex 0 and
+// aria-selected. It wears a focus ring and the hover look while the keyboard
+// drives (#board.kbd); the pointer drops the ring. Keys:
+//   Left Right Home End  move (the row scrolls to show the print)
 //   Enter                copy
 //   Ctrl+Enter           open (a text note unfolds)
 //   K                    keep, or stop keeping
 //   Delete               unpin
-//   Shift+F10, menu key  the context menu, at the print
+//   Shift+F10, menu key  context menu, at the print
 //   Esc                  fold an unfolded note, else tuck the board
 //   Tab                  stays in the row
 
@@ -39,8 +37,7 @@ export function keyboardOpen(settleMs = REVEAL_MS) {
   dom.board.classList.add("kbd");
   const first = focused() && !focused().leaving ? focused() : items()[0] || null;
   focusOn(first, settleMs);
-  // The window becomes the foreground one asynchronously; focus again once
-  // it is, in case the webview dropped the first call.
+  // The window becomes foreground asynchronously; focus again in case the webview dropped the first call.
   ipc.takeFocus().then(() => {
     if (!took || !state.revealed) return;
     const p = focused();
@@ -60,10 +57,7 @@ export function keyboardTuck() {
   }
 }
 
-/**
- * A print is leaving (already out of state.order; it stood at `index`): if
- * it had the focus, the one now in its place takes it, else the one before.
- */
+/** A print is leaving (already out of state.order, it stood at `index`): if it had the focus, the next one takes it, else the previous. */
 export function itemRemoved(print, index) {
   if (print.id !== focusId) return;
   const hadFocus = print.slot.contains(document.activeElement);
@@ -75,7 +69,7 @@ export function itemRemoved(print, index) {
   focusOn(next);
 }
 
-/** Moves the roving focus (tabindex, aria-selected, the ring) to `print`. */
+/** Moves the roving focus to `print`. */
 function setRoving(print) {
   const old = focused();
   if (old && old !== print) {
@@ -102,7 +96,7 @@ function focusOn(print, hoverAfter = 0) {
   }
   print.slot.focus({ preventScroll: true });
   showPrint(print);
-  // The hover look brings the frosted buttons; never while the board still swings.
+  // The hover look shows the frosted buttons; not while the board still swings.
   if (hoverAfter > 0) later(hoverFocused, hoverAfter);
   else hoverFocused();
 }
@@ -112,18 +106,12 @@ function hoverFocused() {
   if (p && dom.board.classList.contains("kbd") && state.revealed) setHover(p, true);
 }
 
-// The row stopped scrolling under a keyboard move: hover the focused print
-// again (hover is dropped while the row moves).
+// Hover is dropped while the row scrolls; restore it when it stops.
 onScrollState((moving) => { if (!moving) hoverFocused(); });
 
-// The pointer takes over: no ring until the next key.
 dom.board.addEventListener("pointerdown", () => dom.board.classList.remove("kbd"));
 
-/**
- * The context menu at the print's bottom-left corner, physical px relative
- * to the window. From the layout, not a measured box: the board may still
- * be turning on its hinge. (The board's top edge sits at the window's.)
- */
+/** The context menu at the print's bottom-left corner, physical px. Computed from layout, not measured: the board may still be turning on its hinge. */
 function menu(print) {
   const dpr = window.devicePixelRatio || 1;
   const left = (window.innerWidth - state.boardW) / 2 + state.boardW / 2 + print.x - scrollPos();
@@ -154,7 +142,7 @@ document.addEventListener("keydown", (e) => {
     }
     case "Home":
     case "End":
-      // Inside an unfolded note these scroll it.
+      // These scroll an unfolded note.
       if (inSheet || !plain || !list.length) return;
       go(key === "Home" ? list[0] : list[list.length - 1]);
       return;

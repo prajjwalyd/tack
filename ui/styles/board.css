@@ -1,15 +1,12 @@
-/* The board: a panel of green felt in a slim aluminium frame, hinged at the
-   top edge of the screen, plus the page itself (transparent, never
-   selectable).
+/* The board: green felt in a slim aluminium frame, hinged at the top edge of
+   the screen, plus the page itself (transparent, never selectable).
 
-   #board          swings down on its hinge (transform), sized by layout.js
-     .cork         the material: felt, frame and corner caps, the shade where
-                   it tucks under the screen edge, the drop shadow. (Named
-                   for the cork it once was.) Width changes play as a scaleX
-                   FLIP (layout.js).
-     #rail         the row's viewport: clips sideways and fades its edges
-                   only while the row scrolls; runs down into the overhang so
-                   a falling print stays visible
+   #board          swings down on its hinge, sized by layout.js
+     .cork         felt, frame, corner caps, the shade under the screen edge,
+                   the drop shadow. Width changes are a scaleX FLIP (layout.js).
+     #rail         the row's viewport: clips sideways and fades its edges only
+                   while the row scrolls; runs down into the overhang so a
+                   falling print stays visible
        #prints     the track, translated by scroll.js
      #hint         the empty-state card */
 
@@ -32,17 +29,14 @@ html, body {
 html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
 img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
 
-/* The colour scheme lives on the board, not the root (see tokens.css). */
+/* The colour scheme lives on the board, not the root (tokens.css). */
 #board { color-scheme: light dark; }
 :root[data-theme="light"] #board { color-scheme: light; }
 :root[data-theme="dark"] #board { color-scheme: dark; }
 
-/* Reveal: the board hangs folded up under the screen edge, nearly edge-on,
-   and swings down on its hinge (the screen edge, --top-hidden into the
-   board) on a damped spring: past flat by a few degrees, then back. Tuck is
-   the quick reverse. The eye sits in front of the hinge; the perspective is
-   part of the transform, so at rest (none) nothing on the page is 3D and the
-   compositor is exactly as it was before the board moved. */
+/* Reveal: the board hangs folded up under the screen edge and swings down on
+   its hinge on a damped spring; tuck is the quick reverse. The perspective is
+   part of the transform, so at rest (none) nothing on the page is 3D. */
 #board {
   position: absolute;
   top: calc(-1 * var(--top-hidden));
@@ -58,12 +52,11 @@ img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
   transform: perspective(var(--board-perspective)) rotateX(var(--hinge-from));
   transition: transform var(--dur-tuck) var(--ease-tuck);
 }
-/* Once tucked the board leaves the render tree, so its layers and textures go. */
+/* Leaves the render tree once tucked, releasing its layers and textures. */
 #board.gone { display: none; }
 
-/* Folded up, the board faces the floor, away from the light: it is unlit,
-   and brightens as it turns to face the room. Same spring as the swing, so
-   the light follows the angle. */
+/* Folded up, the board faces away from the light and brightens as it turns,
+   on the same spring as the swing. */
 #board::after {
   content: "";
   position: absolute;
@@ -80,18 +73,12 @@ img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
   transition: opacity var(--dur-tuck) var(--ease-tuck);
 }
 
-/* ---------------------------------------------------------------- felt */
-/* The material, from the top layer down:
-     the bottom-corner caps (--cap-l/r, below), a hair proud of the frame;
-     the light from above: a soft wash at the top, a vignette below;
-     the felt: a fine plain weave (a 2 px check), warp and weft (noise
-       stretched across and down), a slow mottling, over --felt;
-     the frame: side rails brushed down, the bottom rail brushed across,
-       each a gradient lit from above with a crisp light edge at the felt.
-   The frame is the element's border, with none at the top, where the
-   board hangs from the screen edge; the felt is its padding box. All
-   static images and gradients, rasterised once: nothing here repaints in
-   motion. */
+/* The material, top layer down: the corner caps (--cap-l/r, below); light from
+   above (a wash at the top, a vignette below); the felt (a 2 px weave check,
+   warp and weft noise, slow mottling, over --felt); the frame (side rails
+   brushed down, bottom rail brushed across, lit from above). The frame is the
+   element's border (none at the top); the felt is its padding box. All static
+   images and gradients, rasterised once, so nothing repaints in motion. */
 .cork {
   --weave-size: 128px;
   position: absolute;
@@ -121,10 +108,7 @@ img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
     var(--shadow-board);
   transform-origin: 50% 0;
 }
-/* The corner caps: small, flat aluminium corner pieces, a pixel proud of
-   the rails, with a light edge toward the felt and a hairline seam where
-   they meet the rails. A picture can't follow light-dark(), so the dark
-   theme swaps them. */
+/* Corner caps. A picture can't follow light-dark(), so the dark theme swaps them. */
 .cork {
   --cap-l: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'><defs><linearGradient id='m' x1='0' y1='0' x2='.45' y2='1'><stop offset='0' stop-color='%23eef0f3'/><stop offset='1' stop-color='%23b3b9c0'/></linearGradient><filter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'><feGaussianBlur stdDeviation='.45'/></filter></defs><path d='M7 0V2A5 5 0 0 0 12 7H14' fill='none' stroke='%23001a0c' stroke-opacity='.45' stroke-width='1.1' transform='translate(0 .55)' filter='url(%23b)'/><path d='M0 0V2A12 12 0 0 0 12 14H14V7H12A5 5 0 0 1 7 2V0Z' fill='url(%23m)'/><path d='M6.75 0V2A5.25 5.25 0 0 0 12 7.25H14' fill='none' stroke='%23ffffff' stroke-width='.5'/><path d='M.25 0V2A11.75 11.75 0 0 0 12 13.75H14' fill='none' stroke='%23767c85' stroke-width='.5'/><path d='M0 .25H7M13.75 7V14' stroke='%23000' stroke-opacity='.2' stroke-width='.5'/></svg>");
   --cap-r: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'><defs><linearGradient id='m' x1='0' y1='0' x2='.45' y2='1'><stop offset='0' stop-color='%23eef0f3'/><stop offset='1' stop-color='%23b3b9c0'/></linearGradient><filter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'><feGaussianBlur stdDeviation='.45'/></filter></defs><g transform='translate(14 0) scale(-1 1)'><path d='M7 0V2A5 5 0 0 0 12 7H14' fill='none' stroke='%23001a0c' stroke-opacity='.45' stroke-width='1.1' transform='translate(0 .55)' filter='url(%23b)'/><path d='M0 0V2A12 12 0 0 0 12 14H14V7H12A5 5 0 0 1 7 2V0Z' fill='url(%23m)'/><path d='M6.75 0V2A5.25 5.25 0 0 0 12 7.25H14' fill='none' stroke='%23ffffff' stroke-width='.5'/><path d='M.25 0V2A11.75 11.75 0 0 0 12 13.75H14' fill='none' stroke='%23767c85' stroke-width='.5'/><path d='M0 .25H7M13.75 7V14' stroke='%23000' stroke-opacity='.2' stroke-width='.5'/></g></svg>");
@@ -136,7 +120,7 @@ img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
 }
 :root[data-theme="dark"] .cork { --cap-l: var(--cap-l-dark); --cap-r: var(--cap-r-dark); }
 
-/* The felt sits a hair below the frame: a fine shade along the rails' inner edge. */
+/* A fine shade along the rails' inner edge, so the felt sits below the frame. */
 .cork::after {
   content: "";
   position: absolute;
@@ -149,8 +133,7 @@ img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
     inset 0 -1px 2px -.5px var(--felt-inner-shade);
   pointer-events: none;
 }
-/* The soft shade where the board tucks under the screen edge, across the
-   felt and the rails. */
+/* Soft shade where the board tucks under the screen edge. */
 .cork::before {
   content: "";
   position: absolute;
@@ -165,7 +148,6 @@ img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
   z-index: 1;
 }
 
-/* ---------------------------------------------------------------- the row */
 @property --fade-l { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @property --fade-r { syntax: "<length>"; inherits: false; initial-value: 0px; }
 

@@ -1,23 +1,20 @@
-// Drop to pin. Drag an image file, a link or some text to the top of the
-// screen: the backend brings the board down, and dropping it on the board
-// pins it. The window has dragDropEnabled off, so HTML5 drag and drop
-// reaches the page:
-//   - over the board, a drag that carries something pinnable gets the copy
-//     cursor and a soft light wash on the cork with a small "Drop to pin";
-//   - anywhere else the page refuses it, and every dragover and drop is
-//     cancelled, or the webview would navigate to a dropped file;
-//   - a drop pins, in this order: PNG/JPEG files (pin_image, the bytes as
-//     base64), else the first address of a text/uri-list, else plain text
-//     (pin_text). Nothing is ever fetched.
-// A print being dragged out of the board (state.draggingId) passes over the
-// board too: that is never a drop.
+// Drop to pin. Drag an image file, link or text to the top of the screen: the
+// backend brings the board down, and dropping on the board pins it. The window
+// has dragDropEnabled off so HTML5 drag and drop reaches the page:
+//   - over the board, a pinnable drag gets the copy cursor and a soft light
+//     wash on the cork with "Drop to pin";
+//   - elsewhere the page refuses it and cancels every dragover and drop, or
+//     the webview would navigate to a dropped file;
+//   - a drop pins PNG/JPEG files (pin_image, base64), else the first address of
+//     a text/uri-list, else plain text (pin_text). Nothing is ever fetched.
+// A print dragged out of the board (state.draggingId) is never a drop.
 
 import * as ipc from "./ipc.js";
 import { notice } from "./notice.js";
 import { dom, state } from "./state.js";
 
 const MAX_BYTES = 40 * 1024 * 1024;
-const CHUNK = 3 * 8192;            // a multiple of 3, so the base64 pieces join cleanly
+const CHUNK = 3 * 8192;            // multiple of 3 so base64 pieces join cleanly
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg"]);
 const IMAGE_EXT = /\.(png|jpe?g)$/i;
 
@@ -55,13 +52,12 @@ function onBoardDrag(e) {
 dom.board.addEventListener("dragenter", onBoardDrag);
 dom.board.addEventListener("dragover", onBoardDrag);
 dom.board.addEventListener("dragleave", (e) => {
-  // Moving between the board's own parts fires leave/enter pairs; only a
-  // leave to outside the board (or out of the window: no relatedTarget) counts.
+  // Moving between the board's own parts fires leave/enter pairs; only leaving the board (or window: no relatedTarget) counts.
   const to = e.relatedTarget;
   if (!to || !dom.board.contains(to)) setOver(false);
 });
 
-// Everywhere else: refused, and never a navigation.
+// Everywhere else: refuse, never navigate.
 document.addEventListener("dragover", (e) => {
   e.preventDefault();
   if (!dom.board.contains(e.target)) {
@@ -108,7 +104,7 @@ async function pinImages(files) {
   }
 }
 
-/** Base64 of `bytes`, a chunk at a time (no giant argument lists, no one huge binary string). */
+/** Base64 of `bytes` a chunk at a time, avoiding giant argument lists. */
 function base64(bytes) {
   const parts = [];
   for (let i = 0; i < bytes.length; i += CHUNK) {

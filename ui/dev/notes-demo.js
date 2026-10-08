@@ -85,7 +85,7 @@ preview.dropFile = () => {   // not pinnable: a notice
   dragOver(dt);
 };
 
-// ---------------------------------------------------------------- scenes
+// scenes
 const demo = params.get("demo");
 const slotOf = (pred) => {
   const p = preview.prints.find(pred);

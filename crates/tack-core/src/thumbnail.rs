@@ -1,13 +1,14 @@
 //! Decoding screenshots: the small JPEG prints for the board, the full image
 //! for the clipboard, and the little bitmap that follows the pointer in a drag.
 
-use std::io::Cursor;
+use std::io::{BufRead, Cursor, Seek};
 use std::path::Path;
+use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use base64::Engine;
 use image::codecs::jpeg::JpegEncoder;
-use image::{DynamicImage, GenericImageView, ImageReader, RgbImage};
+use image::{DynamicImage, GenericImageView, ImageReader, Limits, RgbImage};
 
 /// Long side of a print on the board, in pixels.
 const THUMB_SIDE: u32 = 360;
@@ -29,13 +30,59 @@ pub struct Thumb {
     pub height: u32,
 }
 
+/// The most any one picture may claim: 16384 px a side and 256 MiB of
+/// pixels. A file that claims more (a tiny PNG can claim gigabytes) is
+/// refused instead of exhausting memory.
+const MAX_SIDE: u32 = 16_384;
+const MAX_ALLOC: u64 = 256 * 1024 * 1024;
+/// Decodes at once, however many pictures arrive together.
+const MAX_DECODES: usize = 2;
+
+static DECODES: (Mutex<usize>, Condvar) = (Mutex::new(0), Condvar::new());
+
+/// A turn to decode; the next waiting decode starts when it is dropped.
+struct Turn;
+
+impl Turn {
+    fn take() -> Turn {
+        let (count, freed) = &DECODES;
+        let mut n = count.lock().unwrap_or_else(|p| p.into_inner());
+        while *n >= MAX_DECODES {
+            n = freed.wait(n).unwrap_or_else(|p| p.into_inner());
+        }
+        *n += 1;
+        Turn
+    }
+}
+
+impl Drop for Turn {
+    fn drop(&mut self) {
+        let (count, freed) = &DECODES;
+        *count.lock().unwrap_or_else(|p| p.into_inner()) -= 1;
+        freed.notify_one();
+    }
+}
+
+fn limited<R: BufRead + Seek>(reader: ImageReader<R>) -> Result<DynamicImage, String> {
+    let mut reader = reader.with_guessed_format().map_err(|e| e.to_string())?;
+    let mut limits = Limits::default();
+    limits.max_image_width = Some(MAX_SIDE);
+    limits.max_image_height = Some(MAX_SIDE);
+    limits.max_alloc = Some(MAX_ALLOC);
+    reader.limits(limits);
+    let _turn = Turn::take();
+    reader.decode().map_err(|e| e.to_string())
+}
+
+/// Decodes a picture file, within the limits above.
 pub fn decode(path: &Path) -> Result<DynamicImage, String> {
-    ImageReader::open(path)
-        .map_err(|e| e.to_string())?
-        .with_guessed_format()
-        .map_err(|e| e.to_string())?
-        .decode()
-        .map_err(|e| e.to_string())
+    limited(ImageReader::open(path).map_err(|e| e.to_string())?)
+}
+
+/// Decodes a picture already in memory (a drop, a phone pin), within the
+/// same limits.
+pub fn decode_bytes(bytes: &[u8]) -> Result<DynamicImage, String> {
+    limited(ImageReader::new(Cursor::new(bytes)))
 }
 
 pub fn make(path: &Path) -> Result<Thumb, String> {

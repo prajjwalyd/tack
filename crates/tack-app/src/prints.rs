@@ -1,11 +1,8 @@
 //! What can happen to a print, from the app's side: each change is made on
 //! the board model, saved, told to the UI (once it is ready) and, for a
 //! capture or a note leaving the board, followed by moving its file to the
-//! Recycle Bin.
-//!
-//! Also the history's upkeep: unkept prints age out once they are a week old
-//! (checked after the restore at startup, then every hour) or when fifty
-//! newer ones push them out.
+//! Recycle Bin. Also the history's upkeep: unkept prints age out (checked
+//! after the restore at startup, then hourly).
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -82,9 +79,9 @@ fn discard_files(prints: &[Print]) {
 }
 
 /// Sends capture and note files Tack no longer needs to the Recycle Bin,
-/// never deleting them outright. Runs on a thread of its own, since the shell can
-/// take a moment; a file that cannot be recycled is logged and left alone.
-/// A capture still being written goes once it is written.
+/// never deleting them outright. Runs on a thread of its own, since the
+/// shell can take a moment; a file that cannot be recycled is logged and
+/// left alone. A capture still being written goes once it is written.
 pub fn discard_captures(paths: Vec<PathBuf>) {
     let (now, later): (Vec<PathBuf>, Vec<PathBuf>) = paths.into_iter().partition(|p| !captures::is_saving(p));
     for path in later {

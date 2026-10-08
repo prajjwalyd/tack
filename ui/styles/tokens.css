@@ -1,23 +1,21 @@
-/* The note paper, one set from notes/ (docs/design.md, section 8):
-   card.css (A: a white index card, shipped), classic.css (pale warm
-   yellow) or sticky.css (B: a bright sticky note). Change this one line
-   to switch. */
+/* Note paper: one set from notes/ (docs/design.md, section 8): card.css
+   (white index card, shipped), classic.css or sticky.css. Change this line to switch. */
 @import url("notes/card.css");
 
-/* Design tokens: every size, colour, radius, shadow and duration the board
-   uses, as custom properties. Colours come in light/dark pairs through
-   light-dark(), resolved against the board's `color-scheme` (board.css): it
-   follows Windows (prefers-color-scheme) unless <html data-theme="light|dark">
-   forces one, as the preview does. The scheme is set on #board, never on the
-   root, so the transparent window never gets a dark canvas behind it.
+/* Design tokens: sizes, colours, radii, shadows and durations as custom
+   properties. Colours are light-dark() pairs resolved against the board's
+   `color-scheme` (board.css), which follows Windows unless
+   <html data-theme="light|dark"> forces one (the preview does). The scheme is
+   set on #board, not the root, so the transparent window never gets a dark
+   canvas.
 
-   The geometry mirrors scripts/layout.js. motion/spring.js replaces the
-   --ease-reveal / --ease-layout / --ease-settle curves (and their durations)
-   with sampled springs; the values here are the fallbacks. */
+   Geometry mirrors scripts/layout.js. motion/spring.js overrides the
+   --ease-reveal / --ease-layout / --ease-settle curves and durations with
+   sampled springs; the values here are the fallbacks. */
 
 :root {
-  /* ---- geometry ---- */
-  --top-hidden: 24px;        /* board kept above the screen edge; the reveal's hinge is at the edge */
+  /* geometry */
+  --top-hidden: 24px;        /* board part above the screen edge; the hinge is at the edge */
   --board-h: 150px;          /* visible board height */
   --board-radius: 12px;      /* bottom corners, outside the frame */
   --frame-w: 6px;            /* the aluminium frame: sides and bottom, no top rail */
@@ -25,10 +23,8 @@
   --print-border: 4px;       /* even paper border around the photo */
   --print-radius: 3px;
   --photo-radius: 1px;
-  /* The pin: one knob. --pin-scale sizes the head (and, through --pin-u,
-     everything drawn on it: gloss, rim, shadows) from a 10.5 px base;
-     the kept pin is --kept-pin-scale larger again. pin.css places it from
-     these, so nothing else needs to change. */
+  /* Pin: --pin-scale sizes the head and, through --pin-u, everything drawn on
+     it (gloss, rim, shadows) from a 10.5 px base. */
   --pin-scale: 1.3;
   --pin-size: calc(10.5px * var(--pin-scale));
   --pin-u: calc(1px * var(--pin-scale));   /* one "pin pixel" */
@@ -38,19 +34,14 @@
   --badge-size: 28px;        /* the copied check */
   --hint-radius: 2px;        /* the empty-board card and the tip */
   --note-radius: 2px;        /* a paper note (layout.js sizes it: NOTE_W x NOTE_H) */
-  --note-pad: 10px;          /* text inset on a note; the top clears the pin */
 
-  /* ---- light ----
-     One light, above the screen and slightly in front of it: every shadow
-     falls straight down, every highlight sits at the top. */
+  /* light: one source above the screen, so shadows fall straight down and highlights sit at the top */
   --hinge-from: -88deg;      /* the board's angle while tucked: folded up under the screen edge */
   --board-perspective: 1100px;
   --print-perspective: 520px; /* a print peeling off as a drag starts */
 
-  /* ---- colour: board ----
-     Forest-green felt (a fine plain weave, warp and weft, a little mottling)
-     in a brushed-aluminium frame. The board hangs from the screen edge, so
-     the frame has no top rail. (The element is still called .cork.) */
+  /* colour: board. Green felt in a brushed-aluminium frame with no top rail
+     (it hangs from the screen edge). The element is still called .cork. */
   --felt: light-dark(#24503f, #1c4234);
   --felt-light: light-dark(rgba(214, 255, 232, .13), rgba(200, 255, 225, .07));
   --felt-vignette: light-dark(rgba(0, 14, 6, .30), rgba(0, 0, 0, .36));
@@ -62,11 +53,9 @@
     0 1px 2px light-dark(rgba(10, 20, 16, .25), rgba(0, 0, 0, .5)),
     0 14px 34px -6px light-dark(rgba(10, 24, 18, .30), rgba(0, 0, 0, .55));
 
-  /* ---- colour: the frame ----
-     Brushed aluminium, lit from above: the bottom rail's top face catches
-     the light (a white hairline), each side rail is brightest at its inner
-     edge. Dimmer in the dark theme, so it never glares on a dark desktop
-     but keeps a crisp silver edge. */
+  /* colour: frame. Lit from above: the bottom rail's top face is a white
+     hairline, each side rail is brightest at its inner edge. Dimmer in the
+     dark theme so it never glares. */
   --rail-bottom: linear-gradient(180deg,
     light-dark(#ffffff, #e8ebee) 0, light-dark(#ffffff, #e8ebee) .5px,
     light-dark(#e4e7eb, #b9bec4) .5px, light-dark(#d2d6db, #a8aeb5) 1.5px,
@@ -87,7 +76,7 @@
     light-dark(rgba(255, 255, 255, .12), rgba(255, 255, 255, .06)) 86%,
     light-dark(rgba(0, 0, 0, .08), rgba(0, 0, 0, .14)));
 
-  /* ---- colour: prints ---- */
+  /* colour: prints */
   --paper: light-dark(#fbfaf7, #ebe8e2);
   --photo-empty: light-dark(#dcd8d0, #b9b4ab);
   --photo-edge: rgba(0, 0, 0, .14);
@@ -103,22 +92,18 @@
   --badge-bg: rgba(24, 22, 20, .68);
   --badge-ink: #ffffff;
 
-  /* ---- colour: empty-state card (and the one-time tip) ---- */
+  /* colour: empty-state card and the one-time tip */
   --hint-paper: light-dark(#fbfaf7, #e9e6df);
   --hint-ink: rgba(44, 34, 24, .62);
   --hint-ink-strong: rgba(44, 34, 24, .82);
 
-  /* ---- colour: paper notes ----
-     The note paper (--note-*) comes from one of the sets in notes/, chosen
-     by the @import at the top of this file. */
+  /* colour: paper notes (--note-*) come from the notes/ set imported above */
 
-  /* ---- colour: keyboard focus ----
-     A light ring with a dark hairline either side, so it reads on felt and
-     on paper in both themes. */
+  /* colour: keyboard focus. A light ring with dark hairlines reads on felt and paper in both themes. */
   --focus-ring: rgba(255, 255, 255, .96);
   --focus-edge: light-dark(rgba(0, 20, 10, .66), rgba(0, 0, 0, .72));
 
-  /* ---- colour: cues (the notice under the board, the drop affordance) ---- */
+  /* colour: cues (notice under the board, drop affordance) */
   --cue-bg: light-dark(rgba(253, 252, 250, .84), rgba(30, 34, 32, .82));
   --cue-ink: light-dark(rgba(28, 32, 30, .88), rgba(242, 246, 243, .92));
   --cue-edge: light-dark(rgba(0, 0, 0, .08), rgba(255, 255, 255, .10));
@@ -126,23 +111,16 @@
   --drop-wash: light-dark(rgba(255, 255, 255, .16), rgba(255, 255, 255, .09));
   --drop-rim: light-dark(rgba(255, 255, 255, .62), rgba(225, 255, 238, .36));
 
-  /* ---- colour: pins (body, shade) ----
-     Bright glossy push-pins, the colours of a good box of office pins, so
-     they pop on the green. The five slots keep their names (layout.js) but
-     are tomato, cobalt, lemon, violet and white here. The yellow leans to
-     lemon so it never reads as the kept pin's brass; there is no orange
-     (it sat between the red and the brass) and no green (it would vanish
-     into the felt). Pins stay the same in the dark theme: plastic does not
-     dim with the room, and they read on the darker felt anyway. */
+  /* colour: pins (body, shade). The slot names are layout.js's PALETTE; the
+     colours are tomato, cobalt, violet, lemon and white. No orange (too close
+     to brass) and no green (lost in the felt). Same in both themes. */
   --pin-terracotta: #f0392b;  --pin-terracotta-d: #a3170f;   /* tomato */
   --pin-sage: #2f6df6;        --pin-sage-d: #163c9e;         /* cobalt */
   --pin-ink: #8a4cf0;         --pin-ink-d: #4f1fa3;          /* violet */
   --pin-sand: #fbe94a;        --pin-sand-d: #b8a40c;         /* lemon */
   --pin-graphite: #fbfbf8;    --pin-graphite-d: #a9b0b8;     /* white */
   --pin-graphite-rim: rgba(38, 48, 60, .46);   /* the white pin's edge: it has to read on white paper too */
-  /* The kept pin: polished brass, the same on every kept print and note,
-     a little larger than the others (--kept-pin-scale), with a bright rim
-     where the dome turns away and a glint (pin.css). */
+  /* Kept pin: polished brass, larger by --kept-pin-scale (pin.css). */
   --brass-hi: #fffbe3;
   --brass: #f2c24b;
   --brass-mid: #c98d1e;
@@ -152,20 +130,19 @@
   --pin-highlight: rgba(255, 255, 255, .6);
   --pin-cast: light-dark(rgba(0, 12, 6, .55), rgba(0, 0, 0, .6));
 
-  /* ---- shadows ---- */
-  /* A print at rest: tight contact under the pin side, a softer one lower down. */
+  /* shadows */
+  /* A print at rest: tight contact shadow plus a softer one lower down. */
   --shadow-rest:
     0 .5px 1px light-dark(rgba(0, 14, 6, .38), rgba(0, 0, 0, .5)),
     0 2px 3px -1px light-dark(rgba(0, 14, 6, .26), rgba(0, 0, 0, .34)),
     0 8px 9px -6px light-dark(rgba(0, 14, 6, .42), rgba(0, 0, 0, .52));
-  /* Added on hover (and while held above the board), cross-faded with opacity. */
+  /* Added on hover and while held above the board, cross-faded with opacity. */
   --shadow-lift:
     0 3px 6px -1px light-dark(rgba(0, 12, 6, .22), rgba(0, 0, 0, .3)),
     0 16px 22px -10px light-dark(rgba(0, 12, 6, .5), rgba(0, 0, 0, .6));
-  /* (A note's own extra shadow, --shadow-note-corner, is in its paper set.) */
   --shadow-button: 0 .5px 1.5px rgba(0, 0, 0, .18), 0 2px 6px -1px rgba(0, 0, 0, .16);
 
-  /* ---- type ---- */
+  /* type */
   --font-ui: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-small: "Segoe UI Variable Small", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --caption-size: 11px;
@@ -173,9 +150,8 @@
   --note-size: 12px;         /* a note's text on the board */
   --sheet-size: 13px;        /* an unfolded note */
 
-  /* ---- motion ---- */
+  /* motion */
   --ease-out: cubic-bezier(.2, .8, .25, 1);
-  --ease-in: cubic-bezier(.45, 0, .85, .4);
   --ease-reveal: cubic-bezier(.3, 1.25, .45, 1);  /* a swing a little past flat */
   --dur-reveal: 520ms;
   --ease-tuck: cubic-bezier(.5, 0, .85, .35);     /* folds away, gathering speed */

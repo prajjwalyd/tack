@@ -1,12 +1,9 @@
-//! Tack is a plain desktop app, but a program started from inside a packaged
-//! (MSIX) app, such as a terminal or coding tool hosted by one, can end up in
-//! that app's container even when it carries no package identity itself. In
-//! there Windows redirects writes under AppData into the host package's
-//! private cache and gives named objects a namespace of their own. A Tack
-//! started that way works on a private, stale copy of the board, misses the
-//! user's own Tack (two boards, fighting over shortcuts) and can tidy away
-//! files the real board still uses. So it starts itself again through the
-//! shell, outside the container, and the contained copy exits.
+//! Escaping an MSIX container. A program started from inside a packaged app
+//! (a terminal or coding tool hosted by one) can land in that app's container
+//! without a package identity of its own. There Windows redirects AppData
+//! writes and namespaces named objects, so Tack would run a stale private
+//! copy of the board beside the user's real one. It relaunches itself
+//! through the shell instead, and the contained copy exits.
 
 use std::collections::HashMap;
 

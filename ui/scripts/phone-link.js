@@ -1,22 +1,14 @@
-// The "Tack on your phone" window: a small window of its own (phone-link.html)
-// that the tray's "Use on your phone…" opens, and that opens by itself, with
-// the focus, when a new device asks to use the board.
+// The "Tack on your phone" window (phone-link.html): the tray's "Use on your
+// phone..." opens it, and it opens itself when a new device asks to use the
+// board. It holds the on/off switch, the QR code and address, the "pixel
+// wants to use your board" prompt, and the list of allowed devices.
 //
-// Tack can serve the board to the user's phone over NetBird (a private
-// WireGuard network): the phone, with the NetBird app on the same account,
-// opens http://<pc>.netbird.cloud:7717 and sees the board, and can pin photos
-// and text onto it. This window is the switch for that, the way in (a QR code
-// and the address), the answer to "pixel wants to use your board", and the
-// list of devices that were allowed.
+// Everything renders from one PhoneState (docs/ipc.md), sent on phone:state and
+// returned by every command. Each part is rebuilt only when its own slice
+// changes, so keyboard focus is never pulled away.
 //
-// Everything on the page comes from one PhoneState (docs/ipc.md): the backend
-// sends it whenever anything changes (event phone:state) and every command
-// answers with the new one. Each part of the page is rebuilt only when its
-// own slice changes, so the keyboard focus is never pulled from under you.
-//
-// A request to use the board is a security prompt: it sits first, its Allow
-// button takes the focus, Enter acts only on the button that has it, and Esc
-// closes the window without allowing anything.
+// A request is a security prompt: it sits first, its Allow button takes the
+// focus, Enter acts only on the focused button, and Esc closes without allowing.
 
 import * as ipc from "./ipc.js";
 
@@ -43,12 +35,10 @@ const ICONS = {
 /** @type {PhoneState} */
 let state = { on: false, netbird: "connected", serving: false, address: null, qr: null, error: null, pc: null, devices: [], pending: [] };
 let loaded = false;
-let switching = false;   // set_phone is on its way
-const sigs = {};         // what each part of the page was last built from
+let switching = false;   // set_phone in flight
+const sigs = {};         // what each part was last built from
 let copyTimer = 0;
 let announceTimer = 0;
-
-// ---------------------------------------------------------------- the page
 
 document.body.innerHTML = `
   <main class="dialog">
@@ -111,14 +101,12 @@ function when(ms) {
   return `on ${new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: days > 300 ? "numeric" : undefined })}`;
 }
 
-// ---------------------------------------------------------------- the parts
-
 function renderSwitch(s) {
   el.sw.setAttribute("aria-checked", String(s.on));
   el.sw.querySelector(".state").textContent = s.on ? "On" : "Off";
 }
 
-/** The requests, loud and first. Returns true if the list changed. */
+/** The requests, shown first. */
 function renderAsks(s) {
   const hadFocus = el.asks.contains(document.activeElement);
   const before = new Set((sigs.asks ? JSON.parse(sigs.asks) : []).map((p) => p.key));
@@ -142,14 +130,13 @@ function renderAsks(s) {
     if (hadFocus) el.title.focus();   // the focused button just went away
     return;
   }
-  // A person must see this: scroll to it, and put the focus on Allow when it
-  // is new (or the one that had the focus went away).
+  // Scroll to it; focus Allow when the request is new or the focused one went away.
   el.asks.parentElement.scrollTop = 0;
   if (fresh.length && loaded) announce(`${fresh.map((p) => p.name).join(" and ")} ${fresh.length > 1 ? "are" : "is"} asking to use your board`);
   if (fresh.length || hadFocus) el.asks.querySelector('[data-act="allow"]').focus();
 }
 
-/** What the switch leads to. */
+/** The body under the switch. */
 function bodyHtml(s) {
   if (s.netbird === "missing") {
     return `
@@ -219,8 +206,6 @@ function apply(next) {
   loaded = true;
 }
 
-// ---------------------------------------------------------------- actions
-
 async function toggle() {
   if (switching) return;
   switching = true;
@@ -263,7 +248,7 @@ async function copy(btn) {
     await navigator.clipboard.writeText(addr);
   } catch (err) {
     console.warn("[tack] copy failed:", err);
-    // Select it instead, so Ctrl+C is one key away.
+    // Select it so Ctrl+C is one key away.
     const sel = getSelection();
     sel.selectAllChildren($("#addr"));
     announce("Couldn't copy. The address is selected: press Ctrl+C.");
@@ -295,19 +280,16 @@ document.addEventListener("click", (e) => {
 $("#close").addEventListener("click", closePhoneLink);
 
 document.addEventListener("keydown", (e) => {
-  // Esc closes the window and nothing else: it never allows a device. Enter
-  // and Space act on the button that has the focus, as in any Windows dialog.
+  // Esc only closes, it never allows a device.
   if (e.key === "Escape") { e.preventDefault(); closePhoneLink(); return; }
-  // No browser behaviour in a dialog window.
+  // Block browser shortcuts (reload, print, zoom...) in a dialog window.
   const k = e.key.toLowerCase();
   if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && ["r", "p", "f", "g", "u", "s", "o", "n", "j", "h", "+", "-", "=", "0"].includes(k))) e.preventDefault();
 }, true);
 document.addEventListener("contextmenu", (e) => {
-  // The address is selectable text: leave the menu to a click on it, nowhere else.
+  // The address is selectable, so right-click works only there.
   if (!e.target.closest?.(".addr")) e.preventDefault();
 });
-
-// ---------------------------------------------------------------- start
 
 async function load() {
   if (!ipc.available()) { console.error("[tack] window.__TAURI__ is not available"); return; }
@@ -316,6 +298,5 @@ async function load() {
   if (st) apply(st);
 }
 
-// No control takes the focus on open, unless a device is asking: then Allow
-// does (renderAsks). Tab reaches everything; Esc closes from anywhere.
+// Nothing takes the focus on open unless a device is asking (renderAsks).
 load();

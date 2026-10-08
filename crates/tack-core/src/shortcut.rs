@@ -1,9 +1,6 @@
-//! Keyboard shortcuts as the user sees and saves them: "Win+Alt+S" shows or
-//! hides the board, "Win+Alt+C" pins the selection. Both can be changed from
-//! the tray's Shortcuts dialog and are saved in board.json as these strings
-//! ("" turns one off). This module parses, checks and prints them; the
-//! Windows side (`tack-windows::hotkey`) turns a [`Chord`] into a
-//! `RegisterHotKey` call.
+//! Keyboard shortcuts as the user sees and saves them, such as "Win+Alt+S"
+//! ("" turns one off). This module parses, checks and prints them;
+//! `tack_windows::hotkey` registers a [`Chord`].
 
 use std::fmt;
 
@@ -39,7 +36,7 @@ const NAMED: [(&str, u16); 11] = [
 ];
 
 /// The name of a key as written in a chord, if Tack accepts it.
-pub fn key_name(vk: u16) -> Option<String> {
+fn key_name(vk: u16) -> Option<String> {
     match vk {
         0x30..=0x39 | 0x41..=0x5A => Some(char::from(vk as u8).to_string()),
         0x70..=0x87 => Some(format!("F{}", vk - 0x6F)),

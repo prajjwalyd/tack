@@ -1,25 +1,20 @@
 //! The board on the user's phone (or any of their devices), over NetBird.
 //! With the switch on, Tack serves a small page on this PC's NetBird
-//! address, `http://<this-pc>.netbird.cloud:7717`. A phone with the NetBird
-//! app connected opens it, the PC asks "Let pixel use your board?", and once
-//! allowed the phone sees the board and can pin photos and text onto it,
-//! from any network.
-//!
-//! - `mod.rs` (here): the switch, following NetBird as it connects and
-//!   disconnects, who may get in, and the state the window shows.
-//! - [`server`]: the HTTP side and its checks.
-//! - [`window`]: the "Tack on your phone" window.
+//! address; a device that opens it asks "Let pixel use your board?", and
+//! once allowed it sees the board and can pin photos and text onto it.
+//! This module keeps the server in step with the switch and NetBird, and
+//! holds who may get in.
 //!
 //! Who gets in, in layers (docs/privacy.md has the long version):
 //! 1. NetBird's access policies decide which devices can reach this PC at
-//!    all; NetBird drops everything else before Tack sees it.
-//! 2. Tack listens on the NetBird address only: never on the Wi-Fi, office
+//!    all.
+//! 2. Tack listens on the NetBird address only, never on the Wi-Fi, office
 //!    network or internet.
 //! 3. It answers only peers NetBird lists, and knows each by its WireGuard
 //!    key ([`tack_core::phone`]): nothing of the board reaches a device the
 //!    user has not allowed, on this PC, by name.
-//! 4. The page refuses other websites (Host, Origin, Fetch Metadata) and
-//!    limits what a device may send ([`server`]).
+//! 4. The page refuses other websites and limits what a device may send
+//!    ([`server`]).
 
 pub mod server;
 pub mod window;
@@ -114,12 +109,7 @@ fn nudge() {
 fn reconcile(app: &AppHandle) {
     let on = lock(app).settings.phone.on;
     let status = if on { netbird::status() } else { None };
-    let netbird_now = match &status {
-        Some(_) => NetBirdState::Connected,
-        None if on && netbird::installed() => NetBirdState::Disconnected,
-        None if on => NetBirdState::Missing,
-        None => phone().netbird,
-    };
+    let netbird_now = if on { netbird_state(status.as_ref()) } else { phone().netbird };
 
     let mut changed = false;
     {
@@ -169,13 +159,17 @@ fn reconcile(app: &AppHandle) {
 /// window can say what turning it on would need.
 pub fn state(app: &AppHandle) -> PhoneState {
     if !lock(app).settings.phone.on {
-        phone().netbird = match netbird::status() {
-            Some(_) => NetBirdState::Connected,
-            None if netbird::installed() => NetBirdState::Disconnected,
-            None => NetBirdState::Missing,
-        };
+        phone().netbird = netbird_state(netbird::status().as_ref());
     }
     state_now(app)
+}
+
+fn netbird_state(status: Option<&Status>) -> NetBirdState {
+    match status {
+        Some(_) => NetBirdState::Connected,
+        None if netbird::installed() => NetBirdState::Disconnected,
+        None => NetBirdState::Missing,
+    }
 }
 
 fn state_now(app: &AppHandle) -> PhoneState {

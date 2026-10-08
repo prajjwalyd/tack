@@ -1,12 +1,10 @@
-//! Tack's global shortcuts: one shows or hides the board (Win+Alt+S by
-//! default), the other pins the current selection (Win+Alt+C). Both can be
-//! changed at any time, turned off, or paused while the Shortcuts dialog
-//! listens for a new chord.
+//! Tack's global shortcuts: show or hide the board (Win+Alt+S by default) and
+//! pin the selection (Win+Alt+C). Either can be changed, turned off, or
+//! paused while the Shortcuts dialog listens for a new chord.
 //!
 //! `RegisterHotKey` binds a shortcut to the thread that registers it, so one
-//! thread of its own owns them all: it registers, unregisters and hears
-//! `WM_HOTKEY` in its message loop, and takes requests from other threads
-//! through a channel, woken by a posted message.
+//! thread owns them all: it registers, unregisters and hears `WM_HOTKEY` in
+//! its message loop, taking requests from other threads through a channel.
 
 use std::sync::mpsc::{self, Receiver, Sender};
 

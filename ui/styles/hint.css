@@ -1,7 +1,5 @@
-/* The empty state: one small blank index card pinned to the felt,
-   "Take a screenshot · Win + Shift + S", in quiet Segoe UI Variable.
-   layout.js shows it when the board has no prints. (The paper notes pinned
-   in the row are styles/note.css.) */
+/* The empty state: a small index card pinned to the felt ("Take a screenshot
+   · Win + Shift + S"). layout.js shows it when the board has no prints. */
 
 .hint-card {
   position: absolute;
@@ -30,8 +28,7 @@
 .hint-card .dot { padding: 0 7px; opacity: .55; }
 .hint-card .keys { font-weight: 600; color: var(--hint-ink-strong); }
 
-/* An empty board opened from the keyboard has the focus itself: the ring
-   goes round the card, the only thing on it. */
+/* An empty board opened by keyboard has the focus itself: ring round the card. */
 #board.kbd.focused .hint-card.show::after {
   content: "";
   position: absolute;

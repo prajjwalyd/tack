@@ -1,14 +1,13 @@
-// The shortcuts dialog: a small window of its own (shortcuts.html) that the
-// tray's "Shortcuts…" opens. Two rows, each a global shortcut shown as
-// Windows-style keycaps: show or hide the board, and pin the selection.
+// The shortcuts dialog (shortcuts.html), opened from the tray's "Shortcuts...".
+// Two rows, each a global shortcut shown as keycaps: show or hide the board,
+// and pin the selection.
 //
-// Selecting a field (click, Enter or Space) captures the next chord typed:
-// Tack's own hotkeys are paused meanwhile (pause_shortcuts), or pressing
-// the current chord would toggle the board instead of being recorded.
-// Esc cancels the capture, Backspace or Delete turns that shortcut off. A
-// chord needs Win, Ctrl or Alt, or an F-key. Nothing is saved until Save,
-// and only if every chord is free (set_shortcuts); a chord another app
-// holds says so under its row and the dialog stays open.
+// Selecting a field (click, Enter or Space) captures the next chord typed.
+// Tack's own hotkeys are paused meanwhile (pause_shortcuts), or pressing the
+// current chord would toggle the board instead of being recorded. Esc cancels,
+// Backspace or Delete turns the shortcut off. A chord needs Win, Ctrl or Alt,
+// or an F-key. Nothing is saved until Save, and only if every chord is free
+// (set_shortcuts); a chord another app holds is reported under its row.
 //
 // Chords travel as text: modifiers in the order Win, Ctrl, Alt, Shift, then
 // the key, joined with "+", e.g. "Win+Alt+S"; "" is off (docs/ipc.md).
@@ -32,8 +31,6 @@ const chords = { toggle: "", pin: "" };
 let defaults = { toggle: "Win+Alt+S", pin: "Win+Alt+C" };
 let capturing = null;   // { row, held: string[] } while a field listens
 let saving = false;
-
-// ---------------------------------------------------------------- the page
 
 document.body.innerHTML = `
   <main class="dialog">
@@ -91,15 +88,13 @@ function setStatus(row, text, tone = "warn") {
   if (text) s.querySelector("span").textContent = text;
 }
 
-/** The status line for a Shortcut from the backend, as it stands. */
+/** The status line for a backend Shortcut. */
 function describe(sc) {
   if (!sc) return "";
   if (sc.status === "in-use") return sc.chord ? `${sc.chord} is in use by another app` : "In use by another app";
   if (sc.status === "invalid") return HINT;
   return "";
 }
-
-// ---------------------------------------------------------------- capture
 
 /** A key's name in a chord, from its physical code; null if it cannot be one. */
 function keyName(code) {
@@ -174,8 +169,6 @@ function onCaptureKeyUp(e) {
   render(capturing.row);
 }
 
-// ---------------------------------------------------------------- actions
-
 async function save() {
   if (saving) return;
   if (capturing) endCapture();
@@ -212,7 +205,6 @@ function reset() {
 }
 
 for (const r of Object.values(rows)) {
-  // Click, Enter or Space (a button's own activation) starts the capture.
   r.field.addEventListener("click", () => startCapture(r.name));
 }
 $("#reset").addEventListener("click", reset);
@@ -222,9 +214,9 @@ $("#save").addEventListener("click", save);
 document.addEventListener("keydown", (e) => {
   if (capturing) { onCaptureKey(e); return; }
   if (e.key === "Escape") { e.preventDefault(); ipc.closeShortcuts(); return; }
-  // Enter anywhere but on a button saves, as in any Windows dialog.
+  // Enter anywhere but on a button saves.
   if (e.key === "Enter" && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); save(); }
-  // No browser behaviour in a dialog window.
+  // Block browser shortcuts (reload, print, zoom...) in a dialog window.
   const k = e.key.toLowerCase();
   if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && ["r", "p", "f", "g", "u", "s", "o", "n", "j", "h", "+", "-", "=", "0"].includes(k))) e.preventDefault();
 }, true);
@@ -234,11 +226,9 @@ document.addEventListener("pointerdown", (e) => {
   if (capturing && !rows[capturing.row].field.contains(e.target)) endCapture();
 }, true);
 document.addEventListener("contextmenu", (e) => e.preventDefault());
-// Leaving the window mid-capture: stop listening, and never leave Tack's hotkeys paused.
+// Leaving mid-capture must never leave Tack's hotkeys paused.
 window.addEventListener("blur", () => { if (capturing) endCapture(); });
 window.addEventListener("pagehide", () => { if (capturing) endCapture(); });
-
-// ---------------------------------------------------------------- start
 
 async function load() {
   for (const r of ROWS) render(r.name);
@@ -253,7 +243,5 @@ async function load() {
   }
 }
 
-// No field takes the focus on open: the tray opens this with the mouse, and a
-// focus ring would sit on the first field for nothing. Tab reaches the fields;
-// Enter and Esc work from anywhere.
+// No field takes the focus on open: the tray opens it by mouse and a ring would be noise.
 load();

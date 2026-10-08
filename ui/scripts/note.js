@@ -1,15 +1,13 @@
-// Paper notes: text and links pinned in the row like prints. A note is a
-// print whose `data.kind` is "note" (docs/ipc.md): print.js builds it with
-// the same layers, pin and motion, and calls `fillNote` for its paper. This
-// module also decides what "open" means for each kind (`openItem`), and
-// unfolds a text note: a bigger sheet of the same paper hanging from the
-// note's pin, below the board, to read it whole.
+// Paper notes: text and links pinned in the row like prints. A note is a print
+// with `data.kind` "note" (docs/ipc.md): print.js builds it with the same layers
+// and calls `fillNote` for its paper. This module also decides what "open"
+// means per kind (`openItem`) and unfolds a text note into a bigger sheet
+// hanging from its pin below the board.
 //
 // The sheet is the board's only scrollable thing (the wheel scrolls it, not
-// the row). It folds away on Esc, a double click, a click anywhere else,
-// the row scrolling or moving, the note going, and the tuck. While it is
-// down, the board rect sent to the backend takes it in (layout.js), so that
-// area is not click-through.
+// the row). It folds on Esc, double click, a click elsewhere, the row scrolling
+// or moving, the note going, and the tuck. While down, the board rect sent to
+// the backend includes it (layout.js), so it is not click-through.
 
 import * as ipc from "./ipc.js";
 import { clearHover } from "./gestures.js";
@@ -17,15 +15,15 @@ import { PIN_Y, PRINT_TOP, TOP_HIDDEN, onLayout, setExtraRect } from "./layout.j
 import { onScrollState, scrollPos } from "./scroll.js";
 import { dom, state } from "./state.js";
 
-const SHEET_W = 360;          // the unfolded sheet's widest, CSS px (max height is in note.css)
+const SHEET_W = 360;          // widest unfolded sheet, CSS px (max height is in note.css)
 const SHEET_MIN_W = 240;
 const SHEET_PIN_Y = 9;        // pin centre from the sheet's top (--pin-y in note.css)
 const EDGE = 8;               // the sheet keeps this far from the window's sides
-const NOTE_CHARS = 360;       // about four lines' worth; the paper clamps the rest
+const NOTE_CHARS = 360;       // about four lines; the paper clamps the rest
 
 const LINK_SVG = `<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M4.3 5.7l1.4-1.4M3.6 4.2L2.5 5.3a1.6 1.6 0 0 0 2.2 2.2l1.1-1.1M6.4 5.8l1.1-1.1a1.6 1.6 0 0 0-2.2-2.2L4.2 3.6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" fill="none"/></svg>`;
 
-/** True for a note (text or link), false for a screenshot; old payloads have no kind. */
+/** True for a note (text or link), false for a screenshot. */
 export function isNote(data) {
   return data?.kind === "note" && !!data.note;
 }
@@ -40,10 +38,7 @@ export function bareLink(url) {
   return String(url).replace(/^https?:\/\//i, "").replace(/\/$/, "");
 }
 
-/**
- * Writes an address into `el` with a line-break chance after each / ? & = #
- * (and before a dot), so it wraps between its parts, not mid-word.
- */
+/** Writes an address into `el` with break chances after / ? & = # and before a dot, so it wraps between parts. */
 function writeAddress(el, url) {
   el.textContent = "";
   for (const part of url.split(/(?<=[/?&=#])|(?=\.)/)) {
@@ -52,7 +47,7 @@ function writeAddress(el, url) {
   }
 }
 
-/** Builds (or rebuilds, after an edit) a note's paper and its caption's parts. */
+/** Builds (or rebuilds) a note's paper and caption parts. */
 export function fillNote(print) {
   const note = print.data.note || { text: "" };
   const link = note.link || null;
@@ -74,7 +69,7 @@ export function fillNote(print) {
     d.appendChild(name);
     paper.appendChild(d);
   }
-  // A link's caption: its full address over the age (print.js fills the age).
+  // A link's caption: full address over the age (print.js fills the age).
   const caption = print.caption;
   caption.classList.toggle("link", !!link);
   caption.textContent = "";
@@ -90,12 +85,7 @@ export function fillNote(print) {
   }
 }
 
-/**
- * "Open" for any kind: a screenshot or a link goes to the backend (its
- * default app, the browser); a text note unfolds on the board (or folds).
- * `focus`: move the keyboard focus into the sheet, so it can be read and
- * scrolled from the keyboard.
- */
+/** "Open" for any kind: a screenshot or link goes to the backend; a text note unfolds (or folds). `focus` moves keyboard focus into the sheet. */
 export function openItem(print, { focus = false } = {}) {
   if (!print || print.leaving) return;
   if (isNote(print.data) && !linkOf(print.data)) {
@@ -105,8 +95,6 @@ export function openItem(print, { focus = false } = {}) {
   }
   ipc.openPrint(print.id);
 }
-
-// ---------------------------------------------------------------- unfolded
 
 let sheet = null;   // { print, el, scroller, x }
 
@@ -144,8 +132,7 @@ function unfold(print, focus) {
     pin.querySelector(".pin-brass").style.opacity = "1";
   }
 
-  // Hung from the note's pin, placed from the layout (in board px), never
-  // from measured boxes: the board may still be turning on its hinge.
+  // Placed from layout, not measured boxes: the board may still be turning on its hinge.
   const boardLeft = (window.innerWidth - state.boardW) / 2;
   const pinX = state.boardW / 2 + print.x - scrollPos() + print.w / 2;
   const pinY = TOP_HIDDEN + PRINT_TOP + PIN_Y;
@@ -160,7 +147,7 @@ function unfold(print, focus) {
   sheet = { print, el, scroller, x: print.x };
   print.slot.classList.add("unfolded");
 
-  // The wheel reads the note, it does not scroll the row (scroll.js listens on the board).
+  // The wheel scrolls the note, not the row (scroll.js listens on the board).
   el.addEventListener("wheel", (e) => { if (!e.ctrlKey) e.stopPropagation(); }, { passive: true });
   el.addEventListener("dblclick", () => fold());
   el.addEventListener("pointerdown", (e) => e.stopPropagation());
@@ -174,7 +161,7 @@ function unfold(print, focus) {
     el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: "ease-out" });
     return;
   }
-  // Grows out of the note, about its pin: from the note's size to its own.
+  // Grows out of the note about its pin.
   const sx = Math.min(1, print.w / r.width), sy = Math.min(1, print.h / r.height);
   el.animate([
     { opacity: 0.4, transform: `scale(${sx.toFixed(3)}, ${sy.toFixed(3)})` },
@@ -183,7 +170,7 @@ function unfold(print, focus) {
   ], { duration: 260, easing: "cubic-bezier(.2, .8, .25, 1)" });
 }
 
-/** Folds the unfolded note back into its place; `instant`: no animation (tuck, a new sheet). */
+/** Folds the sheet back; `instant` skips animation (tuck, a new sheet). */
 export function fold(instant = false) {
   const s = sheet;
   if (!s) return;
@@ -191,7 +178,7 @@ export function fold(instant = false) {
   document.removeEventListener("pointerdown", onOutside, true);
   s.print.slot.classList.remove("unfolded");
   setExtraRect(null);
-  // The focus was in the sheet: give it back to the note.
+  // Give back the focus the sheet held.
   if (s.el.contains(document.activeElement)) s.print.slot.focus({ preventScroll: true });
   if (instant || !state.revealed || state.reduced || s.print.leaving) {
     if (instant || !state.revealed) { s.el.remove(); return; }
@@ -213,7 +200,7 @@ function onOutside(e) {
   if (sheet && !sheet.el.contains(e.target)) fold();
 }
 
-// The row scrolling or moving would leave the sheet hanging from nothing.
+// A scrolling or moving row would leave the sheet hanging from nothing.
 onScrollState((moving) => { if (moving && sheet) fold(); });
 onLayout(() => {
   if (sheet && (sheet.print.leaving || !state.prints.has(sheet.print.id) || sheet.print.x !== sheet.x)) fold();

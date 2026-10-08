@@ -1,8 +1,6 @@
-/* Note paper, option A: a white index card. Crisp warm-white stock (the
-   prints' fibre texture shows through), a thin red header rule just under
-   the pin and faint blue rules that the text sits on (12 px type on 15 px
-   lines from 18 px down: note.css). Dimmer in the dark theme, like the
-   prints' paper. Picked in tokens.css. */
+/* Note paper "card" (shipped): a warm-white index card with a red header rule
+   under the pin and blue rules the text sits on (12 px type on 15 px lines
+   from 18 px down: note.css). Dimmer in the dark theme. Picked in tokens.css. */
 :root {
   --note-paper: light-dark(#fffefa, #eeebe4);
   --note-ink: rgba(28, 32, 42, .86);

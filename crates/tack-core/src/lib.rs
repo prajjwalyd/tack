@@ -1,8 +1,7 @@
-//! The platform-independent heart of Tack: the board and the prints pinned to
-//! it, how prints arrive and leave, what is saved between sessions, and the
-//! thumbnails the UI shows. Nothing here knows about Tauri or Win32, so all of
-//! it can be unit tested on its own; `tack-windows` and `tack-app` build the
-//! actual app around it.
+//! The platform-independent part of Tack: the board and its prints, how
+//! prints arrive and leave, what is saved between sessions, and the
+//! thumbnails the UI shows. Nothing here knows about Tauri or Win32, so all
+//! of it is unit tested on its own.
 //!
 //! The words used throughout: the **board** waits just above the top edge of
 //! the screen; a **print** is one screenshot pinned to it with a **pin**; a
