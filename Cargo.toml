@@ -21,6 +21,8 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 tauri = { version = "2.12.1", features = ["tray-icon", "image-png"] }
 tauri-build = "2.7.1"
+qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
+tiny_http = "0.12.0"
 trash = "5.2.9"
 # The same version Tauri's WebView2 backend (wry) uses, so its types match.
 webview2-com = "0.39.1"

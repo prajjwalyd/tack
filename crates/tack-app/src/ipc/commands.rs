@@ -9,6 +9,7 @@ use tack_core::{Print, Rect};
 use tauri::AppHandle;
 
 use crate::ipc::events::Removal;
+use crate::phone::{self, PhoneState};
 use crate::shortcuts::{self, DialogState, Pair};
 use crate::state::lock;
 use crate::{context_menu, drag, keyboard, notes, prints, reveal};
@@ -173,4 +174,39 @@ pub async fn pause_shortcuts(paused: bool) {
 #[tauri::command]
 pub async fn close_shortcuts(app: AppHandle) {
     shortcuts::close_dialog(&app);
+}
+
+/// The phone window opens. Async: it may ask NetBird how it is.
+#[tauri::command]
+pub async fn phone_state(app: AppHandle) -> PhoneState {
+    phone::state(&app)
+}
+
+/// The phone window's switch.
+#[tauri::command]
+pub async fn set_phone(app: AppHandle, on: bool) -> PhoneState {
+    phone::set_on(&app, on)
+}
+
+/// Allow or Don't allow, for a device asking to use the board.
+#[tauri::command]
+pub async fn answer_device(app: AppHandle, key: String, allow: bool) -> PhoneState {
+    phone::answer(&app, &key, allow)
+}
+
+/// Remove, for an allowed device.
+#[tauri::command]
+pub async fn forget_device(app: AppHandle, key: String) -> PhoneState {
+    phone::forget(&app, &key)
+}
+
+/// "Get NetBird": NetBird's install page, in the browser.
+#[tauri::command]
+pub fn open_netbird_download() {
+    tack_windows::shell::open_url(phone::NETBIRD_INSTALL);
+}
+
+#[tauri::command]
+pub async fn close_phone_link(app: AppHandle) {
+    phone::window::close(&app);
 }

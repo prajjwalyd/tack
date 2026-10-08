@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::phone::PhoneSettings;
 use crate::shortcut::{Chord, DEFAULT_PIN, DEFAULT_TOGGLE};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -19,6 +20,8 @@ pub struct Settings {
     pub toggle_shortcut: String,
     /// Pins the current selection, as "Win+Alt+C" ("" for none).
     pub pin_shortcut: String,
+    /// The board on the user's phone: the switch and the allowed devices.
+    pub phone: PhoneSettings,
 }
 
 impl Default for Settings {
@@ -29,6 +32,7 @@ impl Default for Settings {
             snip_tip_shown: false,
             toggle_shortcut: DEFAULT_TOGGLE.into(),
             pin_shortcut: DEFAULT_PIN.into(),
+            phone: PhoneSettings::default(),
         }
     }
 }

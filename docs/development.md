@@ -1,7 +1,7 @@
-# Contributing to Tack
+# Working on Tack
 
-Thanks for helping. Tack is small on purpose: a board, prints, pins. Before
-building something big, open an issue to talk it through.
+How to build, run and preview Tack, and the conventions the code follows.
+Tack is small on purpose: a board, prints, pins.
 
 ## Prerequisites
 
@@ -28,8 +28,8 @@ including one line per clipboard change, which is how the Snipping Tool
 capture flow is debugged.
 
 Where things live, and how a screenshot or a click travels through the app,
-is in [docs/architecture.md](docs/architecture.md). The UI and the backend
-talk only through the commands and events in [docs/ipc.md](docs/ipc.md): if
+is in [architecture.md](architecture.md). The UI and the backend
+talk only through the commands and events in [ipc.md](ipc.md): if
 you change one, change `crates/tack-app/src/ipc/`, `ui/scripts/ipc.js`,
 `ui/dev/fake-ipc.js` and `docs/ipc.md` together.
 
@@ -59,7 +59,7 @@ whole `frontendDist` folder) but nothing in the app links to it.
 ## README images and the social preview
 
 The images in `docs/assets/` are rendered from the real board in a browser,
-never drawn by hand (see "README images" in [docs/design.md](docs/design.md)):
+never drawn by hand (see "README images" in [design.md](design.md)):
 `ui/dev/hero.html` gives the hero, hover, row and notes images and, with
 `?card`, the social preview; `ui/dev/demo.html` is the animated loop at the
 top of the README. If you change how the board looks, render them again.
@@ -83,15 +83,9 @@ Social preview** each time it changes.
 - Use the domain words: the **board**, a **print** (one pinned screenshot),
   its **pin**, a **capture** (from the clipboard) versus a **screenshot
   file** (from the folder), **reveal** and **tuck**.
-- The app never touches the network. Do not add dependencies that do.
+- The app never reaches out to the network: no update checks, analytics or
+  fetching. The only listening is the phone board (`crates/tack-app/src/phone/`),
+  on the NetBird address alone, when the user switches it on. Keep it that way.
 
 CI runs formatting, clippy, the tests and a release build on Windows for
-every push and pull request.
-
-## Commits
-
-- One logical change per commit, with the code, tests and docs it needs.
-- Subject in the imperative, under about 70 characters ("Add a Save to
-  Pictures item"), a blank line, then the why if it is not obvious.
-- Pull requests: say what changed and how you tested it, including a screen
-  recording for anything you can see.
+every push.

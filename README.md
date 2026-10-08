@@ -28,6 +28,10 @@ small paper note. The board is a single row: newest first, with older prints
 a scroll away. Keep the ones you still need; the rest quietly age out after
 a week.
 
+And it's on your phone too. Snip on your PC and it's in your pocket; snap a
+photo on your phone and it flies onto your board, on Wi-Fi or mobile data.
+[Two minutes to set up.](#your-board-on-your-phone)
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.png">
@@ -66,6 +70,30 @@ a week.
     <td colspan="2">Text and links go up as paper notes (<b>Win + Alt + C</b>, or drop them on the board).</td>
   </tr>
 </table>
+
+## Your board, on your phone
+
+Your board goes everywhere your phone does. Open it on your phone and your
+latest snips are right there, ready to save or send. Take a photo, tap
+**Pin photo**, and it lands on your PC's board a moment later, the same way a
+screenshot does. It works at home, at the office, on mobile data in another
+city. No account with Tack and no cloud: your phone talks straight to your PC
+through [NetBird](https://netbird.io), a free, open-source private network
+built on WireGuard.
+
+Set it up once:
+
+1. Install [NetBird](https://docs.netbird.io/get-started/install) on your PC
+   and your phone, and sign in to the same account on both.
+2. In Tack's tray menu, choose **Use on your phone…** and switch it on.
+3. Scan the QR code with your phone, then click **Allow** on your PC.
+
+Add the page to your home screen and your board is one tap away from then on.
+
+Only devices on your NetBird network can even ask, and only the ones you
+allow get in. Everything stays on your PC: your phone reads the board from
+it directly, through NetBird's encrypted tunnel, and nothing is uploaded
+anywhere.
 
 ## Gestures
 
@@ -129,9 +157,13 @@ Recycle Bin, never deleted outright, so you can still restore it.
 
 ## Private by design
 
-Tack never sends your screenshots or anything else anywhere. Its own code has
-no network access, and the web view's content security policy only permits the
-app's own files and its local IPC channel. Tack also switches off the network
+Tack never sends your screenshots or anything else anywhere, and never talks
+to the internet. Out of the box its own code has no network access, and the
+web view's content security policy only permits the app's own files and its
+local IPC channel. The one exception is yours to switch on: with **Use on
+your phone**, Tack answers your own devices, and only on your PC's NetBird
+address, never on your Wi-Fi or office network. A device gets in only after
+you click Allow on the PC, and you can remove it at any time. Tack also switches off the network
 services of Microsoft's WebView2 runtime, which draws the board (account
 sign-in, secure DNS probes, proxy auto-detection, SmartScreen): in our
 measurements it opens no connections at all. See [docs/privacy.md](docs/privacy.md)
@@ -168,7 +200,7 @@ cargo test --workspace
 
 You can also work on the board's look and animations in an ordinary browser,
 without Rust: run `npm run preview` and open
-<http://localhost:5178/dev/preview.html>. [CONTRIBUTING.md](CONTRIBUTING.md)
+<http://localhost:5178/dev/preview.html>. [docs/development.md](docs/development.md)
 has the details.
 
 ## Repository map
@@ -177,10 +209,12 @@ has the details.
 crates/
   tack-core/      board model, notes, history and Keep, duplicate detection, board.json, shortcuts, thumbnails (no Tauri, no Win32)
   tack-windows/   Win32 pieces: Screenshots folder, Snipping Tool clipboard, selection and clipboard restore, file drag, overlay window, focus, hotkeys, shell
-  tack-app/       the Tauri app: wiring, IPC commands and events, tray, Shortcuts dialog, context menu
+  tack-app/       the Tauri app: wiring, IPC commands and events, tray, Shortcuts dialog, context menu, the phone board (phone/)
 ui/
   index.html      the board page
   shortcuts.html  the Shortcuts dialog (a small window of its own)
+  phone-link.html the "Tack on your phone" window: the switch, the QR code, Allow, your devices
+  phone/          the page your phone opens, served by Tack itself over NetBird
   styles/         tokens, board, print, pin, note, hint, cues, motion, flight, a11y; notes/ holds the note-paper sets (index card, classic, sticky)
   scripts/        ES modules: main, ipc, layout, print, note, gestures, keyboard, announce, notice, drop, motion/, sound, state
   dev/            browser preview harness with a fake backend; the pages the README images and demo loop are rendered from
@@ -191,13 +225,15 @@ docs/
 
 ## Acknowledgements
 
-Inspired by [Tendedero](https://github.com/alejandrobujan/tendedero) by
-Alejandro Buján. See [NOTICE.md](NOTICE.md).
+Inspired by [Tendedero](https://github.com/alejandrobujan/tendedero) by Alejandro Buján.
 
 Built on [Tauri](https://tauri.app), [windows-rs](https://github.com/microsoft/windows-rs),
 [image](https://github.com/image-rs/image), [notify](https://github.com/notify-rs/notify),
-[arboard](https://github.com/1Password/arboard) and
-[trash](https://github.com/Byron/trash-rs).
+[arboard](https://github.com/1Password/arboard),
+[trash](https://github.com/Byron/trash-rs),
+[tiny_http](https://github.com/tiny-http/tiny-http) and
+[qrcode](https://github.com/kennytm/qrcode-rust). The phone board runs over
+[NetBird](https://netbird.io).
 
 ## License
 

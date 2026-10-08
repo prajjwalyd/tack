@@ -1,0 +1,347 @@
+/* The "Tack on your phone" window (phone-link.html, scripts/phone-link.js):
+   a small Windows 11 window in the Shortcuts dialog's style. A solid
+   background that follows the system theme, Fluent cards, a toggle switch,
+   a QR code on a white card, and a footer with the privacy line and Close.
+   Fluent's metrics: Segoe UI Variable 14/20, 4 px controls, 32 px buttons,
+   the two-tone focus ring. A request to use the board is the one loud thing
+   on the page: an accent-ringed card at the very top. <html
+   data-theme="light|dark"> forces a theme (the dev preview). */
+
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#f3f3f3, #202020);
+  --ink: light-dark(#1a1a1a, #ffffff);
+  --ink-2: light-dark(#5f5f5f, #c8c8c8);
+  --card: light-dark(rgba(255, 255, 255, .72), rgba(255, 255, 255, .052));
+  --card-solid: light-dark(#ffffff, #2b2b2b);
+  --card-edge: light-dark(rgba(0, 0, 0, .062), rgba(0, 0, 0, .22));
+  --divider: light-dark(rgba(0, 0, 0, .07), rgba(255, 255, 255, .06));
+  --hover: light-dark(rgba(0, 0, 0, .037), rgba(255, 255, 255, .06));
+  --press: light-dark(rgba(0, 0, 0, .024), rgba(255, 255, 255, .04));
+  --btn: light-dark(#fdfdfd, #2d2d2d);
+  --btn-hover: light-dark(#f6f6f6, #323232);
+  --btn-press: light-dark(#f3f3f3, #282828);
+  --btn-edge: light-dark(rgba(0, 0, 0, .07), rgba(255, 255, 255, .07));
+  --btn-base: light-dark(rgba(0, 0, 0, .16), rgba(255, 255, 255, .03));
+  --accent: light-dark(#005fb8, #60cdff);
+  --accent-hover: light-dark(#1a6dc0, #5bbbe8);
+  --accent-press: light-dark(#3d82c8, #56a8d1);
+  --accent-wash: light-dark(rgba(0, 95, 184, .10), rgba(96, 205, 255, .14));
+  --on-accent: light-dark(#ffffff, #000000);
+  --warn: light-dark(#9d5d00, #fce100);
+  --ok: light-dark(#0f7b0f, #6ccb5f);
+  --footer: light-dark(rgba(0, 0, 0, .022), rgba(0, 0, 0, .16));
+  --focus-outer: light-dark(rgba(0, 0, 0, .9), #ffffff);
+  --focus-inner: light-dark(#ffffff, rgba(0, 0, 0, .7));
+  --off-edge: light-dark(rgba(0, 0, 0, .56), rgba(255, 255, 255, .54));
+  --font: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-small: "Segoe UI Variable Small", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 14px/20px var(--font);
+  -webkit-font-smoothing: antialiased;
+  cursor: default;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* The page scrolls between a fixed top and the footer, for small screens
+   and big text sizes. */
+.dialog {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 20px 16px;
+  overflow-y: auto;
+  /* Only there when needed, and slim when it is. */
+  scrollbar-width: thin;
+  scrollbar-color: light-dark(rgba(0, 0, 0, .3), rgba(255, 255, 255, .3)) transparent;
+}
+.dialog > * { flex: none; }
+.dialog > section:empty, .dialog > div:empty { display: none; }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+.stack > * { flex: none; }
+
+h1, h2, p, ol, ul { margin: 0; }
+h1, h2 { font-weight: 600; }
+h1:focus, .ask-title:focus { outline: none; }
+
+/* ---------------------------------------------------------------- a request */
+.ask {
+  padding: 12px 14px 14px;
+  border-radius: 8px;
+  background: var(--card-solid);
+  box-shadow: 0 0 0 2px var(--accent), 0 6px 18px light-dark(rgba(0, 0, 0, .14), rgba(0, 0, 0, .45));
+  animation: ask-in 180ms ease-out;
+}
+.ask + .ask { margin-top: 10px; }
+.ask-head { display: flex; gap: 12px; align-items: flex-start; }
+.ask-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+.ask-icon svg { width: 20px; height: 20px; }
+.ask-title { font: 600 16px/22px var(--font-display); overflow-wrap: anywhere; }
+.ask-sub { margin-top: 2px; font: 400 13px/18px var(--font); color: var(--ink-2); }
+.ask-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+@keyframes ask-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------------------------------------------------------------- the header */
+.hero { display: flex; gap: 14px; align-items: center; padding: 2px 0 0; }
+.hero-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+.hero-icon svg { display: block; width: 24px; height: 24px; }
+.hero h1 { font: 600 20px/26px var(--font-display); }
+.hero p { margin-top: 2px; font: 400 13px/18px var(--font); color: var(--ink-2); }
+
+/* ---------------------------------------------------------------- cards */
+.card {
+  border-radius: 6px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--card-edge);
+}
+
+/* The switch: the whole row is the control, as in Windows Settings. */
+.switch {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  column-gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+  outline: none;
+  transition: background-color 80ms ease;
+}
+.switch:hover { background: var(--hover); }
+.switch:active { background: var(--press); }
+.switch[aria-busy="true"] { opacity: .7; }
+.switch .state { color: var(--ink-2); font: 400 13px/18px var(--font-small); }
+
+.track {
+  position: relative;
+  width: 40px;
+  height: 20px;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px var(--off-edge);
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+.track::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--off-edge);
+  transition: transform 140ms ease, width 100ms ease, background-color 120ms ease;
+}
+.switch:hover .track::before { width: 14px; top: 3px; }
+.switch[aria-checked="true"] .track { background: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.switch[aria-checked="true"] .track::before { background: var(--on-accent); transform: translateX(20px); }
+.switch[aria-checked="true"]:hover .track::before { transform: translateX(19px); }
+
+/* ---------------------------------------------------------------- the body */
+.note { padding: 14px 16px; }
+.note p + p, .note p + .std { margin-top: 10px; }
+.note .std { display: inline-block; }
+.quiet { font: 400 13px/18px var(--font); color: var(--ink-2); padding: 0 2px; }
+.quiet.center { text-align: center; text-wrap: balance; }
+.small { font: 400 12px/16px var(--font-small); color: var(--ink-2); }
+.note .small { margin-top: 8px; }
+
+.problem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+  font: 400 13px/18px var(--font);
+}
+.problem svg { flex: none; width: 16px; height: 16px; margin-top: 1px; color: var(--warn); }
+
+.share {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 16px;
+}
+/* A QR code stays black on white in every theme: it has to scan. */
+.qr {
+  width: 164px;
+  height: 164px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px light-dark(rgba(0, 0, 0, .10), rgba(255, 255, 255, .0)), 0 1px 3px light-dark(rgba(0, 0, 0, .08), rgba(0, 0, 0, .4));
+  forced-color-adjust: none;
+}
+.qr svg { display: block; width: 100%; height: 100%; shape-rendering: crispEdges; }
+.scan { margin-top: 8px; font-weight: 600; }
+.needs { margin-top: 8px; }
+.addr-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 4px 4px 4px 12px;
+  border-radius: 6px;
+  background: light-dark(rgba(0, 0, 0, .04), rgba(255, 255, 255, .05));
+}
+.addr {
+  flex: 1;
+  min-width: 0;
+  font: 400 13px/18px var(--font);
+  overflow-wrap: anywhere;
+  user-select: all;
+  cursor: text;
+}
+
+/* ---------------------------------------------------------------- devices */
+.sec { margin: 0 2px 6px; font: 600 13px/18px var(--font); }
+.list { list-style: none; padding: 0; }
+.dev {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 8px 6px 16px;
+}
+.dev + .dev { border-top: 1px solid var(--divider); }
+.dev-text { flex: 1; min-width: 0; }
+.dev-name { display: block; overflow-wrap: anywhere; }
+.dev-when { display: block; font: 400 12px/16px var(--font-small); color: var(--ink-2); }
+
+/* ---------------------------------------------------------------- footer */
+footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--footer);
+  border-top: 1px solid var(--divider);
+}
+.privacy { flex: 1; font: 400 12px/16px var(--font-small); color: var(--ink-2); }
+
+/* ---------------------------------------------------------------- buttons */
+button { font: inherit; }
+.std {
+  min-width: 88px;
+  height: 32px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--btn);
+  box-shadow: inset 0 0 0 1px var(--btn-edge), inset 0 -1px 0 var(--btn-base);
+  color: var(--ink);
+  outline: none;
+}
+.std:hover { background: var(--btn-hover); }
+.std:active { background: var(--btn-press); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--btn-edge); }
+.std.accent {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: inset 0 0 0 1px light-dark(rgba(255, 255, 255, .08), rgba(0, 0, 0, .08)), inset 0 -1px 0 light-dark(rgba(0, 0, 0, .40), rgba(0, 0, 0, .14));
+}
+.std.accent:hover { background: var(--accent-hover); }
+.std.accent:active { background: var(--accent-press); color: light-dark(rgba(255, 255, 255, .8), rgba(0, 0, 0, .6)); }
+.std:disabled { opacity: .55; }
+.text {
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  outline: none;
+}
+.text:hover { background: var(--hover); }
+.text:active { background: var(--press); opacity: .8; }
+.addr-row .std { min-width: 72px; }
+.addr-row .std.done { color: var(--ok); }
+
+/* Fluent's focus: a 2 px outer ring with a 1 px inner one in the opposite tone. */
+.switch:focus-visible,
+.std:focus-visible,
+.text:focus-visible {
+  outline: 2px solid var(--focus-outer);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px var(--focus-inner);
+}
+.switch:focus-visible { outline-offset: 2px; }
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ---------------------------------------------------------------- High Contrast */
+@media (forced-colors: active) {
+  .card, .ask { border: 1px solid CanvasText; box-shadow: none; }
+  .ask { border-width: 2px; }
+  .ask-icon, .hero-icon { background: Canvas; color: CanvasText; border: 1px solid CanvasText; }
+  .std { background: ButtonFace; color: ButtonText; border: 1px solid ButtonText; }
+  /* System colours set by hand: left to the browser, the label would get a
+     Canvas backplate and vanish on the Highlight fill. */
+  .std.accent { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; }
+  .text { color: LinkText; }
+  .track { forced-color-adjust: none; box-shadow: none; border: 1px solid ButtonText; background: Canvas; }
+  .track::before { background: ButtonText; }
+  .switch[aria-checked="true"] .track { background: Highlight; border-color: Highlight; }
+  .switch[aria-checked="true"] .track::before { background: HighlightText; }
+  .addr-row { border: 1px solid CanvasText; }
+  .switch:focus-visible, .std:focus-visible, .text:focus-visible { outline: 2px solid Highlight; box-shadow: none; }
+  .problem svg { color: CanvasText; }
+  footer { border-top: 1px solid CanvasText; }
+}

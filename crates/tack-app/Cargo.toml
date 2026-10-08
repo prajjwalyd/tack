@@ -21,6 +21,8 @@ image.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tauri.workspace = true
+qrcode.workspace = true
+tiny_http.workspace = true
 webview2-com.workspace = true
 
 [dependencies.windows]

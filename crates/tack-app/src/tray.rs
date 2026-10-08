@@ -1,6 +1,6 @@
-//! The notification area icon and its menu: Show board, Clear board, Open
-//! Screenshots folder, Reveal at top edge, Sound, Start with Windows,
-//! Shortcuts…, Quit. A left click on the icon toggles the board. If a
+//! The notification area icon and its menu, kept short: Show board and Use
+//! on your phone…; Clear board and Open Screenshots folder; the settings
+//! (Reveal at top edge, Sound, Start with Windows, Shortcuts…); Quit. A left click on the icon toggles the board. If a
 //! shortcut could not be registered (another app has it), the menu says so
 //! and offers to change it; the menu is rebuilt whenever that changes.
 //!
@@ -27,7 +27,7 @@ use windows::Win32::System::Registry::{
 
 use crate::ipc::events;
 use crate::state::lock;
-use crate::{prints, reveal, shortcuts};
+use crate::{phone, prints, reveal, shortcuts};
 
 /// The check items, kept to read and set their state when clicked.
 pub struct TrayItems {
@@ -57,11 +57,14 @@ fn menu(app: &AppHandle) -> tauri::Result<(Menu<Wry>, TrayItems)> {
     let autostart =
         CheckMenuItem::with_id(app, "tray:autostart", "Start with Windows", true, autostart::enabled(), None::<&str>)?;
     let keys = MenuItem::with_id(app, "tray:shortcuts", "Shortcuts\u{2026}", true, None::<&str>)?;
+    let phone = MenuItem::with_id(app, "tray:phone", "Use on your phone\u{2026}", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "tray:quit", "Quit Tack", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
         &[
             &show,
+            &phone,
+            &PredefinedMenuItem::separator(app)?,
             &clear,
             &folder,
             &PredefinedMenuItem::separator(app)?,
@@ -77,7 +80,7 @@ fn menu(app: &AppHandle) -> tauri::Result<(Menu<Wry>, TrayItems)> {
     for (n, chord) in shortcuts::in_use(app).into_iter().enumerate() {
         let text = format!("{chord} is in use by another app \u{2014} Change\u{2026}");
         let warning = MenuItem::with_id(app, format!("tray:shortcuts-in-use-{n}"), text, true, None::<&str>)?;
-        menu.insert(&warning, 3 + n)?;
+        menu.insert(&warning, 5 + n)?;
     }
     Ok((menu, TrayItems { edge, sound, autostart }))
 }
@@ -182,6 +185,11 @@ fn follow_taskbar_theme(app: AppHandle) {
 /// Menu clicks with a `tray:` id. The check state is set explicitly, so it is
 /// right whether or not the menu already flipped it.
 pub fn handle(app: &AppHandle, id: &str) {
+    if id == "tray:phone" {
+        let app = app.clone();
+        std::thread::spawn(move || phone::window::open(&app));
+        return;
+    }
     if id == "tray:shortcuts" || id.starts_with("tray:shortcuts-in-use") {
         // Not from this handler: building a window on the event loop's own
         // thread, inside one of its handlers, would wait on itself.

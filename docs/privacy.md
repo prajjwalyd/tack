@@ -2,12 +2,53 @@
 
 ## Tack itself
 
-Nothing. Tack's code has no network access: no HTTP client, no update check,
-no analytics. The board is a local page whose content security policy only
-allows Tack's own files, `data:` images and the local IPC channel, so even a
-bug in the page could not reach the internet. Your board lives in
-`%APPDATA%\Tack\board.json`, unsaved captures in
+Nothing goes out. Tack has no HTTP client, no update check and no analytics,
+and it never connects anywhere. The board is a local page whose content
+security policy only allows Tack's own files, `data:` images and the local
+IPC channel, so even a bug in the page could not reach the internet. Your
+board lives in `%APPDATA%\Tack\board.json`, unsaved captures in
 `%LOCALAPPDATA%\Tack\Captures` and notes in `%LOCALAPPDATA%\Tack\Notes`.
+
+Out of the box Tack does not listen for connections either. The one thing
+that does is yours to switch on: **Use on your phone** (below).
+
+## Your board on your phone
+
+With **Use on your phone** on, Tack serves the board to your own devices
+over [NetBird](https://netbird.io), a private network built on WireGuard.
+Tack still makes no outgoing connections; your phone connects to your PC.
+Who gets in, layer by layer:
+
+1. **NetBird decides who can reach this PC at all.** Only devices in your
+   NetBird network, allowed by its access policies, can send this PC
+   anything; NetBird drops the rest before Tack sees it. For the tightest
+   setup, give your phone and PC a NetBird group of their own and a policy
+   that allows only the phone to reach the PC on TCP port 7717.
+2. **Tack listens only on the PC's NetBird address** (100.x.y.z, port
+   7717): never on your Wi-Fi, office network or the internet.
+3. **Every request must come from a device NetBird lists**, which Tack reads
+   from NetBird's own client (`netbird status`, run from NetBird's install
+   folder only). WireGuard ties each address to a device's key, so the
+   sender is who NetBird says it is.
+4. **Nothing of the board reaches a device you have not allowed.** The first
+   time a device asks, the PC shows "Let pixel use your board?". Tack
+   remembers the answer by the device's WireGuard key, not its name or
+   address, so another device cannot pass for it. Remove a device in the
+   same window and it has to ask again. A device you turn down can ask again
+   no more than every 30 seconds, and no more than three can wait at once.
+5. **Other websites on your phone cannot use it.** Requests must name your
+   PC in the Host header (which defeats DNS rebinding) and, when the browser
+   says where they come from (Fetch Metadata, Origin), come from Tack's own
+   page. The page itself loads nothing but its own files.
+6. **What a device can send is limited:** JPEG, PNG or text only, 40 MB at
+   most, and 30 pins a minute.
+
+The connection is plain HTTP inside NetBird's tunnel. WireGuard encrypts it
+from your phone to your PC, so your carrier or a café's Wi-Fi sees only
+encrypted traffic; the browser still says "Not secure", because it cannot
+see the tunnel. Your board never leaves your PC except to be shown on your
+allowed devices, and photos you pin from the phone are saved on the PC like
+any capture. Turn the switch off and the port closes.
 
 ## Text, the clipboard and notes
 

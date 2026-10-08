@@ -16,6 +16,7 @@ pub mod drag_out;
 pub mod edge_reveal;
 pub mod focus;
 pub mod hotkey;
+pub mod netbird;
 pub mod overlay;
 pub mod pointer;
 pub mod sandbox;

@@ -25,6 +25,7 @@ pub const WARM_UP: &str = "board:warm-up";
 pub const SETTINGS: &str = "board:settings";
 pub const POINTER_LEFT: &str = "board:pointer-left";
 pub const NOTICE: &str = "board:notice";
+pub const PHONE_STATE: &str = "phone:state";
 
 /// How the UI animates an unpinned print.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
@@ -114,4 +115,9 @@ pub fn pointer_left(app: &AppHandle) {
 /// ("Nothing selected", "Already pinned"...). Also read out by screen readers.
 pub fn notice(app: &AppHandle, text: &str) {
     let _ = app.emit(NOTICE, json!({ "text": text }));
+}
+
+/// The phone window's state changed (see `phone::PhoneState`).
+pub fn phone_state(app: &AppHandle, state: &crate::phone::PhoneState) {
+    let _ = app.emit_to(crate::phone::window::LABEL, PHONE_STATE, state);
 }

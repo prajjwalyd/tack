@@ -179,33 +179,44 @@ fn pin_files(app: &AppHandle, paths: Vec<PathBuf>) -> String {
 /// capture, so it goes to the Recycle Bin when it leaves the board.
 pub fn pin_dropped_image(app: &AppHandle, name: &str, data: &str) -> String {
     let bytes = match base64::engine::general_purpose::STANDARD.decode(data.trim()) {
-        Ok(bytes) if bytes.len() <= MAX_DROP_BYTES => bytes,
+        Ok(bytes) => bytes,
         _ => {
             notice(app, say::BAD_IMAGE);
             return format!("{name}: not a picture Tack can take");
         }
     };
+    pin_image_bytes(app, name, &bytes).unwrap_or_else(|line| line)
+}
+
+/// Pins the bytes of a PNG or JPEG file, saved unchanged in Tack's captures
+/// folder, like a capture. Ok with the log's line when it went up; Err with
+/// it (and a notice on the board) when it did not.
+pub fn pin_image_bytes(app: &AppHandle, name: &str, bytes: &[u8]) -> Result<String, String> {
+    if bytes.len() > MAX_DROP_BYTES {
+        notice(app, say::BAD_IMAGE);
+        return Err(format!("{name}: too large"));
+    }
     let ext = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         "png"
     } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
         "jpg"
     } else {
         notice(app, say::BAD_IMAGE);
-        return format!("{name}: neither PNG nor JPEG");
+        return Err(format!("{name}: neither PNG nor JPEG"));
     };
-    let thumb = match image::load_from_memory(&bytes).map_err(|e| e.to_string()).and_then(thumbnail::from_image) {
+    let thumb = match image::load_from_memory(bytes).map_err(|e| e.to_string()).and_then(thumbnail::from_image) {
         Ok(thumb) => thumb,
         Err(e) => {
             notice(app, say::BAD_IMAGE);
-            return format!("{name}: cannot decode ({e})");
+            return Err(format!("{name}: cannot decode ({e})"));
         }
     };
-    let saved = capture::save_bytes(&bytes, &capture::captures_folder(), "Image", ext, snipping_tool::local_time());
+    let saved = capture::save_bytes(bytes, &capture::captures_folder(), "Image", ext, snipping_tool::local_time());
     let path = match saved {
         Ok(path) => path,
         Err(e) => {
             notice(app, say::FAILED);
-            return format!("{name}: cannot save ({e})");
+            return Err(format!("{name}: cannot save ({e})"));
         }
     };
     match prints::pin(app, path.clone(), thumb, Origin::Capture, prints::live(), None) {
@@ -213,11 +224,11 @@ pub fn pin_dropped_image(app: &AppHandle, name: &str, data: &str) -> String {
             reveal::reveal(app, RevealReason::New);
             let handle = app.clone();
             let _ = app.run_on_main_thread(move || aged.announce(&handle));
-            format!("{name}: pinned")
+            Ok(format!("{name}: pinned"))
         }
         _ => {
             prints::discard_captures(vec![path]);
-            format!("{name}: not pinned")
+            Err(format!("{name}: not pinned"))
         }
     }
 }

@@ -30,6 +30,7 @@ mod drag;
 mod ipc;
 mod keyboard;
 mod notes;
+mod phone;
 mod prints;
 mod reveal;
 mod screenshot_files;
@@ -93,6 +94,12 @@ fn main() {
                 commands::set_shortcuts,
                 commands::pause_shortcuts,
                 commands::close_shortcuts,
+                commands::phone_state,
+                commands::set_phone,
+                commands::answer_device,
+                commands::forget_device,
+                commands::open_netbird_download,
+                commands::close_phone_link,
                 $($extra),*
             ]
         };
@@ -129,6 +136,7 @@ fn main() {
             screenshot_files::watch(handle.clone(), capture::captures_folder());
             screenshot_files::watch(handle.clone(), note::notes_folder());
             captures::start(handle.clone());
+            phone::start(handle.clone());
             edge_reveal::start(reveal::EdgeGlue(handle.clone()));
             #[cfg(debug_assertions)]
             notes::debug::start(&handle);

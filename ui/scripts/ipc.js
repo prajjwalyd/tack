@@ -1,8 +1,8 @@
 // The UI's side of the IPC contract (docs/ipc.md). The only module that
 // touches window.__TAURI__: commands go out through the wrappers below,
 // events come in through `on`. The Rust side is crates/tack-app/src/ipc/.
-// Both webviews use it: the board (main.js) and the shortcuts dialog
-// (shortcuts.js).
+// Every webview uses it: the board (main.js), the shortcuts dialog
+// (shortcuts.js) and the phone window (phone-link.js).
 
 /** Event names, backend -> UI. Mirrors crates/tack-app/src/ipc/events.rs. */
 export const EVENTS = Object.freeze({
@@ -20,6 +20,7 @@ export const EVENTS = Object.freeze({
   POINTER_LEFT: "board:pointer-left",        // none: the window went click-through
   ORDER_CHANGED: "board:order-changed",      // { ids: string[] } the whole row, display order
   NOTICE: "board:notice",                    // { text: string } a short message under the board
+  PHONE_STATE: "phone:state",                // PhoneState (phone-link.js), whenever it changes
 });
 
 /** Command names, UI -> backend. Mirrors crates/tack-app/src/ipc/commands.rs. */
@@ -45,6 +46,13 @@ export const COMMANDS = Object.freeze({
   SET_SHORTCUTS: "set_shortcuts",
   PAUSE_SHORTCUTS: "pause_shortcuts",
   CLOSE_SHORTCUTS: "close_shortcuts",
+  // The phone window (its own small window).
+  PHONE_STATE: "phone_state",
+  SET_PHONE: "set_phone",
+  ANSWER_DEVICE: "answer_device",
+  FORGET_DEVICE: "forget_device",
+  OPEN_NETBIRD_DOWNLOAD: "open_netbird_download",
+  CLOSE_PHONE_LINK: "close_phone_link",
 });
 
 /**
@@ -135,6 +143,14 @@ export const setShortcuts = (toggle, pin) => invoke(COMMANDS.SET_SHORTCUTS, { to
 /** While a chord is being captured, Tack's own hotkeys must not fire. */
 export const pauseShortcuts = (paused) => invoke(COMMANDS.PAUSE_SHORTCUTS, { paused });
 export const closeShortcuts = () => invoke(COMMANDS.CLOSE_SHORTCUTS);
+
+// The phone window. Each answers with the new PhoneState (phone-link.js).
+export const phoneState = () => invoke(COMMANDS.PHONE_STATE);
+export const setPhone = (on) => invoke(COMMANDS.SET_PHONE, { on });
+export const answerDevice = (key, allow) => invoke(COMMANDS.ANSWER_DEVICE, { key, allow });
+export const forgetDevice = (key) => invoke(COMMANDS.FORGET_DEVICE, { key });
+export const openNetbirdDownload = () => invoke(COMMANDS.OPEN_NETBIRD_DOWNLOAD);
+export const closePhoneLink = () => invoke(COMMANDS.CLOSE_PHONE_LINK);
 
 /**
  * Debug builds only: tells the backend's stress test what the page just did

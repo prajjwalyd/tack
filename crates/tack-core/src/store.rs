@@ -512,6 +512,10 @@ mod tests {
             snip_tip_shown: true,
             toggle_shortcut: "Ctrl+Alt+F9".into(),
             pin_shortcut: String::new(),
+            phone: crate::phone::PhoneSettings {
+                on: true,
+                devices: vec![crate::phone::Device { key: "cGl4ZWw=".into(), name: "pixel".into(), approved_at: NOW }],
+            },
         };
         save(&file, &prints, &settings);
         // Saving again replaces the file rather than failing on it.
