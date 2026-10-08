@@ -1,3 +1,9 @@
+/* The note paper, one set from notes/ (docs/design.md, section 8):
+   card.css (A: a white index card, shipped), classic.css (pale warm
+   yellow) or sticky.css (B: a bright sticky note). Change this one line
+   to switch. */
+@import url("notes/card.css");
+
 /* Design tokens: every size, colour, radius, shadow and duration the board
    uses, as custom properties. Colours come in light/dark pairs through
    light-dark(), resolved against the board's `color-scheme` (board.css): it
@@ -19,7 +25,13 @@
   --print-border: 4px;       /* even paper border around the photo */
   --print-radius: 3px;
   --photo-radius: 1px;
-  --pin-size: 10.5px;
+  /* The pin: one knob. --pin-scale sizes the head (and, through --pin-u,
+     everything drawn on it: gloss, rim, shadows) from a 10.5 px base;
+     the kept pin is --kept-pin-scale larger again. pin.css places it from
+     these, so nothing else needs to change. */
+  --pin-scale: 1.3;
+  --pin-size: calc(10.5px * var(--pin-scale));
+  --pin-u: calc(1px * var(--pin-scale));   /* one "pin pixel" */
   --button-size: 18px;
   --button-inset: 6px;       /* × and Keep, from the photo's corners */
   --caption-gap: 5px;        /* print bottom to caption */
@@ -97,17 +109,8 @@
   --hint-ink-strong: rgba(44, 34, 24, .82);
 
   /* ---- colour: paper notes ----
-     A pale warm yellow, so a note never reads as a print's border, and clear
-     enough of the green that it stays paper, never khaki, on the felt. Like
-     the prints' paper it stays light in the dark theme, only a little dimmer
-     (a lamp-lit room), so its ink never changes. */
-  --note-paper: light-dark(#fdf6d6, #f0e5ba);
-  --note-ink: rgba(46, 37, 22, .86);
-  --note-ink-soft: rgba(46, 37, 22, .56);
-  --note-link: #34507a;                      /* a muted ink blue */
-  --note-domain: rgba(52, 80, 122, .78);
-  --note-curl: rgba(120, 92, 34, .07);       /* the free corner, lifting a hair off the felt */
-  --note-scroll: rgba(70, 54, 26, .30);      /* the unfolded sheet's thin scrollbar */
+     The note paper (--note-*) comes from one of the sets in notes/, chosen
+     by the @import at the top of this file. */
 
   /* ---- colour: keyboard focus ----
      A light ring with a dark hairline either side, so it reads on felt and
@@ -124,18 +127,29 @@
   --drop-rim: light-dark(rgba(255, 255, 255, .62), rgba(225, 255, 238, .36));
 
   /* ---- colour: pins (body, shade) ----
-     A muted, matte palette keyed to the green: the five slots keep their
-     names (layout.js) but are coral, slate, ink, cream and dark slate here.
-     A green pin would vanish into the felt, so there is none. */
-  --pin-terracotta: #d9785f;  --pin-terracotta-d: #a14e39;   /* coral */
-  --pin-sage: #8794a3;        --pin-sage-d: #5b6676;         /* slate */
-  --pin-ink: #3f5376;         --pin-ink-d: #27344d;          /* ink */
-  --pin-sand: #f1e8d4;        --pin-sand-d: #bfb08f;         /* cream */
-  --pin-graphite: #6d7680;    --pin-graphite-d: #444b54;     /* dark slate */
-  --brass-hi: #fff0c2;
-  --brass: #d9ab45;
-  --brass-d: #8f6516;
-  --pin-highlight: rgba(255, 255, 255, .55);
+     Bright glossy push-pins, the colours of a good box of office pins, so
+     they pop on the green. The five slots keep their names (layout.js) but
+     are tomato, cobalt, lemon, violet and white here. The yellow leans to
+     lemon so it never reads as the kept pin's brass; there is no orange
+     (it sat between the red and the brass) and no green (it would vanish
+     into the felt). Pins stay the same in the dark theme: plastic does not
+     dim with the room, and they read on the darker felt anyway. */
+  --pin-terracotta: #f0392b;  --pin-terracotta-d: #a3170f;   /* tomato */
+  --pin-sage: #2f6df6;        --pin-sage-d: #163c9e;         /* cobalt */
+  --pin-ink: #8a4cf0;         --pin-ink-d: #4f1fa3;          /* violet */
+  --pin-sand: #fbe94a;        --pin-sand-d: #b8a40c;         /* lemon */
+  --pin-graphite: #fbfbf8;    --pin-graphite-d: #a9b0b8;     /* white */
+  --pin-graphite-rim: rgba(38, 48, 60, .46);   /* the white pin's edge: it has to read on white paper too */
+  /* The kept pin: polished brass, the same on every kept print and note,
+     a little larger than the others (--kept-pin-scale), with a bright rim
+     where the dome turns away and a glint (pin.css). */
+  --brass-hi: #fffbe3;
+  --brass: #f2c24b;
+  --brass-mid: #c98d1e;
+  --brass-d: #7a4c08;
+  --brass-rim: #f7d677;
+  --kept-pin-scale: 1.15;
+  --pin-highlight: rgba(255, 255, 255, .6);
   --pin-cast: light-dark(rgba(0, 12, 6, .55), rgba(0, 0, 0, .6));
 
   /* ---- shadows ---- */
@@ -148,8 +162,7 @@
   --shadow-lift:
     0 3px 6px -1px light-dark(rgba(0, 12, 6, .22), rgba(0, 0, 0, .3)),
     0 16px 22px -10px light-dark(rgba(0, 12, 6, .5), rgba(0, 0, 0, .6));
-  /* A note's free corner stands a hair proud of the felt: a little more shadow under it. */
-  --shadow-note-corner: 5px 7px 7px -7px light-dark(rgba(0, 14, 6, .40), rgba(0, 0, 0, .5));
+  /* (A note's own extra shadow, --shadow-note-corner, is in its paper set.) */
   --shadow-button: 0 .5px 1.5px rgba(0, 0, 0, .18), 0 2px 6px -1px rgba(0, 0, 0, .16);
 
   /* ---- type ---- */

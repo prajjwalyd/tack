@@ -77,6 +77,7 @@ html, body { width: 960px; height: 540px; }
     radial-gradient(closest-side, rgba(255, 252, 235, .95), rgba(255, 236, 170, .35) 35%, transparent 70%) 50% 50% / 9px 9px no-repeat,
     linear-gradient(90deg, transparent, rgba(255, 250, 230, .95) 50%, transparent) 50% 50% / 30px 1.6px no-repeat,
     linear-gradient(0deg, transparent, rgba(255, 250, 230, .95) 50%, transparent) 50% 50% / 1.6px 30px no-repeat;
+  scale: var(--pin-scale);   /* grows with the pin */
   opacity: 0;
   pointer-events: none;
   animation: demo-sparkle 560ms cubic-bezier(.2, .7, .3, 1) 150ms both;

@@ -181,7 +181,7 @@ crates/
 ui/
   index.html      the board page
   shortcuts.html  the Shortcuts dialog (a small window of its own)
-  styles/         tokens, board, print, pin, note, hint, cues, motion, flight, a11y
+  styles/         tokens, board, print, pin, note, hint, cues, motion, flight, a11y; notes/ holds the note-paper sets (index card, classic, sticky)
   scripts/        ES modules: main, ipc, layout, print, note, gestures, keyboard, announce, notice, drop, motion/, sound, state
   dev/            browser preview harness with a fake backend; the pages the README images and demo loop are rendered from
 docs/

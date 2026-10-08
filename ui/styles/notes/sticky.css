@@ -1,0 +1,20 @@
+/* Note paper, option B: a classic sticky note. A clean, bright canary
+   yellow (not beige), a touch deeper toward the bottom where the sheet curls
+   away from the light, and a curl shadow under its free bottom edge.
+   Slightly dimmer in the dark theme. Picked in tokens.css. */
+:root {
+  --note-paper: light-dark(#fff27a, #f0df5c);
+  --note-ink: rgba(48, 40, 6, .88);
+  --note-ink-soft: rgba(48, 40, 6, .58);
+  --note-link: #2b4a86;
+  --note-domain: rgba(43, 74, 134, .80);
+  --note-curl: rgba(150, 110, 0, .12);
+  --note-scroll: rgba(90, 74, 0, .32);
+  --note-face: linear-gradient(180deg, rgba(255, 255, 255, .10), transparent 30%, transparent 62%, rgba(170, 130, 0, .10));
+  --note-sheet-face: none;
+  /* The free bottom edge lifts off the felt: a curl shadow, deepest at the corners. */
+  --shadow-note-corner:
+    0 7px 6px -5px light-dark(rgba(0, 14, 6, .34), rgba(0, 0, 0, .44)),
+    6px 8px 7px -6px light-dark(rgba(0, 14, 6, .40), rgba(0, 0, 0, .5)),
+    -5px 8px 7px -7px light-dark(rgba(0, 14, 6, .30), rgba(0, 0, 0, .4));
+}

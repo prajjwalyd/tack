@@ -42,27 +42,29 @@ body { background: var(--wp-base) !important; }
   left: 0; right: 0; top: 41%;
   display: flex; flex-direction: column; align-items: center;
   color: var(--bar-ink);
-  font-family: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-family: "Roboto Serif", Georgia, serif;
+  font-optical-sizing: auto;
   text-align: center;
   pointer-events: none;
 }
 #card h1 {
   margin: 0;
-  font-size: 76px; line-height: 1.05; font-weight: 700;
-  letter-spacing: -1.6px;
+  font-size: 76px; line-height: 1.05; font-weight: 640;
+  font-stretch: 96%;
+  letter-spacing: -1.2px;
   color: light-dark(#17171c, #f4f4f8);
 }
 #card .sub {
   margin: 18px 0 0;
-  font-size: 29px; line-height: 1.2; font-weight: 400;
-  font-family: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-size: 30px; line-height: 1.2; font-weight: 420;
+  font-style: italic;
   color: light-dark(rgba(23, 23, 28, .72), rgba(244, 244, 248, .74));
 }
 #card .brand {
   position: fixed; left: 0; right: 0; bottom: 34px;
   display: flex; align-items: center; justify-content: center;
   margin: 0;
-  font: 400 22px/1 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font-size: 22px; line-height: 1; font-weight: 400;
   color: light-dark(rgba(23, 23, 28, .72), rgba(244, 244, 248, .74));
 }
 #card .brand img { width: 54px; height: 54px; margin-right: 10px; }

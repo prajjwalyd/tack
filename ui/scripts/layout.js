@@ -17,7 +17,6 @@ import { dom, state } from "./state.js";
 export const TOP_HIDDEN = 24;     // --top-hidden
 export const BOARD_H = 150;       // --board-h
 const BORDER = 4;                 // --print-border
-const PIN_SIZE = 10.5;            // --pin-size
 export const PIN_Y = 7;           // pin centre, from a print's top (--pin-y in print.css)
 
 export const PRINT_TOP = 13;             // prints hang from a common line this far below the screen edge
@@ -66,8 +65,7 @@ export function measure(print) {
   }
   print.slot.style.width = `${print.w}px`;
   print.slot.style.height = `${print.h}px`;
-  print.pin.style.left = `${print.w / 2 - PIN_SIZE / 2}px`;
-  print.pin.style.top = `${PIN_Y - PIN_SIZE / 2}px`;
+  // The pin places itself (pin.css), from --pin-size and --pin-y.
 }
 
 /** A stable first colour for a print, from its id. */

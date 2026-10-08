@@ -106,7 +106,7 @@
   margin: calc(var(--pin-size) / -2) 0 0 calc(var(--pin-size) / -2);
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, var(--pin-highlight), transparent 45%), var(--pin-sage);
-  box-shadow: inset 0 -1px 1.5px var(--pin-sage-d), 0 1.5px 1.5px var(--pin-cast);
+  box-shadow: inset 0 calc(var(--pin-u) * -1) calc(var(--pin-u) * 1.5) var(--pin-sage-d), 0 calc(var(--pin-u) * 1.5) calc(var(--pin-u) * 1.5) var(--pin-cast);
 }
 .tip-close {
   position: absolute;

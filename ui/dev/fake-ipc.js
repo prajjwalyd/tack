@@ -180,6 +180,13 @@ const withNotes = location.pathname.endsWith("/preview.html") ? params.get("note
 if (withNotes) {
   for (const [text, ago] of SAMPLE_NOTES) prints.push(makeNote(text, ago * MIN));
 }
+// ?notes=compare: a short note, a long one and a link, each between prints
+// (the note paper study, docs/design.md section 8).
+if (params.get("notes") === "compare") {
+  for (const [text, ago] of [["Call Sam back at 4.", 5], [SAMPLE_NOTES[1][0], 40], [SAMPLE_NOTES[0][0], 3 * 60]]) {
+    prints.push(makeNote(text, ago * MIN));
+  }
+}
 // ?n=20 starts with that many prints (ages spread over the last week).
 const startN = Math.min(50, +new URLSearchParams(location.search).get("n") || 0);
 for (let i = prints.length; i < startN; i++) prints.push(make((i * 7 + 4) * 37 * MIN));

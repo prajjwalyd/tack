@@ -1,0 +1,26 @@
+/* Note paper, option A: a white index card. Crisp warm-white stock (the
+   prints' fibre texture shows through), a thin red header rule just under
+   the pin and faint blue rules that the text sits on (12 px type on 15 px
+   lines from 18 px down: note.css). Dimmer in the dark theme, like the
+   prints' paper. Picked in tokens.css. */
+:root {
+  --note-paper: light-dark(#fffefa, #eeebe4);
+  --note-ink: rgba(28, 32, 42, .86);
+  --note-ink-soft: rgba(28, 32, 42, .54);
+  --note-link: #2a4d8c;
+  --note-domain: rgba(42, 77, 140, .80);
+  --note-curl: rgba(40, 46, 60, .06);
+  --note-scroll: rgba(40, 46, 60, .28);
+  --note-rule-red: rgba(222, 72, 72, .62);
+  --note-rule-blue: rgba(84, 140, 214, .24);
+  --note-face:
+    linear-gradient(180deg,
+      transparent 16px, var(--note-rule-red) 16px, var(--note-rule-red) 17px, transparent 17px,
+      transparent 31px, var(--note-rule-blue) 31px, var(--note-rule-blue) 32px, transparent 32px,
+      transparent 46px, var(--note-rule-blue) 46px, var(--note-rule-blue) 47px, transparent 47px,
+      transparent 61px, var(--note-rule-blue) 61px, var(--note-rule-blue) 62px, transparent 62px,
+      transparent 76px, var(--note-rule-blue) 76px, var(--note-rule-blue) 77px, transparent 77px);
+  --note-sheet-face:
+    linear-gradient(180deg, transparent 19px, var(--note-rule-red) 19px, var(--note-rule-red) 20px, transparent 20px);
+  --shadow-note-corner: 5px 7px 7px -7px light-dark(rgba(0, 14, 6, .40), rgba(0, 0, 0, .5));
+}

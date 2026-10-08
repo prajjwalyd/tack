@@ -13,6 +13,7 @@
   #board::after { display: none; }
   .slot.arriving .pin::before,
   #board:not(.tucked) .slot.kept .pin-brass::after { animation: none; }
+  #board:not(.tucked) .slot > .pin { transition: none; }   /* the kept pin's size: a plain swap under the brass fade */
   .slot { transition: transform 1ms; }
   .card, .slot.hover .card, .slot.pressing .card, .slot.dragging .card {
     transform: rotate(var(--tilt));
