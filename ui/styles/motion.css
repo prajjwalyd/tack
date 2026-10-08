@@ -1,0 +1,15 @@
+/* Reduced motion. The board still comes and goes, but as a short plain slide
+   with no overshoot; prints change state with quick fades instead of lifts.
+   The scripts skip swings, breezes, the tumbling fall and scroll smoothing
+   (state.reduced). Loaded last so it wins. */
+
+@media (prefers-reduced-motion: reduce) {
+  #board { transition: transform 160ms ease-out; }
+  #board.tucked { transition: transform 140ms ease-in; }
+  .slot { transition: transform 1ms; }
+  .card, .slot.hover .card, .slot.pressing .card {
+    transform: rotate(var(--tilt));
+    transition: opacity 150ms ease;
+  }
+  #rail.scrolls { transition: none; }
+}

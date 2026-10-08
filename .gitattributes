@@ -1,0 +1,6 @@
+# Text is stored with LF and checked out with LF on every platform.
+* text=auto eol=lf
+
+*.png binary
+*.ico binary
+*.icns binary

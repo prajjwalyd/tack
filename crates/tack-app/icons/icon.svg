@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Tack: a cork tile with one photo print, pinned at a slight angle by a
+       brass pin. Windows 11 style: soft top-down light, gentle gradients, no
+       outlines. Hand-tuned small sizes: icon-16.svg, icon-32.svg. -->
+  <defs>
+    <linearGradient id="cork" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ddb98b"/>
+      <stop offset="1" stop-color="#bb8f5f"/>
+    </linearGradient>
+    <radialGradient id="corkLight" cx="0.5" cy="0" r="0.9">
+      <stop offset="0" stop-color="#fff3df" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#fff3df" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6b4420" stop-opacity="0"/>
+      <stop offset="1" stop-color="#6b4420" stop-opacity="0.32"/>
+    </linearGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="2" seed="7" result="n"/>
+      <feColorMatrix in="n" values="0 0 0 0 0.30  0 0 0 0 0.18  0 0 0 0 0.07  1.1 0 0 0 -0.5"/>
+    </filter>
+    <clipPath id="tileClip"><rect x="96" y="104" width="832" height="832" rx="176"/></clipPath>
+    <filter id="tileShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+    <filter id="printShadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+    <filter id="pinShadow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#eeebe4"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7fb2e5"/>
+      <stop offset="1" stop-color="#c9e1f4"/>
+    </linearGradient>
+    <linearGradient id="hillBack" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fbf95"/>
+      <stop offset="1" stop-color="#6fa57c"/>
+    </linearGradient>
+    <linearGradient id="hillFront" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4f8a64"/>
+      <stop offset="1" stop-color="#3b7052"/>
+    </linearGradient>
+    <radialGradient id="brass" cx="0.4" cy="0.34" r="0.7">
+      <stop offset="0" stop-color="#fff2c6"/>
+      <stop offset="0.45" stop-color="#e2b24c"/>
+      <stop offset="1" stop-color="#95681a"/>
+    </radialGradient>
+    <radialGradient id="glint" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- the tile's shadow -->
+  <rect x="120" y="148" width="784" height="800" rx="170" fill="#3a2410" opacity="0.32" filter="url(#tileShadow)"/>
+
+  <!-- the cork tile -->
+  <rect x="96" y="104" width="832" height="832" rx="176" fill="url(#cork)"/>
+  <g clip-path="url(#tileClip)">
+    <rect x="96" y="104" width="832" height="832" filter="url(#grain)" opacity="0.55"/>
+    <rect x="96" y="104" width="832" height="832" fill="url(#corkLight)"/>
+    <!-- the tile's thickness: a little darker toward its bottom edge -->
+    <rect x="96" y="860" width="832" height="76" fill="url(#edge)"/>
+    <!-- a whisper of rim light along the top, no outline -->
+    <rect x="96" y="104" width="832" height="10" fill="#fff6e6" opacity="0.28"/>
+  </g>
+
+  <!-- the print, tilted -->
+  <g transform="rotate(-6 512 548)">
+    <rect x="242" y="338" width="540" height="430" rx="18" fill="#2c1806" opacity="0.38" filter="url(#printShadow)" transform="translate(10 26)"/>
+    <rect x="242" y="338" width="540" height="430" rx="18" fill="url(#paper)"/>
+    <clipPath id="photoClip"><rect x="276" y="372" width="472" height="362" rx="6"/></clipPath>
+    <g clip-path="url(#photoClip)">
+      <rect x="276" y="372" width="472" height="362" fill="url(#sky)"/>
+      <circle cx="626" cy="478" r="46" fill="#fff6df"/>
+      <path d="M276 640 C 360 586, 440 590, 520 626 S 680 600, 748 570 L 748 734 L 276 734 Z" fill="url(#hillBack)"/>
+      <path d="M276 690 C 380 640, 470 650, 560 690 S 700 690, 748 668 L 748 734 L 276 734 Z" fill="url(#hillFront)"/>
+    </g>
+  </g>
+
+  <!-- the brass pin, near the print's top edge -->
+  <ellipse cx="506" cy="378" rx="56" ry="50" fill="#2a1704" opacity="0.42" filter="url(#pinShadow)" transform="translate(12 20)"/>
+  <circle cx="500" cy="366" r="56" fill="url(#brass)"/>
+  <ellipse cx="482" cy="346" rx="22" ry="17" fill="url(#glint)" opacity="0.9"/>
+</svg>

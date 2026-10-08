@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- Tack at 24 px, on the pixel grid (see icon-32.svg). -->
+  <defs>
+    <linearGradient id="cork" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#dab589"/>
+      <stop offset="1" stop-color="#b6895a"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#84b5e7"/>
+      <stop offset="1" stop-color="#c0dbf3"/>
+    </linearGradient>
+    <radialGradient id="brass" cx="0.4" cy="0.35" r="0.7">
+      <stop offset="0" stop-color="#ffefbe"/>
+      <stop offset="0.5" stop-color="#ddab45"/>
+      <stop offset="1" stop-color="#946818"/>
+    </radialGradient>
+  </defs>
+  <rect x="2" y="2.5" width="20" height="20" rx="4.5" fill="#3a2410" opacity="0.16"/>
+  <rect x="2" y="2" width="20" height="20" rx="4.5" fill="url(#cork)"/>
+  <rect x="4" y="9" width="16" height="12" fill="#2c1806" opacity="0.2"/>
+  <rect x="4" y="7" width="16" height="12" fill="#fdfcf9"/>
+  <rect x="5" y="8" width="14" height="10" fill="url(#sky)"/>
+  <rect x="14" y="10" width="2" height="2" fill="#fff6df"/>
+  <path d="M5 14 C 8 12.6 10 12.8 12 13.7 S 16.5 13.2 19 12.5 V 18 H 5 Z" fill="#7fb38a"/>
+  <rect x="5" y="16" width="14" height="2" fill="#4b8560"/>
+  <circle cx="12.4" cy="7.6" r="2.6" fill="#2a1704" opacity="0.32"/>
+  <circle cx="12" cy="7" r="2.5" fill="url(#brass)"/>
+  <rect x="11" y="6" width="1" height="1" fill="#fffbe8" opacity="0.9"/>
+</svg>

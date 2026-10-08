@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Tack at 24-32 px, on the pixel grid: the print stays straight here,
+       since a tilt this small only blurs its edges. -->
+  <defs>
+    <linearGradient id="cork" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#dcb789"/>
+      <stop offset="1" stop-color="#b78a5a"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#82b4e6"/>
+      <stop offset="1" stop-color="#c3ddf3"/>
+    </linearGradient>
+    <radialGradient id="brass" cx="0.4" cy="0.35" r="0.7">
+      <stop offset="0" stop-color="#fff0c0"/>
+      <stop offset="0.5" stop-color="#deac46"/>
+      <stop offset="1" stop-color="#946818"/>
+    </radialGradient>
+  </defs>
+  <rect x="2" y="2.5" width="28" height="28" rx="6" fill="#3a2410" opacity="0.18"/>
+  <rect x="2" y="2" width="28" height="28" rx="6" fill="url(#cork)"/>
+  <rect x="7" y="2" width="18" height="1" fill="#fff6e6" opacity="0.25"/>
+  <rect x="6" y="11" width="20" height="16" rx="1" fill="#2c1806" opacity="0.22"/>
+  <rect x="6" y="9" width="20" height="16" rx="1" fill="#fdfcf9"/>
+  <rect x="8" y="11" width="16" height="12" fill="url(#sky)"/>
+  <circle cx="19.5" cy="14.5" r="1.8" fill="#fff6df"/>
+  <path d="M8 19.5 C 11 17.5 14 17.8 16.5 19 S 21.5 18.3 24 17 V 23 H 8 Z" fill="#7fb38a"/>
+  <path d="M8 21.5 C 11.5 19.8 14.5 20.2 17 21.4 S 22 21.2 24 20.4 V 23 H 8 Z" fill="#4b8560"/>
+  <circle cx="16.6" cy="10.3" r="3.4" fill="#2a1704" opacity="0.35"/>
+  <circle cx="16" cy="9.5" r="3.2" fill="url(#brass)"/>
+  <circle cx="15" cy="8.4" r="0.9" fill="#fffbe8" opacity="0.9"/>
+</svg>

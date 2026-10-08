@@ -1,0 +1,30 @@
+/* The empty state: one small blank index card pinned to the cork,
+   "Take a screenshot · Win + Shift + S", in quiet Segoe UI Variable.
+   layout.js shows it when the board has no prints. */
+
+.note {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--top-hidden) + var(--board-h) / 2 + 2px);
+  padding: 15px 20px 14px;
+  border-radius: var(--note-radius);
+  background: var(--note-paper);
+  box-shadow: var(--shadow-rest);
+  color: var(--note-ink);
+  white-space: nowrap;
+  translate: -50% -50%;
+  rotate: -1deg;
+  opacity: 0;
+  scale: .97;
+  transition: opacity 180ms ease, scale 260ms var(--ease-out);
+  pointer-events: none;
+}
+.note.show { opacity: 1; scale: 1; transition-delay: 120ms; }
+.note .pin { left: calc(50% - var(--pin-size) / 2); top: 3px; }
+.note p {
+  margin: 0;
+  font: 400 var(--note-size)/18px var(--font-ui);
+  letter-spacing: .1px;
+}
+.note .dot { padding: 0 7px; opacity: .55; }
+.note .keys { font-weight: 600; color: var(--note-ink-strong); }

@@ -1,0 +1,175 @@
+/* A print: one screenshot on photo paper with an even thin border, pinned at
+   a small angle. The layers (.slot > .drop > .swing > .card) are described in
+   scripts/print.js; hover, press, drag and kept are classes on .slot.
+   Everything that moves does so with transform or opacity: the hover shadow
+   is its own layer (.shade) that fades in, never an animated box-shadow. */
+
+.slot {
+  --pin-y: 7px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  pointer-events: auto;
+  touch-action: none;
+  transition: transform var(--dur-layout) var(--ease-layout);
+}
+.slot.placing { transition: none; }
+.slot.moving { z-index: 18; }
+.slot.hover { z-index: 20; }
+.slot.arriving { z-index: 25; }
+.slot.leaving { z-index: 30; pointer-events: none; }
+.slot.awaiting { visibility: hidden; }
+
+.drop, .swing { position: absolute; inset: 0; }
+.drop { transform-origin: 50% var(--pin-y); }
+.swing { transform-origin: 50% var(--pin-y); }
+
+.card {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% var(--pin-y);
+  transform: rotate(var(--tilt));
+  transition:
+    transform var(--dur-hover-out) var(--ease-settle),
+    opacity var(--dur-fade) ease;
+}
+.slot.hover .card {
+  transform: translateY(-2px) rotate(calc(var(--tilt) * .2));
+  transition: transform var(--dur-hover) var(--ease-out), opacity var(--dur-fade) ease;
+}
+.slot.pressing .card {
+  transform: translateY(0) rotate(calc(var(--tilt) * .2)) scale(.97);
+  transition: transform var(--dur-press) cubic-bezier(.3, 0, .2, 1), opacity var(--dur-fade) ease;
+}
+.slot.dragging .card { opacity: .45; transition: transform 300ms var(--ease-out), opacity 160ms ease; }
+
+/* The lift shadow, faded in on hover. */
+.shade {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--print-radius);
+  box-shadow: var(--shadow-lift);
+  opacity: 0;
+  transition: opacity var(--dur-hover-out) ease;
+}
+.slot.hover .shade { opacity: 1; transition-duration: var(--dur-hover); }
+.slot.pressing .shade { opacity: 0; transition-duration: var(--dur-press); }
+
+.paper {
+  position: absolute;
+  inset: 0;
+  padding: var(--print-border);
+  border-radius: var(--print-radius);
+  background: var(--paper);
+  box-shadow: var(--shadow-rest);
+}
+.photo {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: var(--photo-radius);
+  background: var(--photo-empty);
+}
+.photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* A hairline where photo meets paper, so light screenshots keep their edge. */
+.photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 .5px var(--photo-edge);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- × and Keep */
+.btn {
+  position: absolute;
+  top: calc(var(--print-border) + var(--button-inset));
+  width: var(--button-size);
+  height: var(--button-size);
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--button-bg);
+  -webkit-backdrop-filter: blur(8px) saturate(1.5);
+  backdrop-filter: blur(8px) saturate(1.5);
+  box-shadow: 0 0 0 .5px var(--button-edge), var(--shadow-button);
+  color: var(--button-ink);
+  cursor: default;
+  outline: none;
+  opacity: 0;
+  transform: scale(.82);
+  transition:
+    opacity var(--dur-buttons) ease,
+    transform var(--dur-buttons) var(--ease-out),
+    background-color 120ms ease,
+    color 120ms ease;
+  pointer-events: none;
+  z-index: 3;
+}
+.btn svg { display: block; width: 100%; height: 100%; }
+.btn.x { right: calc(var(--print-border) + var(--button-inset)); }
+.btn.keep { left: calc(var(--print-border) + var(--button-inset)); }
+.slot.hover:not(.pressing):not(.dragging) .btn {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition-delay: var(--delay-buttons), var(--delay-buttons), 0s, 0s;
+}
+.slot.hover .btn:hover { background: var(--button-bg-hover); }
+.slot.hover .btn.x:hover { color: var(--button-ink-danger); }
+.slot.hover .btn:active { transform: scale(.88); transition-duration: 80ms; transition-delay: 0s; }
+.keep .fill { fill: transparent; transition: fill 160ms ease; }
+.slot.kept .keep { color: var(--button-ink-kept); }
+.slot.kept .keep .fill { fill: currentColor; }
+
+/* ---------------------------------------------------------------- caption */
+/* The print's age, the only text on the board. Straight, under the print. */
+.caption {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + var(--caption-gap));
+  translate: -50% 0;
+  font: 600 var(--caption-size)/14px var(--font-small);
+  letter-spacing: .15px;
+  color: var(--caption-ink);
+  text-shadow: 0 1px 0 var(--caption-emboss);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  pointer-events: none;
+}
+.slot.hover:not(.dragging) .caption {
+  opacity: 1;
+  transform: none;
+  transition: opacity var(--dur-caption) ease var(--delay-buttons), transform var(--dur-caption) var(--ease-out) var(--delay-buttons);
+}
+
+/* ---------------------------------------------------------------- copied */
+.badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--badge-size);
+  height: var(--badge-size);
+  margin: calc(var(--badge-size) / -2) 0 0 calc(var(--badge-size) / -2);
+  border-radius: 50%;
+  background: var(--badge-bg);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 0 0 .5px rgba(255, 255, 255, .12) inset, 0 2px 8px rgba(0, 0, 0, .22);
+  color: var(--badge-ink);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.badge svg { display: block; width: 100%; height: 100%; }

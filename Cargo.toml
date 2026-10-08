@@ -1,0 +1,38 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["The Tack contributors"]
+publish = false
+
+[workspace.dependencies]
+tack-core = { path = "crates/tack-core" }
+tack-windows = { path = "crates/tack-windows" }
+
+arboard = "3.6.1"
+base64 = "0.22.1"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
+notify = "8.2.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+tauri = { version = "2.12.1", features = ["tray-icon", "image-png"] }
+tauri-build = "2.7.1"
+trash = "5.2.9"
+# The same version Tauri's WebView2 backend (wry) uses, so its types match.
+webview2-com = "0.39.1"
+windows = "0.62"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+# Image decoding is unusably slow unoptimised.
+[profile.dev.package."*"]
+opt-level = 2

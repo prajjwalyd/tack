@@ -1,0 +1,115 @@
+/* The board: a panel of fine cork that slides out from under the top edge of
+   the screen, plus the page itself (transparent, never selectable).
+
+   #board          slides (transform), sized by layout.js
+     .cork         the material: grain, hairline edge, inner top shade, drop
+                   shadow. Width changes play as a scaleX FLIP (layout.js).
+     #rail         the row's viewport: clips sideways and fades its edges
+                   only while the row scrolls; runs down into the overhang so
+                   a falling print stays visible
+       #prints     the track, translated by scroll.js
+     #hint         the empty-state card */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  -webkit-font-smoothing: antialiased;
+}
+html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
+img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
+
+/* The colour scheme lives on the board, not the root (see tokens.css). */
+#board { color-scheme: light dark; }
+:root[data-theme="light"] #board { color-scheme: light; }
+:root[data-theme="dark"] #board { color-scheme: dark; }
+
+#board {
+  position: absolute;
+  top: calc(-1 * var(--top-hidden));
+  left: 50%;
+  translate: -50% 0;
+  width: 360px;
+  height: calc(var(--top-hidden) + var(--board-h));
+  transform: none;
+  transition: transform var(--dur-reveal) var(--ease-reveal);
+}
+#board.tucked {
+  transform: translateY(calc(-100% - 24px));   /* just clear of the screen, shadow included */
+  transition: transform var(--dur-tuck) var(--ease-tuck);
+}
+/* Once tucked the board leaves the render tree, so its layers and textures go. */
+#board.gone { display: none; }
+
+/* ---------------------------------------------------------------- cork */
+/* Grain: two fine noise fields (dark and light specks) and a slightly
+   coarser, very faint one, all neutral alpha over the theme's cork colour.
+   Rasterised once per tile and repeated; nothing here repaints in motion. */
+.cork {
+  position: absolute;
+  inset: 0;
+  border-radius: 0 0 var(--board-radius) var(--board-radius);
+  background:
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='a' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.92' numOctaves='2' seed='7' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.22  0 0 0 0 0.13  0 0 0 0 0.05  0.75 0 0 0 -0.36'/></filter><rect width='100%25' height='100%25' filter='url(%23a)'/></svg>"),
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='b' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' seed='19' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 0.96  0 0 0 0 0.88  0 0.6 0 0 -0.31'/></filter><rect width='100%25' height='100%25' filter='url(%23b)'/></svg>"),
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='c' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.38' numOctaves='2' seed='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.25  0 0 0 0 0.15  0 0 0 0 0.06  0 0 0.5 0 -0.23'/></filter><rect width='100%25' height='100%25' filter='url(%23c)'/></svg>"),
+    var(--cork);
+  box-shadow:
+    inset 0 0 0 1px var(--edge-inner),
+    0 0 0 1px var(--edge-outer),
+    var(--shadow-board);
+  transform-origin: 50% 0;
+}
+/* The soft shade where the board tucks under the screen edge. */
+.cork::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: calc(var(--top-hidden) + 14px);
+  background: linear-gradient(180deg, var(--tuck-shade) 0, var(--tuck-shade) var(--top-hidden), transparent);
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 14px), rgba(0, 0, 0, .55) calc(100% - 11px), rgba(0, 0, 0, .18) calc(100% - 6px), transparent);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 14px), rgba(0, 0, 0, .55) calc(100% - 11px), rgba(0, 0, 0, .18) calc(100% - 6px), transparent);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- the row */
+@property --fade-l { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --fade-r { syntax: "<length>"; inherits: false; initial-value: 0px; }
+
+#rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--top-hidden);
+  height: calc(var(--board-h) + 210px);   /* down into the overhang, for falls */
+  pointer-events: none;
+}
+#rail.scrolls {
+  overflow-x: clip;
+  overflow-y: visible;
+  --fade-l: 0px;
+  --fade-r: 0px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent 100%);
+  transition: --fade-l var(--dur-fade-edge) ease, --fade-r var(--dur-fade-edge) ease;
+}
+#rail.more-l { --fade-l: 44px; }
+#rail.more-r { --fade-r: 44px; }
+
+#prints {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 0;
+  height: 0;
+}

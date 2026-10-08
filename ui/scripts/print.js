@@ -1,0 +1,405 @@
+// A print on the board: creating its element, pinning it on, keeping it,
+// reordering the row, updating its picture, the copied check, its age
+// caption, and taking it down.
+//
+// Each print is a stack of layers, outermost first:
+//   .slot   placed in the row by layout.js (translate); holds the pin and caption
+//   .drop   arrival, keep press, reorder lift and fall animations
+//   .swing  the pendulum motion around the pin (motion/swing.js)
+//   .card   the resting tilt, hover lift and press; holds the lift .shade, the
+//           .paper (border, rest shadow, .photo > img), the copied .badge and
+//           the Keep and × buttons
+// `print` objects hold those elements and the backend's data (`print.data`,
+// an IPC Print).
+
+import * as ipc from "./ipc.js";
+import { clearHover, endPress, forgetPendingClick, rehover, wireGestures } from "./gestures.js";
+import { colorFor, layout, measure, showPrint } from "./layout.js";
+import { LAYOUT_MS } from "./motion/spring.js";
+import { swing } from "./motion/swing.js";
+import { playPop, playTock } from "./sound.js";
+import { cancel, dom, later, rand, state } from "./state.js";
+
+const MAX_TILT = 1.5;          // degrees, either way
+const COPIED_MS = 1000;        // the check stays this long
+const KEEP_PRESS_MS = 360;     // the pin's press when kept; the row waits for it
+
+const X_SVG = `<svg viewBox="0 0 18 18" aria-hidden="true"><path d="M6.4 6.4l5.2 5.2M11.6 6.4l-5.2 5.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>`;
+const KEEP_SVG = `<svg viewBox="0 0 18 18" aria-hidden="true"><path class="fill" d="M6.6 5.1h4.8a.8.8 0 0 1 .8.8v7.2L9 11l-3.2 2.1V5.9a.8.8 0 0 1 .8-.8z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+const CHECK_SVG = `<svg viewBox="0 0 28 28" aria-hidden="true"><path d="M9.6 14.4l3 3 5.9-6.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+
+function createPrint(data) {
+  const print = {
+    id: data.id,
+    data: { ...data },
+    addedAt: Date.now(),
+    tilt: (Math.random() < 0.5 ? -1 : 1) * rand(0.3, MAX_TILT),
+    color: colorFor(data.id),
+    settled: false,
+    w: 0, h: 0, x: 0, y: 0, t: "",
+    sw: null, swAnim: null,
+    leaving: false,
+    badgeTimer: 0,
+    captionTimer: 0,
+  };
+
+  const slot = document.createElement("div");
+  slot.className = "slot placing";
+  slot.dataset.id = data.id;
+  slot.innerHTML = `
+    <div class="drop"><div class="swing"><div class="card">
+      <div class="shade"></div>
+      <div class="paper"><div class="photo"><img alt="" draggable="false" decoding="async"></div></div>
+      <div class="badge">${CHECK_SVG}</div>
+      <button class="btn keep" tabindex="-1" aria-label="Keep">${KEEP_SVG}</button>
+      <button class="btn x" tabindex="-1" aria-label="Unpin">${X_SVG}</button>
+    </div></div></div>
+    <span class="pin" data-c="${print.color}"><span class="pin-head"></span><span class="pin-brass"></span></span>
+    <div class="caption"></div>`;
+  print.slot = slot;
+  print.drop = slot.querySelector(".drop");
+  print.swingLayer = slot.querySelector(".swing");
+  print.el = slot.querySelector(".card");
+  print.shade = slot.querySelector(".shade");
+  print.img = slot.querySelector("img");
+  print.badge = slot.querySelector(".badge");
+  print.keepButton = slot.querySelector(".keep");
+  print.discardButton = slot.querySelector(".x");
+  print.pin = slot.querySelector(".pin");
+  print.caption = slot.querySelector(".caption");
+  print.el.style.setProperty("--tilt", `${print.tilt.toFixed(2)}deg`);
+  setKeptClass(print, !!data.kept);
+  print.img.addEventListener("load", () => {
+    // Fall back to the decoded size when the backend sent no dimensions.
+    if (!(print.data.width > 0 && print.data.height > 0)) {
+      print.data.width = print.img.naturalWidth;
+      print.data.height = print.img.naturalHeight;
+      measure(print);
+      layout();
+    }
+  });
+  print.img.src = data.thumb;
+  measure(print);
+  wireGestures(print);
+  return print;
+}
+
+export function printById(id) { return state.prints.get(id); }
+
+/**
+ * Puts a print on the board; `animate` pins it on (now, or once revealed).
+ * Initial prints arrive in display order and are appended (`append`); a new
+ * one goes where the backend's order puts it: at the end of the kept group
+ * if kept, else first among the recent prints.
+ */
+export function addPrint(data, animate, append = false) {
+  if (!data || !data.id) return;
+  if (state.prints.has(data.id)) { updatePrint(data); return; }
+  const print = createPrint(data);
+  state.prints.set(data.id, print);
+  const keptCount = state.order.filter((id) => state.prints.get(id)?.data.kept).length;
+  if (append) state.order.push(data.id);
+  else state.order.splice(keptCount, 0, data.id);   // end of the kept group, or first of the recent
+  dom.prints.appendChild(print.slot);
+  const widthBefore = state.boardW;
+  layout();
+  // Place it without sliding in from the origin.
+  void print.slot.offsetWidth;
+  print.slot.classList.remove("placing");
+  if (!animate) return;
+  if (!state.revealed) { print.slot.classList.add("awaiting"); state.awaiting.push(print); return; }
+  // If the board has to grow, or the row to scroll, to make room, pin on
+  // once there is cork under the print.
+  const moved = showPrint(print);
+  if ((state.boardW > widthBefore || moved) && !state.reduced) {
+    print.slot.classList.add("awaiting");
+    later(() => { if (print.leaving) return; print.slot.classList.remove("awaiting"); pinOn(print); }, LAYOUT_MS * 0.4);
+  } else {
+    pinOn(print);
+  }
+}
+
+/** Takes a print down; `how` is "fall" or "quiet". */
+export function removePrint(id, how) {
+  const print = printById(id);
+  if (!print) return;
+  state.prints.delete(id);
+  state.order = state.order.filter((x) => x !== id);
+  state.awaiting = state.awaiting.filter((c) => c !== print);
+  if (state.hovered === print) clearHover();
+  if (state.press?.print === print) endPress();
+  forgetPendingClick(id);
+  if (state.draggingId === id) state.draggingId = null;
+  detach(print, how);
+  // Let the print start to go before the row closes the gap.
+  if (state.revealed && !state.reduced && how === "fall") later(layout, 120);
+  else layout();
+}
+
+/** New picture, size, name or keep state for a print already on the board. */
+export function updatePrint(data) {
+  const print = printById(data.id);
+  if (!print) return;
+  const before = print.data;
+  print.data = { ...before, ...data };
+  if (data.thumb && data.thumb !== before.thumb) {
+    print.img.src = data.thumb;
+    if (state.revealed && !state.reduced) {
+      print.img.animate([{ opacity: 0.3 }, { opacity: 1 }], { duration: 360, easing: "ease-out" });
+    }
+  }
+  if (typeof data.kept === "boolean" && data.kept !== print.slot.classList.contains("kept")) {
+    setKept(print, data.kept, state.revealed);
+  }
+  if (data.width !== before.width || data.height !== before.height) { measure(print); layout(); }
+  if (state.hovered === print) showCaption(print);
+}
+
+// ---------------------------------------------------------------- pin on
+
+/** The arrival: held just above the cork, pressed down, then the pin goes in. */
+export function pinOn(print) {
+  const slot = print.slot;
+  ipc.debugAck("pin-on", { id: print.id });
+  const tock = () => { playTock(); ipc.debugAck("tock", { id: print.id }); };
+  if (state.reduced) {
+    print.drop.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: "ease-out" });
+    print.pin.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay: 120, fill: "backwards" });
+    later(tock, 140);
+    return;
+  }
+  slot.classList.add("arriving");
+  const lean = Math.sign(print.tilt || 1) * rand(0.8, 1.6);
+  // Held: scale 1.06, a wide soft shadow. Pressed onto the cork in ~260 ms.
+  print.drop.animate([
+    { offset: 0, opacity: 0, transform: `translateY(-7px) scale(1.06) rotate(${lean}deg)` },
+    { offset: 0.2, opacity: 1, transform: `translateY(-6px) scale(1.06) rotate(${lean}deg)`, easing: "cubic-bezier(.45, 0, .25, 1)" },
+    { offset: 1, opacity: 1, transform: "none" },
+  ], { duration: 330 });
+  print.shade.animate([
+    { opacity: 1, transform: "translateY(4px) scale(1.03)" },
+    { offset: 0.2, opacity: 1, transform: "translateY(4px) scale(1.03)", easing: "cubic-bezier(.45, 0, .25, 1)" },
+    { opacity: 0, transform: "none" },
+  ], { duration: 330 });
+  // The pin lands last.
+  const pinAt = 250;
+  print.pin.animate([
+    { opacity: 0, transform: "translateY(-4px) scale(1.7)" },
+    { offset: 0.6, opacity: 1, transform: "scale(.9)", easing: "cubic-bezier(.3, 1.4, .5, 1)" },
+    { opacity: 1, transform: "none" },
+  ], { duration: 170, delay: pinAt, easing: "cubic-bezier(.5, 0, .9, .4)", fill: "backwards" });
+  later(tock, pinAt + 95);
+  later(() => { slot.classList.remove("arriving"); swing(print, -Math.sign(print.tilt || 1) * 0.6); }, pinAt + 150);
+}
+
+// ---------------------------------------------------------------- keep
+
+function setKeptClass(print, kept) {
+  print.slot.classList.toggle("kept", kept);
+  print.keepButton.setAttribute("aria-label", kept ? "Stop keeping" : "Keep");
+}
+
+/** Shows a print as kept or not; `animate` plays the pin's little press. */
+function setKept(print, kept, animate) {
+  print.data.kept = kept;
+  if (kept && print.data.keptAt == null) print.data.keptAt = Date.now();
+  if (!kept) print.data.keptAt = null;
+  if (!animate || state.reduced || !state.revealed) { setKeptClass(print, kept); return; }
+  // The pin is pressed in, turns brass at the bottom of the press, and springs back.
+  print.pin.animate([
+    { transform: "none" },
+    { offset: 0.32, transform: "scale(.7)", easing: "cubic-bezier(.2, .9, .3, 1.5)" },
+    { offset: 0.7, transform: "scale(1.1)" },
+    { transform: "none" },
+  ], { duration: KEEP_PRESS_MS, easing: "cubic-bezier(.4, 0, .6, 1)" });
+  print.drop.animate([
+    { transform: "none" },
+    { offset: 0.32, transform: "scale(.985)" },
+    { transform: "none" },
+  ], { duration: KEEP_PRESS_MS - 40, easing: "ease-out" });
+  later(() => setKeptClass(print, print.data.kept), KEEP_PRESS_MS * 0.3);
+  holdOrder(KEEP_PRESS_MS);
+}
+
+/** The Keep button (and, if the owner chooses, the hold): toggles keeping. */
+export function toggleKeep(print) {
+  if (print.leaving) return;
+  const kept = !print.data.kept;
+  setKept(print, kept, true);
+  ipc.setKept(print.id, kept);
+  applyOrder(localOrder());   // the backend confirms with board:order-changed
+}
+
+// ---------------------------------------------------------------- order
+
+let orderHoldUntil = 0;
+let orderTimer = 0;
+let pendingOrder = null;
+
+/** Holds reorders back for `ms`, so a keep press is seen before the print moves. */
+function holdOrder(ms) { orderHoldUntil = Math.max(orderHoldUntil, performance.now() + ms); }
+
+/** Applies a reorder that was waiting for a keep press (tuck: no timers left behind). */
+export function flushOrder() {
+  orderHoldUntil = 0;
+  if (orderTimer) { cancel(orderTimer); orderTimer = 0; }
+  if (pendingOrder) { const o = pendingOrder; pendingOrder = null; applyOrder(o); }
+}
+
+/** The display order the backend would give: kept by keptAt, then newest first. */
+function localOrder() {
+  const idx = new Map(state.order.map((id, i) => [id, i]));
+  return state.order.map((id) => state.prints.get(id)).filter(Boolean).sort((a, b) => {
+    const ka = a.data.kept ? 0 : 1, kb = b.data.kept ? 0 : 1;
+    if (ka !== kb) return ka - kb;
+    if (!ka) {
+      const d = (a.data.keptAt ?? 0) - (b.data.keptAt ?? 0);
+      if (d) return d;
+    } else if (a.data.pinnedAt != null && b.data.pinnedAt != null && a.data.pinnedAt !== b.data.pinnedAt) {
+      return b.data.pinnedAt - a.data.pinnedAt;
+    }
+    return idx.get(a.id) - idx.get(b.id);
+  }).map((p) => p.id);
+}
+
+/**
+ * A new order for the row (board:order-changed, or a local keep). Prints
+ * glide to their new places; ones that travel further than a step lift
+ * slightly on the way, so they pass over their neighbours.
+ */
+export function applyOrder(ids) {
+  const wait = orderHoldUntil - performance.now();
+  if (wait > 0 && state.revealed) {
+    pendingOrder = ids;
+    if (!orderTimer) orderTimer = later(() => { orderTimer = 0; const o = pendingOrder; pendingOrder = null; applyOrder(o); }, wait);
+    return;
+  }
+  const seen = new Set();
+  const next = [];
+  for (const id of ids || []) if (state.prints.has(id) && !seen.has(id)) { seen.add(id); next.push(id); }
+  // A print missing from `ids` is about to be removed (board:print-removed
+  // follows): it stays where it is, after the print it followed until now.
+  state.order.forEach((id, i) => {
+    if (seen.has(id)) return;
+    const prev = state.order[i - 1];
+    next.splice(prev === undefined ? 0 : next.indexOf(prev) + 1, 0, id);
+    seen.add(id);
+  });
+  if (next.join("\n") === state.order.join("\n")) return;
+  const before = new Map(next.map((id) => [id, state.prints.get(id).x]));
+  state.order = next;
+  layout();
+  if (!state.revealed) return;
+  // The hovered print may have moved out from under the pointer.
+  if (state.hovered && state.hovered.x !== before.get(state.hovered.id)) { clearHover(); later(rehover, LAYOUT_MS); }
+  if (state.reduced) return;
+  for (const id of next) {
+    const p = state.prints.get(id);
+    const dx = Math.abs(p.x - before.get(id));
+    if (dx <= p.w + 30) continue;
+    p.slot.classList.add("moving");
+    p.drop.animate([
+      { transform: "none" },
+      { offset: 0.45, transform: "translateY(-5px) scale(1.03)" },
+      { transform: "none" },
+    ], { duration: LAYOUT_MS, easing: "ease-in-out" });
+    later(() => p.slot.classList.remove("moving"), LAYOUT_MS);
+  }
+}
+
+// ---------------------------------------------------------------- take down
+
+/** "fall": the pin pops out and the print drops away. "quiet": a quick fade. */
+function detach(print, how) {
+  print.leaving = true;
+  const slot = print.slot;
+  slot.classList.add("leaving");
+  slot.classList.remove("hover", "pressing");
+  print.swAnim?.cancel();
+  cancel(print.badgeTimer);
+  cancel(print.captionTimer);
+  const done = () => slot.remove();
+
+  if (!state.revealed) { done(); return; }
+
+  if (how !== "fall" || state.reduced) {
+    const a = print.drop.animate(
+      [{ opacity: 1, transform: "none" }, { opacity: 0, transform: how === "fall" ? "translateY(10px)" : "scale(.96)" }],
+      { duration: how === "fall" ? 220 : 170, easing: "ease-in", fill: "forwards" });
+    print.pin.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, fill: "forwards" });
+    a.onfinish = done;
+    if (how === "fall") playPop();
+    return;
+  }
+
+  // The pin pops out...
+  const dir = Math.sign(print.tilt) || 1;
+  print.pin.animate([
+    { opacity: 1, transform: "none" },
+    { offset: 0.4, opacity: 1, transform: `translate(${dir * 1}px, -5px) scale(1.12)` },
+    { opacity: 0, transform: `translate(${dir * 3}px, -9px) scale(1)` },
+  ], { duration: 200, easing: "cubic-bezier(.2, .7, .4, 1)", fill: "forwards" });
+  playPop();
+  // ...and the print drops away and fades, in about 450 ms.
+  const a = print.drop.animate([
+    { offset: 0, transform: "none", opacity: 1 },
+    { offset: 0.12, transform: `translateY(-2px) rotate(${dir * 0.6}deg)`, opacity: 1, easing: "cubic-bezier(.5, 0, .9, .55)" },
+    { offset: 0.5, opacity: 0.85 },
+    { offset: 1, transform: `translate(${dir * 6}px, 64px) rotate(${dir * rand(6, 10)}deg)`, opacity: 0 },
+  ], { duration: 450, delay: 50, fill: "forwards" });
+  a.onfinish = done;
+}
+
+// ---------------------------------------------------------------- copied
+
+/** A check stamps onto the print for a second, and the print sways on its pin. */
+export function showCopied(print) {
+  cancel(print.badgeTimer);
+  print.badge.getAnimations().forEach((a) => a.cancel());
+  print.badge.animate([
+    { opacity: 0, transform: "scale(1.4)" },
+    { offset: 0.6, opacity: 1, transform: "scale(.95)" },
+    { opacity: 1, transform: "none" },
+  ], { duration: state.reduced ? 1 : 230, easing: "cubic-bezier(.3, .8, .4, 1)", fill: "forwards" });
+  print.badgeTimer = later(() => {
+    print.badge.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.92)" }],
+      { duration: 200, easing: "ease-in", fill: "forwards" });
+  }, COPIED_MS);
+  swing(print, Math.sign(print.tilt || 1) * 1.2);
+}
+
+// ---------------------------------------------------------------- age caption
+
+const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: "long" });
+const dateFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
+const yearFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
+
+/** "Just now", "2 min ago", "3 hours ago", "Yesterday", "Tuesday", "12 Sep". */
+export function ageText(t, now = Date.now()) {
+  const s = Math.max(0, (now - t) / 1000);
+  if (s < 45) return "Just now";
+  const min = Math.max(1, Math.round(s / 60));
+  if (min < 60) return `${min} min ago`;
+  const a = new Date(t), b = new Date(now);
+  const days = Math.round((new Date(b.getFullYear(), b.getMonth(), b.getDate()) - new Date(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
+  if (days <= 0) { const h = Math.floor(min / 60); return h === 1 ? "1 hour ago" : `${h} hours ago`; }
+  if (days === 1) return "Yesterday";
+  if (days < 7) return dayFmt.format(a);
+  return (a.getFullYear() === b.getFullYear() ? dateFmt : yearFmt).format(a);
+}
+
+/** Fills the hovered print's caption and keeps it current while it shows. */
+export function showCaption(print) {
+  cancel(print.captionTimer);
+  const t = print.data.pinnedAt ?? print.addedAt;
+  const text = ageText(t);
+  if (print.caption.textContent !== text) print.caption.textContent = text;
+  const age = Date.now() - t;
+  const next = age < 3600e3 ? 60e3 - (age % 60e3) + 50 : 5 * 60e3;
+  print.captionTimer = later(() => { if (state.hovered === print) showCaption(print); }, next);
+}
+
+export function hideCaption(print) {
+  cancel(print.captionTimer);
+  print.captionTimer = 0;
+}

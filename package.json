@@ -1,0 +1,15 @@
+{
+  "name": "tack",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A corkboard for your screenshots that slides down from the top of the screen",
+  "license": "MIT",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "preview": "python -m http.server 5178 --directory ui"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.1"
+  }
+}

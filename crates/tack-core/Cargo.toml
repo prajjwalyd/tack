@@ -1,0 +1,15 @@
+[package]
+name = "tack-core"
+description = "The board model behind Tack: prints, persistence, cleanup and thumbnails. No Tauri, no Win32."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+base64.workspace = true
+image.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+trash.workspace = true

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Tack</title>
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/board.css">
+  <link rel="stylesheet" href="styles/print.css">
+  <link rel="stylesheet" href="styles/pin.css">
+  <link rel="stylesheet" href="styles/note.css">
+  <link rel="stylesheet" href="styles/motion.css">
+</head>
+<body>
+  <div id="board" class="tucked gone" aria-label="Pinned screenshots">
+    <div class="cork"></div>
+    <div id="rail"><div id="prints"></div></div>
+    <div id="hint" class="note">
+      <span class="pin" data-c="sage"><span class="pin-head"></span></span>
+      <p>Take a screenshot<span class="dot">&middot;</span><span class="keys">Win + Shift + S</span></p>
+    </div>
+  </div>
+  <script type="module" src="scripts/main.js"></script>
+</body>
+</html>

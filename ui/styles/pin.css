@@ -1,0 +1,47 @@
+/* Pins: small matte heads with one soft highlight and a precise little cast
+   shadow, in a muted palette (terracotta, sage, ink, sand, graphite) that
+   never repeats between neighbours. A kept print's pin is brass: the brass
+   head sits on top and fades in, so the change never repaints the head. */
+
+.pin {
+  --c: var(--pin-graphite);
+  --cd: var(--pin-graphite-d);
+  position: absolute;
+  width: var(--pin-size);
+  height: var(--pin-size);
+  z-index: 4;
+  pointer-events: none;
+}
+.pin-head, .pin-brass {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+.pin-head {
+  background:
+    radial-gradient(circle at 36% 30%, var(--pin-highlight) 0, rgba(255, 255, 255, 0) 3px),
+    radial-gradient(circle at 46% 38%, var(--c) 0, var(--c) 42%, var(--cd) 100%);
+  box-shadow:
+    inset 0 0 0 .5px rgba(0, 0, 0, .14),
+    inset 0 -.5px 1px rgba(0, 0, 0, .22),
+    0 1px 1px var(--pin-cast),
+    .4px 2px 2.5px -.5px var(--pin-cast);
+}
+.pin-brass {
+  background:
+    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, .9) 0, rgba(255, 255, 255, 0) 2.6px),
+    radial-gradient(circle at 40% 34%, var(--brass-hi) 0, var(--brass) 52%, var(--brass-d) 100%);
+  box-shadow:
+    inset 0 0 0 .5px rgba(90, 62, 18, .35),
+    0 1px 1px var(--pin-cast),
+    .4px 2px 2.5px -.5px var(--pin-cast);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.slot.kept .pin-brass { opacity: 1; }
+
+.pin[data-c="terracotta"] { --c: var(--pin-terracotta); --cd: var(--pin-terracotta-d); }
+.pin[data-c="sage"]       { --c: var(--pin-sage);       --cd: var(--pin-sage-d); }
+.pin[data-c="ink"]        { --c: var(--pin-ink);        --cd: var(--pin-ink-d); }
+.pin[data-c="sand"]       { --c: var(--pin-sand);       --cd: var(--pin-sand-d); }
+.pin[data-c="graphite"]   { --c: var(--pin-graphite);   --cd: var(--pin-graphite-d); }

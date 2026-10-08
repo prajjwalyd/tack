@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "What the board webview may call: events and its own window.",
+  "windows": ["board"],
+  "permissions": ["core:default"]
+}

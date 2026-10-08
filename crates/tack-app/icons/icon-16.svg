@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- Tack at 16 px, drawn on the pixel grid: a tan tile, a white print, a brass dot. -->
+  <defs>
+    <linearGradient id="cork" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d9b385"/>
+      <stop offset="1" stop-color="#b48656"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fbcea"/>
+      <stop offset="1" stop-color="#bcd9f2"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="14" height="14" rx="3" fill="url(#cork)"/>
+  <rect x="1" y="14" width="14" height="1" rx="0.5" fill="#8d6239" opacity="0.35"/>
+  <rect x="3" y="5" width="10" height="8" fill="#000" opacity="0.18"/>
+  <rect x="3" y="4" width="10" height="8" fill="#fdfcf9"/>
+  <rect x="4" y="5" width="8" height="6" fill="url(#sky)"/>
+  <rect x="4" y="9" width="8" height="2" fill="#5f9a6e"/>
+  <rect x="9" y="6" width="2" height="1" fill="#fff6df"/>
+  <circle cx="8" cy="4.5" r="2" fill="#7a5414" opacity="0.5" transform="translate(0.4 0.6)"/>
+  <circle cx="8" cy="4.5" r="2" fill="#dcaa42"/>
+  <rect x="7" y="3" width="1" height="1" fill="#fff1c4"/>
+</svg>

@@ -1,0 +1,106 @@
+/* Design tokens: every size, colour, radius, shadow and duration the board
+   uses, as custom properties. Colours come in light/dark pairs through
+   light-dark(), resolved against the board's `color-scheme` (board.css): it
+   follows Windows (prefers-color-scheme) unless <html data-theme="light|dark">
+   forces one, as the preview does. The scheme is set on #board, never on the
+   root, so the transparent window never gets a dark canvas behind it.
+
+   The geometry mirrors scripts/layout.js. motion/spring.js replaces the
+   --ease-reveal / --ease-layout / --ease-settle curves (and their durations)
+   with sampled springs; the values here are the fallbacks. */
+
+:root {
+  /* ---- geometry ---- */
+  --top-hidden: 24px;        /* cork kept above the screen edge: room for the reveal overshoot */
+  --board-h: 150px;          /* visible board height */
+  --board-radius: 12px;      /* bottom corners */
+  --print-border: 4px;       /* even paper border around the photo */
+  --print-radius: 3px;
+  --photo-radius: 1px;
+  --pin-size: 10.5px;
+  --button-size: 18px;
+  --button-inset: 6px;       /* × and Keep, from the photo's corners */
+  --caption-gap: 5px;        /* print bottom to caption */
+  --badge-size: 28px;        /* the copied check */
+  --note-radius: 2px;
+
+  /* ---- colour: board ---- */
+  --cork: light-dark(#c9a57a, #7a5a3c);
+  --edge-outer: light-dark(rgba(84, 56, 26, .42), rgba(0, 0, 0, .6));
+  --edge-inner: light-dark(rgba(255, 246, 228, .34), rgba(255, 226, 190, .09));
+  --tuck-shade: light-dark(rgba(66, 40, 14, .30), rgba(0, 0, 0, .42));
+  --shadow-board:
+    0 1px 2px light-dark(rgba(30, 18, 6, .22), rgba(0, 0, 0, .45)),
+    0 14px 34px -6px light-dark(rgba(30, 18, 6, .26), rgba(0, 0, 0, .5));
+
+  /* ---- colour: prints ---- */
+  --paper: light-dark(#fbfaf7, #ebe8e2);
+  --photo-empty: light-dark(#dcd8d0, #b9b4ab);
+  --photo-edge: rgba(0, 0, 0, .14);
+  --caption-ink: light-dark(rgba(52, 33, 14, .74), rgba(255, 243, 226, .80));
+  --caption-emboss: light-dark(rgba(255, 238, 210, .40), rgba(0, 0, 0, .35));
+  --button-bg: light-dark(rgba(255, 255, 255, .66), rgba(250, 248, 244, .58));
+  --button-bg-hover: rgba(255, 255, 255, .88);
+  --button-edge: rgba(0, 0, 0, .10);
+  --button-ink: #2b2620;
+  --button-ink-danger: #a8362a;
+  --button-ink-kept: #8a6420;
+  --badge-bg: rgba(24, 22, 20, .58);
+  --badge-ink: #ffffff;
+
+  /* ---- colour: empty-state card ---- */
+  --note-paper: light-dark(#fbfaf7, #e9e6df);
+  --note-ink: rgba(44, 34, 24, .62);
+  --note-ink-strong: rgba(44, 34, 24, .82);
+
+  /* ---- colour: pins (body, shade) ---- a muted, matte palette */
+  --pin-terracotta: #b8674b;  --pin-terracotta-d: #8a4430;
+  --pin-sage: #8b9c7a;        --pin-sage-d: #62735a;
+  --pin-ink: #4d5f7f;         --pin-ink-d: #33425c;
+  --pin-sand: #e4dccb;        --pin-sand-d: #b5a88e;
+  --pin-graphite: #5d5f63;    --pin-graphite-d: #3c3e42;
+  --brass-hi: #fff0c2;
+  --brass: #d9ab45;
+  --brass-d: #8f6516;
+  --pin-highlight: rgba(255, 255, 255, .55);
+  --pin-cast: light-dark(rgba(46, 26, 6, .42), rgba(0, 0, 0, .55));
+
+  /* ---- shadows ---- */
+  /* A print at rest: tight contact under the pin side, a softer one lower down. */
+  --shadow-rest:
+    0 .5px 1px light-dark(rgba(46, 28, 8, .30), rgba(0, 0, 0, .45)),
+    0 2px 3px -1px light-dark(rgba(46, 28, 8, .20), rgba(0, 0, 0, .30)),
+    0 8px 9px -6px light-dark(rgba(46, 28, 8, .34), rgba(0, 0, 0, .48));
+  /* Added on hover (and while held above the board), cross-faded with opacity. */
+  --shadow-lift:
+    0 3px 6px -1px light-dark(rgba(40, 24, 6, .16), rgba(0, 0, 0, .28)),
+    0 16px 22px -10px light-dark(rgba(40, 24, 6, .40), rgba(0, 0, 0, .55));
+  --shadow-button: 0 .5px 1.5px rgba(0, 0, 0, .18), 0 2px 6px -1px rgba(0, 0, 0, .16);
+
+  /* ---- type ---- */
+  --font-ui: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-small: "Segoe UI Variable Small", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --caption-size: 11px;
+  --note-size: 13px;
+
+  /* ---- motion ---- */
+  --ease-out: cubic-bezier(.2, .8, .25, 1);
+  --ease-in: cubic-bezier(.45, 0, .85, .4);
+  --ease-reveal: cubic-bezier(.24, 1.12, .4, 1);   /* spring with a hint of overshoot */
+  --dur-reveal: 400ms;
+  --ease-tuck: cubic-bezier(.4, 0, .9, .45);
+  --dur-tuck: 200ms;
+  --ease-layout: cubic-bezier(.22, 1, .36, 1);
+  --dur-layout: 480ms;
+  --ease-settle: cubic-bezier(.22, 1.2, .4, 1);
+  --dur-hover: 190ms;
+  --dur-hover-out: 260ms;
+  --dur-buttons: 140ms;
+  --delay-buttons: 120ms;
+  --dur-caption: 170ms;
+  --dur-press: 520ms;        /* the press-and-hold (HOLD_MS in gestures.js) */
+  --dur-fade: 220ms;
+  --dur-fade-edge: 180ms;    /* scroll masks */
+
+  font-family: var(--font-ui);
+}
