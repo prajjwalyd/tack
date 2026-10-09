@@ -1,14 +1,22 @@
 //! The Windows clipboard, for pinning a selection: reading what an app just
 //! copied (text, a picture or files), telling whether it was marked private,
-//! and putting back what the user had on the clipboard before.
+//! and putting back what the user had on the clipboard before. Also taking
+//! Snipping Tool's captures off it, and putting a print's picture on it.
 //!
 //! Only [`crate::selection`] reads text from here, and only right after the
 //! user pressed the pin shortcut.
+//!
+//! While Tack holds the clipboard open no other app can write to it, so
+//! Snipping Tool's next copy would fail. It is opened once per read, only to
+//! copy bytes; pictures are decoded and encoded while it is closed.
 
+use std::io::Cursor;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use image::{DynamicImage, RgbaImage};
+use image::codecs::bmp::BmpDecoder;
+use image::codecs::png::PngEncoder;
+use image::{DynamicImage, ExtendedColorType, ImageEncoder, ImageFormat, RgbaImage};
 use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{GlobalFree, HANDLE, HGLOBAL, HWND};
 use windows::Win32::System::DataExchange::{
@@ -16,7 +24,7 @@ use windows::Win32::System::DataExchange::{
     GetClipboardSequenceNumber, IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
 };
 use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE};
-use windows::Win32::System::Ole::{CF_DIB, CF_HDROP, CF_UNICODETEXT};
+use windows::Win32::System::Ole::{CF_DIB, CF_DIBV5, CF_HDROP, CF_UNICODETEXT};
 use windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
 
 /// The most a snapshot holds; past this the clipboard is not restored.
@@ -24,6 +32,9 @@ const SNAPSHOT_LIMIT: usize = 256 * 1024 * 1024;
 /// Another app may hold the clipboard open for a moment.
 const OPEN_TRIES: u32 = 12;
 const OPEN_GAP: Duration = Duration::from_millis(15);
+/// A copied picture is read again if its app failed to draw it on demand.
+const PICTURE_TRIES: u32 = 4;
+const PICTURE_GAP: Duration = Duration::from_millis(60);
 
 /// Bumped by Windows on every clipboard change.
 pub(crate) fn sequence() -> u32 {
@@ -40,8 +51,9 @@ pub(crate) fn owner() -> Option<HWND> {
 struct Open;
 
 impl Open {
-    /// Opens the clipboard for `owner` (`None`: only to read), retrying
-    /// while another app has it.
+    /// Opens the clipboard for `owner`, retrying while another app has it.
+    /// Opening does not make `owner` the owner (emptying it does); it only
+    /// tells anyone looking into a busy clipboard who holds it open.
     fn new(owner: Option<HWND>) -> Option<Open> {
         for attempt in 0..OPEN_TRIES {
             if attempt > 0 {
@@ -293,13 +305,6 @@ fn is_private() -> bool {
     exclude || ignore || history
 }
 
-/// [`is_private`] for the clipboard as it is now; `None` while another app
-/// holds it open.
-pub(crate) fn private_now() -> Option<bool> {
-    let _open = Open::new(None)?;
-    Some(is_private())
-}
-
 fn available(format: u32) -> bool {
     format != 0 && unsafe { IsClipboardFormatAvailable(format) }.is_ok()
 }
@@ -318,24 +323,27 @@ pub(crate) fn has_picture() -> bool {
 /// Text that is only whitespace or control characters counts as none, so a
 /// copied picture that also offers a placeholder character is a picture.
 pub(crate) fn read(owner: HWND) -> Content {
-    {
-        let Some(_open) = Open::new(Some(owner)) else { return Content::Empty };
-        if is_private() {
-            return Content::Private;
+    for attempt in 0..PICTURE_TRIES {
+        if attempt > 0 {
+            std::thread::sleep(PICTURE_GAP);
         }
-        if let Some(files) = files() {
-            if !files.is_empty() {
+        let picture = {
+            let Some(_open) = Open::new(Some(owner)) else { return Content::Empty };
+            if is_private() {
+                return Content::Private;
+            }
+            if let Some(files) = files().filter(|files| !files.is_empty()) {
                 return Content::Files(files);
             }
-        }
-        if let Some(text) = text() {
-            if text.chars().any(|c| !c.is_whitespace() && !c.is_control()) {
+            if let Some(text) = text().filter(|text| text.chars().any(|c| !c.is_whitespace() && !c.is_control())) {
                 return Content::Text(text);
             }
-        }
-    }
-    if has_picture() {
-        if let Some(img) = read_image(4, Duration::from_millis(60)) {
+            if !has_picture() {
+                return Content::Empty;
+            }
+            picture()
+        };
+        if let Some(img) = picture.and_then(|p| p.decode()) {
             return Content::Image(img);
         }
     }
@@ -367,22 +375,116 @@ fn files() -> Option<Vec<PathBuf>> {
     }
 }
 
-/// The clipboard's picture, through arboard (which opens the clipboard
-/// itself, so ours must be closed). Tried `tries` times, `gap` apart: the
-/// picture may be drawn on demand by its app, or the clipboard still held
-/// open by its owner.
-pub(crate) fn read_image(tries: u32, gap: Duration) -> Option<DynamicImage> {
+/// A picture as copied off the clipboard, still encoded.
+pub(crate) enum Picture {
+    Png(Vec<u8>),
+    /// CF_DIB: a bitmap header and its pixels, with no file header.
+    Dib(Vec<u8>),
+}
+
+impl Picture {
+    pub(crate) fn decode(&self) -> Option<DynamicImage> {
+        let img = match self {
+            Picture::Png(bytes) => image::load_from_memory_with_format(bytes, ImageFormat::Png).ok()?,
+            Picture::Dib(bytes) => {
+                DynamicImage::from_decoder(BmpDecoder::new_without_file_header(Cursor::new(bytes)).ok()?).ok()?
+            }
+        };
+        Some(tack_core::capture::without_alpha(img.to_rgba8()))
+    }
+}
+
+/// The clipboard's picture, while it is open: its PNG, else the bitmap that
+/// Windows makes from any other bitmap format. Only one is asked for, as its
+/// app may have to draw each one on demand. CF_DIB rather than CF_DIBV5:
+/// apps disagree on where a V5 header's colour masks go.
+fn picture() -> Option<Picture> {
+    let png = registered(w!("PNG"));
+    if let Some(bytes) = available(png).then(|| bytes_of(png)).flatten() {
+        return Some(Picture::Png(bytes));
+    }
+    bytes_of(CF_DIB.0 as u32).map(Picture::Dib)
+}
+
+/// Why a capture was not taken off the clipboard.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Untaken {
+    /// Another app held the clipboard open throughout.
+    Busy,
+    /// Something else reached the clipboard after the capture.
+    Replaced,
+    /// Marked private by whoever copied it.
+    Private,
+    /// Its app gave no picture.
+    Unreadable,
+}
+
+/// Copies the picture off the clipboard if it is still the copy heard at
+/// `since` (a [`sequence`] number) and not marked private, all in one
+/// opening so nothing can change in between. `window` is named as the one
+/// holding it open. Tried `tries` times, `gap` apart.
+pub(crate) fn take_picture(window: Option<HWND>, since: u32, tries: u32, gap: Duration) -> Result<Picture, Untaken> {
+    let mut why = Untaken::Busy;
     for attempt in 0..tries {
         if attempt > 0 {
             std::thread::sleep(gap);
         }
-        let Ok(mut clipboard) = arboard::Clipboard::new() else { continue };
-        let Ok(data) = clipboard.get_image() else { continue };
-        if let Some(rgba) = RgbaImage::from_raw(data.width as u32, data.height as u32, data.bytes.into_owned()) {
-            return Some(tack_core::capture::without_alpha(rgba));
+        // Looked at before opening too, so a stale copy keeps nobody waiting.
+        if sequence() != since {
+            return Err(Untaken::Replaced);
+        }
+        let Some(_open) = Open::new(window) else { continue };
+        if sequence() != since {
+            return Err(Untaken::Replaced);
+        }
+        if is_private() {
+            return Err(Untaken::Private);
+        }
+        match picture() {
+            Some(picture) => return Ok(picture),
+            None => why = Untaken::Unreadable,
         }
     }
-    None
+    Err(why)
+}
+
+/// Puts a picture on the clipboard as PNG and as a bitmap, both encoded
+/// before it is opened.
+pub(crate) fn put_picture(rgba: &RgbaImage) -> Result<(), String> {
+    let mut png = Vec::new();
+    PngEncoder::new(&mut png)
+        .write_image(rgba.as_raw(), rgba.width(), rgba.height(), ExtendedColorType::Rgba8)
+        .map_err(|e| e.to_string())?;
+    let dib = dibv5(rgba);
+    let _open = Open::new(None).ok_or("the clipboard is busy")?;
+    unsafe { EmptyClipboard() }.map_err(|e| e.to_string())?;
+    // PNG first: apps that take the first picture format they know get the
+    // one that keeps transparency exactly.
+    set_bytes(registered(w!("PNG")), &png)?;
+    set_bytes(CF_DIBV5.0 as u32, &dib)
+}
+
+/// CF_DIBV5 for a picture: a BITMAPV5HEADER for 32-bit sRGB with alpha, then
+/// the pixels as BGRA, bottom row first.
+fn dibv5(rgba: &RgbaImage) -> Vec<u8> {
+    const HEADER: usize = 124;
+    let (width, height) = rgba.dimensions();
+    let size = rgba.as_raw().len();
+    let mut out = Vec::with_capacity(HEADER + size);
+    let mut put = |values: &[u32]| values.iter().for_each(|v| out.extend_from_slice(&v.to_le_bytes()));
+    // Size, width, height, then 1 plane and 32 bits per pixel.
+    put(&[HEADER as u32, width, height, 1 | (32 << 16)]);
+    put(&[3 /* BI_BITFIELDS */, size as u32, 0, 0, 0, 0]);
+    put(&[0x00FF_0000, 0x0000_FF00, 0x0000_00FF, 0xFF00_0000, 0x7352_4742 /* LCS_sRGB */]);
+    // Endpoints and gamma: unused with sRGB.
+    out.resize(108, 0);
+    out.extend([4u32 /* LCS_GM_IMAGES */, 0, 0, 0].iter().flat_map(|v| v.to_le_bytes()));
+    for row in rgba.rows().rev() {
+        for p in row {
+            out.extend_from_slice(&[p[2], p[1], p[0], p[3]]);
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -426,5 +528,59 @@ mod tests {
             assert!(restorable(format), "{name}");
         }
         assert!(!is_marker(registered(w!("HTML Format"))));
+    }
+
+    fn sample(alpha: u8) -> RgbaImage {
+        RgbaImage::from_fn(5, 3, |x, y| image::Rgba([(x * 50) as u8, (y * 80) as u8, 200, alpha]))
+    }
+
+    /// `dibv5` as the decoder reads a V5 header: with the colour masks
+    /// repeated after it.
+    fn decode_v5(dib: &[u8]) -> RgbaImage {
+        let mut repeated = dib[..124].to_vec();
+        repeated.extend_from_slice(&dib[40..52]);
+        repeated.extend_from_slice(&dib[124..]);
+        Picture::Dib(repeated).decode().expect("decodes").to_rgba8()
+    }
+
+    #[test]
+    fn a_bitmap_put_on_the_clipboard_has_the_same_pixels_the_right_way_up() {
+        let img = sample(255);
+        let dib = dibv5(&img);
+        assert_eq!(dib.len(), 124 + 5 * 3 * 4, "masks inside the header only, as other apps expect");
+        assert_eq!(decode_v5(&dib), img);
+    }
+
+    #[test]
+    fn a_bitmap_put_on_the_clipboard_keeps_its_transparency() {
+        let img = sample(128);
+        assert_eq!(decode_v5(&dibv5(&img)), img);
+    }
+
+    #[test]
+    fn a_plain_bitmap_off_the_clipboard_decodes() {
+        // CF_DIB as Windows makes it: BITMAPINFOHEADER, 32-bit BGRX, bottom
+        // row first.
+        let img = sample(255);
+        let mut dib = Vec::new();
+        for v in [40u32, 5, 3, 1 | (32 << 16), 0 /* BI_RGB */, 60, 0, 0, 0, 0] {
+            dib.extend_from_slice(&v.to_le_bytes());
+        }
+        for row in img.rows().rev() {
+            for p in row {
+                dib.extend_from_slice(&[p[2], p[1], p[0], 0]);
+            }
+        }
+        assert_eq!(Picture::Dib(dib).decode().expect("decodes").to_rgba8(), img);
+    }
+
+    #[test]
+    fn a_png_with_trailing_bytes_still_decodes() {
+        // Clipboard memory can be bigger than what was put in it.
+        let img = sample(255);
+        let mut png = Vec::new();
+        PngEncoder::new(&mut png).write_image(img.as_raw(), 5, 3, ExtendedColorType::Rgba8).unwrap();
+        png.extend([0; 16]);
+        assert_eq!(Picture::Png(png).decode().expect("decodes").to_rgba8(), img);
     }
 }

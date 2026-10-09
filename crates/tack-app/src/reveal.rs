@@ -8,6 +8,7 @@
 //! tucked ([`webview_power`]), so every reveal wakes it before showing the
 //! window.
 
+use std::sync::atomic::{AtomicIsize, Ordering};
 use std::time::{Duration, Instant};
 
 use tack_core::{Rect, RevealReason, Settings, View};
@@ -86,6 +87,10 @@ impl Placement {
     }
 }
 
+/// The board window's handle, kept for threads that must not wait on the
+/// main thread (its getters go through the event loop).
+static BOARD: AtomicIsize = AtomicIsize::new(0);
+
 pub fn board_hwnd(app: &AppHandle) -> Option<HWND> {
     app.get_webview_window(WINDOW_LABEL)?.hwnd().ok()
 }
@@ -102,6 +107,7 @@ pub fn init_window(app: &AppHandle) {
         }
     }
     if let Some(hwnd) = board_hwnd(app) {
+        BOARD.store(hwnd.0 as isize, Ordering::Release);
         overlay::make_unfocusable(hwnd);
     }
     webview_privacy::apply(app);
@@ -182,17 +188,15 @@ fn sleep_once_ready(app: &AppHandle) {
     });
 }
 
-pub fn set_click_through(app: &AppHandle, ignore: bool) {
-    let handle = app.clone();
-    let _ = app.run_on_main_thread(move || {
-        // Stale by the time it ran? The poller sends another one.
-        if lock(&handle).view.ignoring != ignore {
-            return;
-        }
-        if let Some(hwnd) = board_hwnd(&handle) {
-            overlay::set_click_through(hwnd, ignore);
-        }
-    });
+/// Applied on the poller's thread, not queued for the main thread: a drag
+/// out runs inside a main-thread callback, so anything queued would land
+/// after the drop, and the drop would hit the board instead of the app below.
+pub fn set_click_through(ignore: bool) {
+    let raw = BOARD.load(Ordering::Acquire);
+    if raw != 0 {
+        trace!("click-through {ignore}");
+        overlay::set_click_through(HWND(raw as *mut _), ignore);
+    }
 }
 
 /// Slides the board down on the monitor under the pointer.
@@ -464,7 +468,7 @@ impl EdgeHost for EdgeGlue {
     }
 
     fn set_click_through(&self, ignore: bool) {
-        set_click_through(&self.0, ignore);
+        set_click_through(ignore);
     }
 
     fn pointer_left(&self) {

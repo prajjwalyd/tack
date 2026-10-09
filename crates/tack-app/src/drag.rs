@@ -42,8 +42,10 @@ pub fn start(app: &AppHandle, id: String) {
     let scheduled = app.run_on_main_thread(move || {
         let hwnd = board_hwnd(&handle);
         // Modal: returns once the button is released somewhere.
-        if let Err(e) = drag_out::drag_file(hwnd, &path, image) {
-            eprintln!("tack: drag failed: {e}");
+        match drag_out::drag_file(hwnd, &path, image) {
+            // 0 when nothing took it, 1 copy, 2 move, 4 link.
+            Ok(_effect) => trace!("drag: drop effect {}", _effect.0),
+            Err(e) => eprintln!("tack: drag failed: {e}"),
         }
         finish(&handle, id, path);
     });

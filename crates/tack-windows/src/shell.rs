@@ -105,11 +105,7 @@ pub fn recycle(path: PathBuf) {
 /// screenshot, so call it off the UI thread.
 pub fn copy_image(path: &Path) -> Result<(), String> {
     let rgba = tack_core::thumbnail::decode(path)?.to_rgba8();
-    let (width, height) = rgba.dimensions();
-    let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-    clipboard
-        .set_image(arboard::ImageData { width: width as usize, height: height as usize, bytes: rgba.into_raw().into() })
-        .map_err(|e| e.to_string())
+    crate::clipboard::put_picture(&rgba)
 }
 
 /// Puts text on the clipboard, with Windows line breaks.

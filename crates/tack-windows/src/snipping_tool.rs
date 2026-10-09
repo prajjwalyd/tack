@@ -9,6 +9,7 @@
 //! they can name private documents and chats.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -33,8 +34,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
     MSG, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLIPBOARDUPDATE, WNDCLASSW,
 };
 
+use crate::capture_origin;
+use crate::clipboard::{self, Untaken};
 use crate::focus::{class_name, window_process};
-use crate::{capture_origin, clipboard};
 
 /// Snipping Tool's package family, the same on every PC: its publisher's
 /// signature is part of it, so no other app can have it.
@@ -46,10 +48,14 @@ const SNIPPERS: [&str; 2] = ["snippingtool.exe", "screenclippinghost.exe"];
 /// Reading the image is retried for about a second.
 const READ_TRIES: u32 = 6;
 const READ_GAP: Duration = Duration::from_millis(200);
+/// How long a capture is left alone before it is read.
+const SETTLE: Duration = Duration::from_millis(100);
 
 /// Accepted clipboard changes, handed to the reader thread with the start of
 /// their log line.
 static ACCEPTED: OnceLock<Sender<Accepted>> = OnceLock::new();
+/// The listener's window handle, once it exists.
+static LISTENER: AtomicIsize = AtomicIsize::new(0);
 
 /// A clipboard change that is a capture, as heard.
 struct Accepted {
@@ -95,32 +101,26 @@ pub fn start(mut on_capture: impl FnMut(DynamicImage, (i32, i32)) -> String + Se
 }
 
 /// Reads the capture heard at `sequence`: not if it was marked private, and
-/// only if nothing else reached the clipboard in the meantime.
+/// only if nothing else reached the clipboard in the meantime. The
+/// clipboard is open only while the picture's bytes are copied.
 fn read(sequence: u32) -> Result<DynamicImage, &'static str> {
-    let replaced = "ignored (replaced before it was read)";
-    let mut private = None;
-    for attempt in 0..READ_TRIES {
-        if attempt > 0 {
-            std::thread::sleep(READ_GAP);
-        }
-        private = clipboard::private_now();
-        if private.is_some() {
-            break;
-        }
-    }
-    match private {
-        None => return Err("ignored (the clipboard stayed busy)"),
-        Some(true) => return Err("ignored (marked private)"),
-        Some(false) => {}
-    }
-    if clipboard::sequence() != sequence {
-        return Err(replaced);
-    }
-    let img = clipboard::read_image(READ_TRIES, READ_GAP).ok_or("ignored (unreadable)")?;
-    if clipboard::sequence() != sequence {
-        return Err(replaced);
-    }
-    Ok(img)
+    // Snipping Tool sets the clipboard, then flushes it: reading at once
+    // would hold it open just when Snipping Tool needs it again.
+    std::thread::sleep(SETTLE);
+    let picture = clipboard::take_picture(listener(), sequence, READ_TRIES, READ_GAP).map_err(|why| match why {
+        Untaken::Busy => "ignored (the clipboard stayed busy)",
+        Untaken::Replaced => "ignored (replaced before it was read)",
+        Untaken::Private => "ignored (marked private)",
+        Untaken::Unreadable => "ignored (unreadable)",
+    })?;
+    picture.decode().ok_or("ignored (undecodable)")
+}
+
+/// The listener's window, to name Tack as the one holding the clipboard
+/// open while a capture is read.
+fn listener() -> Option<HWND> {
+    let hwnd = LISTENER.load(Ordering::Relaxed);
+    (hwnd != 0).then_some(HWND(hwnd as *mut _))
 }
 
 /// The local time, to name a capture's file after.
@@ -153,6 +153,7 @@ unsafe fn listen() -> windows::core::Result<()> {
         None,
     )?;
     AddClipboardFormatListener(hwnd)?;
+    LISTENER.store(hwnd.0 as isize, Ordering::Relaxed);
     let mut msg = MSG::default();
     while GetMessageW(&mut msg, None, 0, 0).0 > 0 {
         DispatchMessageW(&msg);

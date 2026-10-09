@@ -274,7 +274,11 @@ impl Poller {
                 // down would make it bounce straight back.
                 let clicked_outside = (left_pressed || right_pressed) && !over_board && !on_taskbar;
 
-                if !held && !self.press_inside && over_board == v.ignoring {
+                // The window covers the whole work area, and the drag loop
+                // drops on whatever window is under the pointer: off the
+                // board it must let a print being dragged out through.
+                let follow = v.dragging.is_some() || (!held && !self.press_inside);
+                if follow && over_board == v.ignoring {
                     v.ignoring = !over_board;
                     click_through = Some(v.ignoring);
                 }
