@@ -42,9 +42,9 @@ const DRAG_JITTER: i32 = 8;
 const EDGE_BAND: i32 = 2;
 /// Grace period once the pointer is outside the board's zone, so a brief
 /// overshoot does not tuck it.
-const LEAVE_DELAY: Duration = Duration::from_millis(350);
+const LEAVE_DELAY: Duration = Duration::from_millis(250);
 /// Slack around the board before the pointer counts as gone, CSS px.
-const LEAVE_MARGIN: f64 = 24.0;
+const LEAVE_MARGIN: f64 = 10.0;
 /// SHQueryUserNotificationState is not free; nobody notices half a second.
 const FULLSCREEN_CHECK: Duration = Duration::from_millis(500);
 

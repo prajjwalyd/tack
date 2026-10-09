@@ -8,7 +8,7 @@
 //! tucked ([`webview_power`]), so every reveal wakes it before showing the
 //! window.
 
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::time::{Duration, Instant};
 
 use tack_core::{Rect, RevealReason, Settings, View};
@@ -188,14 +188,32 @@ fn sleep_once_ready(app: &AppHandle) {
     });
 }
 
+/// Whether the board should let the pointer through, as last decided.
+static IGNORING: AtomicBool = AtomicBool::new(true);
+
 /// Applied on the poller's thread, not queued for the main thread: a drag
 /// out runs inside a main-thread callback, so anything queued would land
 /// after the drop, and the drop would hit the board instead of the app below.
 pub fn set_click_through(ignore: bool) {
+    trace!("click-through {ignore}");
+    IGNORING.store(ignore, Ordering::Release);
+    sync_click_through();
+}
+
+/// Brings the window in line with [`IGNORING`]. Showing the window makes it
+/// click-through, and the poller may decide otherwise on another thread at
+/// the same moment, so it applies until the decision holds still.
+fn sync_click_through() {
     let raw = BOARD.load(Ordering::Acquire);
-    if raw != 0 {
-        trace!("click-through {ignore}");
+    if raw == 0 {
+        return;
+    }
+    loop {
+        let ignore = IGNORING.load(Ordering::Acquire);
         overlay::set_click_through(HWND(raw as *mut _), ignore);
+        if IGNORING.load(Ordering::Acquire) == ignore {
+            break;
+        }
     }
 }
 
@@ -268,6 +286,7 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
                     }
                     if let Some(hwnd) = board_hwnd(&handle) {
                         overlay::show_at(hwnd, place.pos, place.size);
+                        sync_click_through();
                     }
                 });
             } else {
@@ -284,6 +303,7 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
         v.monitor_top = place.monitor_top;
         v.scale = place.scale;
         v.ignoring = true;
+        IGNORING.store(true, Ordering::Release);
         (v.generation, v.window_pos, v.window_size)
     };
     // It may be idling (edge reveal off); the board needs it from now on.
@@ -309,6 +329,7 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
             }
             let Some(hwnd) = board_hwnd(&app) else { return };
             overlay::show_at(hwnd, pos, size);
+            sync_click_through();
             trace!("reveal gen={generation}: window shown");
             events::reveal(&app, reason);
             trace!("reveal gen={generation}: board:reveal sent");
