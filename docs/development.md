@@ -54,13 +54,7 @@ there too.
 `ui/dev/` is embedded in the app with the rest of `ui/` (Tauri embeds the
 whole `frontendDist` folder) but nothing in the app links to it.
 
-## README images and the social preview
-
-The images in `docs/assets/` are rendered from the real board in a browser,
-never drawn by hand:
-`ui/dev/hero.html` gives the hero, hover, row and notes images and, with
-`?card`, the social preview; `ui/dev/demo.html` is the animated loop at the
-top of the README. If you change how the board looks, render them again.
+## The social preview
 
 `docs/assets/social-preview.png` (1280 × 640) is what GitHub shows when the
 repository is linked, but a file in the repository is not enough: a

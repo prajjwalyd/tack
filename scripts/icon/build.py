@@ -16,7 +16,6 @@ sys.path.insert(0, HERE)
 import master, pixels
 
 IC = os.path.join(REPO, "crates", "tack-app", "icons")
-DESK = os.path.join(REPO, "ui", "dev", "desktop")
 ASSETS = os.path.join(REPO, "docs", "assets")
 PIXEL = (16, 20, 24, 32)
 
@@ -50,8 +49,6 @@ def svg_sources():
     for t in ("light", "dark"):
         w(os.path.join(IC, f"tray-{t}-64.svg"), master.note(master.build(64, 64, t),
           f"Tack tray icon at 64 px (scales above 200%) for a {t} taskbar (scripts/icon)."))
-        w(os.path.join(DESK, f"tack-tray-{t}.svg"), pixels.to_svg(grid(32), t,
-          f"Tack's tray icon ({t} taskbar) for the README scenes: a copy of crates/tack-app/icons/tray-{t}-32.svg."))
     print("svg sources written")
 
 def render(jobs):
