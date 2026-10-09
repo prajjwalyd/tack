@@ -7,10 +7,7 @@
 <p align="center"><b>The top of your screen, finally useful.</b><br>
 Tack is a small pinboard for Windows that hangs just above the top edge of your screen.</p>
 
-<!-- demo video: replace this block with the uploaded video link -->
-<p align="center">
-  <img src="docs/assets/poster.png" width="880" alt="A snip of a chart flies up onto the Tack board at the top of a Windows desktop">
-</p>
+https://github.com/user-attachments/assets/0e2f1078-f804-4241-9b8f-a8305564e11d
 
 - **Snip the way you already do.** Win + Shift + S, Print Screen, or any tool
   that saves to your Screenshots folder. The board drops down, pins it, and
