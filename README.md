@@ -71,10 +71,10 @@ The details are in [docs/privacy.md](docs/privacy.md).
 ## Install
 
 1. Download **Tack_…_x64-setup.exe** (or **…_arm64-setup.exe** on an ARM PC) from the [latest release](https://github.com/prajjwalyd/tack/releases/latest).
-2. Run it. Tack appears at the top of your screen, and its icon sits in the tray.
+2. Open it. Windows may say **"Windows protected your PC"**, because the installer isn't code-signed yet: click **More info**, then **Run anyway**.
+3. Tack appears at the top of your screen, and its icon sits in the tray.
 
-Windows 10 or 11. The installer isn't code-signed yet, so Windows may show
-"Windows protected your PC": choose **More info**, then **Run anyway**.
+Windows 10 or 11.
 
 To build it yourself, see [docs/development.md](docs/development.md).
 
