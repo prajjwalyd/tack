@@ -3197,7 +3197,7 @@ dependencies = [
 
 [[package]]
 name = "tack-app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "httparse",
@@ -3215,7 +3215,7 @@ dependencies = [
 
 [[package]]
 name = "tack-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "image",
@@ -3226,7 +3226,7 @@ dependencies = [
 
 [[package]]
 name = "tack-windows"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "arboard",
  "image",
