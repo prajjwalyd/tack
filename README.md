@@ -7,11 +7,9 @@
 <p align="center"><b>The top of your screen, finally useful.</b><br>
 Tack is a small pinboard for Windows that hangs just above the top edge of your screen.</p>
 
+<!-- demo video: replace this block with the uploaded video link -->
 <p align="center">
-  <picture>
-    <source srcset="docs/assets/demo.webp" type="image/webp">
-    <img src="docs/assets/demo.gif" width="880" alt="A snip flies up onto the Tack board as it swings down from the top of the screen">
-  </picture>
+  <img src="docs/assets/poster.png" width="880" alt="A snip of a chart flies up onto the Tack board at the top of a Windows desktop">
 </p>
 
 - **Snip the way you already do.** Win + Shift + S, Print Screen, or any tool
@@ -25,10 +23,7 @@ Tack is a small pinboard for Windows that hangs just above the top edge of your 
 - **No clutter.** Old snips fade out after a week. **Keep** the ones you need.
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.png">
-    <img src="docs/assets/hero.png" width="880" alt="The Tack board at the top of a Windows desktop with five screenshots pinned on it">
-  </picture>
+  <img src="docs/assets/hero.png" width="880" alt="The Tack board at the top of a Windows desktop with code, a chart, a note, a video frame and a chat pinned on it">
 </p>
 
 ## Your board, on your phone
@@ -42,6 +37,10 @@ through [NetBird](https://netbird.io), a free, open-source private network.
    and your phone, and sign in to the same account on both.
 2. In Tack's tray menu, choose **Use on your phone…** and switch it on.
 3. Scan the QR code with your phone and click **Allow** on your PC.
+
+<p align="center">
+  <img src="docs/assets/phone.png" width="880" alt="The Tack on your phone window with its QR code beside a phone showing the same board in Chrome over 5G">
+</p>
 
 Add it to your home screen and it's one tap from then on. Only devices you
 allow get in, and your board never leaves your PC.
