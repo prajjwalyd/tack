@@ -1,0 +1,46 @@
+name: Release
+
+# Pushing a tag like v0.1.0 builds the installer on a clean machine and
+# attaches it to a draft release, so every download comes from the public
+# code at that tag.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install the Tauri CLI
+        run: npm ci
+
+      - name: Build the installer and draft the release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: npx tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: Tack ${{ github.ref_name }}
+          releaseBody: |
+            Download the **x64-setup.exe** below and run it. Tack starts at the top of your screen; its icon is in the tray.
+
+            Windows 10 or 11. The installer isn't code-signed yet, so Windows SmartScreen may ask: choose **More info › Run anyway**.
+          releaseDraft: true
+          prerelease: false
