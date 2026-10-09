@@ -70,17 +70,13 @@ The details are in [docs/privacy.md](docs/privacy.md).
 
 ## Install
 
-Tack runs on Windows 10 and 11. There's no published installer yet, so build
-it with [Rust](https://rustup.rs), the Visual Studio C++ Build Tools and
-Node.js 20 or newer:
+1. Download **Tack_…_x64-setup.exe** from the [latest release](https://github.com/prajjwalyd/tack/releases/latest).
+2. Run it. Tack appears at the top of your screen, and its icon sits in the tray.
 
-```sh
-npm install
-npm run build        # installer in target/release/bundle/nsis/
-```
+Windows 10 or 11. The installer isn't code-signed yet, so Windows may show
+"Windows protected your PC": choose **More info**, then **Run anyway**.
 
-[docs/development.md](docs/development.md) covers development and the
-browser preview.
+To build it yourself, see [docs/development.md](docs/development.md).
 
 ## Credits
 

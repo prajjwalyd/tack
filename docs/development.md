@@ -20,6 +20,9 @@ npm run dev                  # debug build of crates/tack-app, then runs it
 cargo test --workspace       # unit tests (the board model lives in tack-core)
 ```
 
+The installer: `npm run build` writes it to `target/release/bundle/nsis/`.
+Releases are built by CI from a `v*` tag (`.github/workflows/release.yml`).
+
 Only one Tack runs at a time: quit the tray icon (or
 `taskkill /IM tack.exe /F`) before starting another build.
 
