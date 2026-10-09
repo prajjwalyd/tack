@@ -144,6 +144,10 @@ Tack's files stay on this PC, and Tack only ever cleans up its own:
   Tack starts, a print whose file cannot be read yet stays listed for next
   time, and only files Tack could have written (pictures; `.txt` notes in
   its notes folder) are put back on the board.
+- Uninstalling Tack removes its "Start with Windows" entry. Its data stays
+  unless you tick "Delete the application data" in the uninstaller, which
+  then deletes `%APPDATA%\Tack` and `%LOCALAPPDATA%\Tack`. Updating Tack
+  never deletes anything, and your Screenshots folder is never touched.
 
 Links are never fetched: no page title, no preview, no icon. The domain a
 link note shows is read from the link itself. Opening one (double-click,
