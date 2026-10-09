@@ -1,8 +1,8 @@
 name: Release
 
-# Pushing a tag like v0.1.0 builds the installer on a clean machine and
-# attaches it to a draft release, so every download comes from the public
-# code at that tag.
+# Pushing a tag like v0.1.1 builds the x64 and arm64 installers on a clean
+# machine and attaches them to a draft release, so every download comes from
+# the public code at that tag.
 on:
   push:
     tags:
@@ -12,15 +12,56 @@ permissions:
   contents: write
 
 jobs:
-  windows:
+  # Both installer jobs upload to this one release. Creating it here, before
+  # they start, keeps them from each creating their own draft.
+  draft:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.draft.outputs.release_id }}
+    steps:
+      - name: Create the draft release
+        id: draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          BODY: |
+            Download the installer for your PC below and run it. Tack starts at the top of your screen; its icon is in the tray.
+
+            - **x64-setup.exe**: most PCs (Intel and AMD).
+            - **arm64-setup.exe**: PCs with an ARM processor, such as a Snapdragon X laptop.
+
+            Windows 10 or 11. The installer isn't code-signed yet, so Windows SmartScreen may ask: choose **More info › Run anyway**.
+        run: |
+          # A re-run reuses the draft instead of making a second one.
+          id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+            --jq '.[] | select(.tag_name == env.TAG and .draft) | .id' | sed -n 1p)
+          if [ -z "$id" ]; then
+            id=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
+              -f tag_name="$TAG" -f name="Tack $TAG" -f body="$BODY" \
+              -F draft=true -F prerelease=false --jq .id)
+          fi
+          echo "release_id=$id" >> "$GITHUB_OUTPUT"
+
+  installer:
+    needs: draft
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-pc-windows-msvc
+          - aarch64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
 
       - uses: actions/setup-node@v4
         with:
@@ -30,17 +71,11 @@ jobs:
       - name: Install the Tauri CLI
         run: npm ci
 
-      - name: Build the installer and draft the release
+      - name: Build the installer and add it to the draft release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tauriScript: npx tauri
-          tagName: ${{ github.ref_name }}
-          releaseName: Tack ${{ github.ref_name }}
-          releaseBody: |
-            Download the **x64-setup.exe** below and run it. Tack starts at the top of your screen; its icon is in the tray.
-
-            Windows 10 or 11. The installer isn't code-signed yet, so Windows SmartScreen may ask: choose **More info › Run anyway**.
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.draft.outputs.release_id }}
+          args: --target ${{ matrix.target }}

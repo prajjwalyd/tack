@@ -70,7 +70,7 @@ The details are in [docs/privacy.md](docs/privacy.md).
 
 ## Install
 
-1. Download **Tack_…_x64-setup.exe** from the [latest release](https://github.com/prajjwalyd/tack/releases/latest).
+1. Download **Tack_…_x64-setup.exe** (or **…_arm64-setup.exe** on an ARM PC) from the [latest release](https://github.com/prajjwalyd/tack/releases/latest).
 2. Run it. Tack appears at the top of your screen, and its icon sits in the tray.
 
 Windows 10 or 11. The installer isn't code-signed yet, so Windows may show
