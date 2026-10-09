@@ -1,8 +1,11 @@
 name: CI
 
+# A tag push is built by the release workflow, so it isn't checked twice.
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
