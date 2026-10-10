@@ -8,8 +8,8 @@
 //! - shown: 40
 //! - tucked, the user at the controls (input in the last [`ACTIVE_FOR`]):
 //!   25 near the top, 10 elsewhere
-//! - tucked, untouched since: one per reveal dwell, 10 / 4 / 2.5 from the
-//!   fastest speed to the slowest ([`hidden_pause`])
+//! - tucked, untouched since: one per reveal dwell, within 100 to 200 ms:
+//!   10 / 4 / 5 from the fastest speed to the slowest ([`hidden_pause`])
 //! - tucked, edge reveal off: 2
 //! - the pointer unreadable (a UAC prompt): 1 for three seconds, then 0.1
 //! - session locked or display off: 0, until [`session`] wakes it
@@ -34,8 +34,11 @@ const POLL_HIDDEN: Duration = Duration::from_millis(40);
 /// moment, and resting there a little more.
 const POLL_FAR: Duration = Duration::from_millis(100);
 /// Tucked, and the keyboard and mouse were last touched long ago (see
-/// [`ACTIVE_FOR`]): one look per reveal dwell, but never oftener than this.
+/// [`ACTIVE_FOR`]): one look per reveal dwell, but never oftener than
+/// [`POLL_RESTING_MIN`] nor rarer than [`POLL_RESTING_MAX`]. The cap keeps a
+/// press for a drag from being noticed more than that late.
 const POLL_RESTING_MIN: Duration = Duration::from_millis(100);
+const POLL_RESTING_MAX: Duration = Duration::from_millis(200);
 /// The time since the last input within which the user counts as at the
 /// controls. Longer than any wait for a drag at the edge ([`DRAG_DWELL`]),
 /// which needs a look every tick, and than any reveal dwell.
@@ -403,7 +406,7 @@ fn hidden_pause(idle: Duration, near_top: bool, dwell: Duration) -> Duration {
     match (idle < ACTIVE_FOR, near_top) {
         (true, true) => POLL_HIDDEN,
         (true, false) => POLL_FAR,
-        (false, _) => dwell.max(POLL_RESTING_MIN),
+        (false, _) => dwell.clamp(POLL_RESTING_MIN, POLL_RESTING_MAX),
     }
 }
 
@@ -532,8 +535,8 @@ mod tests {
     }
 
     #[test]
-    fn an_untouched_poller_looks_once_per_dwell_never_oftener_than_a_tenth_of_a_second() {
-        for (speed, wait) in SPEEDS.into_iter().zip([100, 250, 400]) {
+    fn an_untouched_poller_looks_once_per_dwell_within_a_tenth_to_a_fifth_of_a_second() {
+        for (speed, wait) in SPEEDS.into_iter().zip([100, 200, 200]) {
             for near_top in [true, false] {
                 assert_eq!(hidden_pause(ACTIVE_FOR, near_top, speed.dwell()), ms(wait));
             }
