@@ -43,9 +43,10 @@ const DRAG_DWELL: Duration = Duration::from_millis(220);
 const DRAG_JITTER: i32 = 8;
 /// How far below the monitor top still counts as "the very top", px.
 const EDGE_BAND: i32 = 2;
-/// Grace period once the pointer is outside the board's zone, so a brief
-/// overshoot does not tuck it.
-const LEAVE_DELAY: Duration = Duration::from_millis(250);
+// The grace period once the pointer is outside the board's zone is the
+// user's speed too ([`tack_core::RevealSpeed::leave_delay`]). Everything else
+// here is class C (see the policy on `RevealSpeed`): an input threshold, a
+// physical gesture's time or polling the system, which never scale.
 /// Slack around the board before the pointer counts as gone, CSS px.
 const LEAVE_MARGIN: f64 = 10.0;
 /// SHQueryUserNotificationState is not free; nobody notices half a second.
@@ -185,6 +186,7 @@ impl Poller {
         let mut pause = POLL_SHOWN;
         let action = host.with_view(|v, settings| {
             let edge_dwell = settings.reveal.dwell();
+            let leave_delay = settings.reveal.leave_delay();
             if let Some((fs, snipping)) = fullscreen {
                 v.fullscreen = fs;
                 v.snipping = snipping;
@@ -277,7 +279,9 @@ impl Poller {
                 // Not the taskbar: a click on the tray icon toggles the board
                 // itself when the button comes up, and tucking here on the way
                 // down would make it bounce straight back.
-                let clicked_outside = (left_pressed || right_pressed) && !over_board && !on_taskbar;
+                // Nor in Settings, which counts as outside the board but is
+                // what holds it down.
+                let clicked_outside = (left_pressed || right_pressed) && !over_board && !on_taskbar && !v.settings_open;
 
                 // The window covers the whole work area, and the drag loop
                 // drops on whatever window is under the pointer: off the
@@ -289,18 +293,24 @@ impl Poller {
                 }
 
                 let peeking = !v.entered && v.peek_until.is_some_and(|t| now < t);
-                let busy = held || self.press_inside || v.stay_open || peeking;
+                // Settings open: the board stays down (no leave, no peek end)
+                // for as long as it is.
+                let busy = held || self.press_inside || v.stay_open || peeking || v.settings_open;
 
                 // A full-screen app coming to the front sends the edge's and a
                 // new capture's board back up; Snipping Tool's overlay only
                 // the edge's, since a new capture's board may well come down
                 // while that overlay is still fading out.
                 let fullscreen_tucks = v.fullscreen
-                    && match v.reason {
+                    && (match v.reason {
                         RevealReason::Edge => true,
                         RevealReason::New => !v.snipping,
                         RevealReason::Hotkey | RevealReason::Tray => false,
-                    };
+                    }
+                        // A full-screen app wins over the Settings hold,
+                        // whoever revealed the board; the hold ends with the
+                        // tuck (but not for Snipping Tool's own overlay).
+                        || (v.settings_open && !v.snipping));
                 if (!held && clicked_outside) || (!held && fullscreen_tucks) {
                     if cfg!(debug_assertions) {
                         eprintln!(
@@ -316,7 +326,7 @@ impl Poller {
                     Action::None
                 } else {
                     let since = *self.away_since.get_or_insert(now);
-                    if now - since >= LEAVE_DELAY {
+                    if now - since >= leave_delay {
                         Action::Tuck
                     } else {
                         Action::None
