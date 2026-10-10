@@ -274,6 +274,7 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
         if !s.ui_ready {
             return;
         }
+        #[cfg(debug_assertions)]
         let scale = s.settings.reveal.motion_scale();
         let v = &mut s.view;
         // Explicit requests always win; the edge does not interrupt a full
