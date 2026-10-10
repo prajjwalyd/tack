@@ -3,12 +3,15 @@
 //   node scripts/felt/generate.mjs            write the three tiles (WebP, via headless Chrome)
 //   node scripts/felt/generate.mjs --png      write PNGs instead (no Chrome needed; larger)
 //   node scripts/felt/generate.mjs --out DIR  somewhere else (a preview, say)
-//   env: CHROME (path to chrome.exe), SIZES to experiment
+//   env: CHROME (path to chrome.exe); STRENGTH, MID, HIGHLIGHTS, K_LIGHT, K_DARK, ALPHA_STEP to experiment
 //
-// What it makes: seamless, NEUTRAL (mid-grey, mean 128) pictures of wool felt
-// that ui/styles/felt.css lays over the felt colour with soft-light, so one
-// set works on every colour. All three are drawn from scratch by simulating
-// the material (no photograph, nothing copied from anywhere):
+// What it makes: seamless pictures of wool felt that ui/styles/felt.css lays
+// over the felt colour with PLAIN alpha blending, so painting them costs no
+// more than painting an image (no blend mode, nothing read back), and one set
+// works on every colour. Each tile is white where the felt is lighter than
+// its colour and black where it is darker, with an alpha for how much. All
+// three are drawn from scratch by simulating the material (no photograph,
+// nothing copied from anywhere):
 //
 //   felt-fibre   a dense mat of short, randomly turned, slightly curved,
 //                soft-ended fibres, each a little lighter at its tip and
@@ -18,11 +21,11 @@
 //
 // Tiles wrap at their edges (every stroke is drawn modulo the tile), and are
 // drawn at 2x (the cloud, being soft, at 1x) so they stay crisp at 100-200 %
-// Windows scaling: the CSS shows each at half its pixel size. Their sizes in CSS pixels (256, 357, 193) share
-// no factor, so the three never line up and no repeat shows. Everything is
+// Windows scaling: the CSS shows each at half its pixel size. Their sizes in
+// CSS pixels (256, 357, 193) share no factor, so the three never line up and no repeat shows. Everything is
 // seeded: the same script always writes the same files.
 //
-// Dependency-free: Node 22 only. WebP comes from Chrome's canvas encoder
+// Dependency-free: Node 22 only. Lossless WebP (with alpha) comes from Chrome's canvas encoder
 // (CDP over the global WebSocket, as the demo renderer does).
 
 import { spawn } from "node:child_process";
@@ -169,6 +172,38 @@ const TILES = [
   { name: "felt-pile", css: 193, draw: pile },
 ];
 
+// The tiles are designed as a grey g laid on with soft-light (0.5 = no change),
+// then converted to what plain alpha can do. For a grey Cs over a colour c:
+//   soft-light, Cs < .5:   -(1 - 2Cs) c (1 - c)        black at alpha a:  -a c
+//   soft-light, Cs > .5:   +(2Cs - 1) (D(c) - c)       white at alpha a:  +a (1 - c)
+// (D is the W3C helper, ~ sqrt(c)), so the alphas are (1 - 2Cs) K_DARK and
+// (2Cs - 1) K_LIGHT, and the gains fit the soft-light result over the felt
+// colours the app can show (the presets, the accent and custom colours once
+// theme.js has kept them between luminance 0.012 and 0.12, in both themes),
+// weighted by each channel's luminance: least squares of the difference, per
+// channel, over those colours. They match where the felt's green is (the
+// channel that carries the luminance) to within a few percent, and the shade of
+// the texture can differ by up to about +/-30% on the extreme channels, which
+// is below what one sees.
+const ALPHA_STEP = +(process.env.ALPHA_STEP || 4);
+const K_LIGHT = +(process.env.K_LIGHT || 0.31), K_DARK = +(process.env.K_DARK || 0.67);
+
+/**
+ * Grey tile -> RGBA: white or black, with the alpha the plain blend needs.
+ * The alpha is rounded to steps of ALPHA_STEP (a step is under 4 grey levels
+ * of change in the felt, which a fibre's own noise hides) because the picture
+ * is stored lossless, and fewer levels make it a lot smaller.
+ */
+function overlay(grey) {
+  const out = new Uint8Array(grey.length * 4);
+  grey.forEach((g, i) => {
+    const u = (2 * g) / 255 - 1;
+    out.fill(u > 0 ? 255 : 0, i * 4, i * 4 + 3);
+    out[i * 4 + 3] = Math.round(255 * Math.abs(u) * (u > 0 ? K_LIGHT : K_DARK) / ALPHA_STEP) * ALPHA_STEP;
+  });
+  return out;
+}
+
 /** A greyscale picture at half its size (2 x 2 averages). */
 function halve(grey, S) {
   const n = S / 2, out = new Uint8Array(n * n);
@@ -177,13 +212,13 @@ function halve(grey, S) {
 }
 
 // ---- output ----
-function png(grey, S) {   // 8-bit greyscale PNG
+function png(rgba, S) {   // 8-bit RGBA PNG
   const crcT = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
   const crc = (b) => { let c = 0xffffffff; for (const x of b) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
   const chunk = (type, data) => { const b = Buffer.alloc(12 + data.length); b.writeUInt32BE(data.length, 0); b.write(type, 4, "ascii"); data.copy(b, 8); b.writeUInt32BE(crc(b.subarray(4, 8 + data.length)), 8 + data.length); return b; };
-  const head = Buffer.alloc(13); head.writeUInt32BE(S, 0); head.writeUInt32BE(S, 4); head[8] = 8; head[9] = 0;
-  const raw = Buffer.alloc((S + 1) * S);
-  for (let y = 0; y < S; y++) { raw[y * (S + 1)] = 0; Buffer.from(grey.buffer, y * S, S).copy(raw, y * (S + 1) + 1); }
+  const head = Buffer.alloc(13); head.writeUInt32BE(S, 0); head.writeUInt32BE(S, 4); head[8] = 8; head[9] = 6;
+  const raw = Buffer.alloc((S * 4 + 1) * S);
+  for (let y = 0; y < S; y++) { raw[y * (S * 4 + 1)] = 0; Buffer.from(rgba.buffer, y * S * 4, S * 4).copy(raw, y * (S * 4 + 1) + 1); }
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", head), chunk("IDAT", deflateSync(raw, { level: 9 })), chunk("IEND", Buffer.alloc(0))]);
 }
 
@@ -214,12 +249,12 @@ async function chromeWebp(pngs) {   // PNG buffers -> WebP buffers, by Chrome's 
     return out;
   } finally { proc.kill(); }
 }
-const WEBP_QUALITY = +(process.env.WEBP_QUALITY || 0.82);
+const WEBP_QUALITY = +(process.env.WEBP_QUALITY || 1);   // 1: lossless (the alpha is the picture; lossy colour only made it bigger)
 
 mkdirSync(OUT, { recursive: true });
 const greys = TILES.map((t) => ({ ...t, S: t.css * (t.scale || 2) }));
 for (const t of greys) t.grey = t.scale === 1 ? halve(t.draw(t.S * 2), t.S * 2) : t.draw(t.S);
-const pngs = greys.map((t) => png(t.grey, t.S));
+const pngs = greys.map((t) => png(overlay(t.grey), t.S));
 const files = AS_PNG ? pngs : await chromeWebp(pngs);
 greys.forEach((t, i) => {
   const path = join(OUT, `${t.name}.${AS_PNG ? "png" : "webp"}`);
