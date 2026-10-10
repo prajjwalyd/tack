@@ -131,24 +131,36 @@
   --note-size: 12px;         /* a note's text on the board */
   --sheet-size: 13px;        /* an unfolded note */
 
-  /* motion. --motion-scale: the Reveal speed setting (scripts/motion/scale.js), 1 for Normal. */
+  /* motion. --motion-scale: the Speed setting (scripts/motion/scale.js), 1 for
+     Normal. Every duration and delay here (and in the other board stylesheets)
+     is its Normal value times it: the policy, with the classes of what scales
+     and what does not, is the header of scripts/motion/scale.js, and
+     tests/ui/motion.test.js fails on a raw one. */
   --motion-scale: 1;
   --ease-out: cubic-bezier(.2, .8, .25, 1);
   --ease-reveal: cubic-bezier(.3, 1.25, .45, 1);  /* a swing a little past flat */
   --dur-reveal: calc(520ms * var(--motion-scale));
   --ease-tuck: cubic-bezier(.5, 0, .85, .35);     /* folds away, gathering speed */
-  --dur-tuck: calc(190ms * var(--motion-scale));  /* inside reveal.js's TUCK_MS */
+  --dur-tuck: calc(190ms * var(--motion-scale));  /* TUCK_MS in reveal.js and in tack-core's reveal_speed.rs */
   --ease-layout: cubic-bezier(.22, 1, .36, 1);
-  --dur-layout: 480ms;
+  --dur-layout: calc(480ms * var(--motion-scale));
   --ease-settle: cubic-bezier(.22, 1.2, .4, 1);
-  --dur-hover: 190ms;
-  --dur-hover-out: 260ms;
-  --dur-buttons: 140ms;
-  --delay-buttons: 120ms;
-  --dur-caption: 170ms;
-  --dur-press: 520ms;        /* the press-and-hold (HOLD_MS in gestures.js) */
-  --dur-fade: 220ms;
-  --dur-fade-edge: 180ms;    /* scroll masks */
+  --dur-hover: calc(190ms * var(--motion-scale));
+  --dur-hover-out: calc(260ms * var(--motion-scale));
+  --dur-buttons: calc(140ms * var(--motion-scale));
+  --delay-buttons: calc(120ms * var(--motion-scale));
+  --dur-caption: calc(170ms * var(--motion-scale));
+  --dur-press: 520ms;        /* the press-and-hold (HOLD_MS in gestures.js): a physical gesture time, never scaled */
+  --dur-fade: calc(220ms * var(--motion-scale));
+  --dur-fade-edge: calc(180ms * var(--motion-scale));    /* scroll masks */
+  --dur-tap: calc(80ms * var(--motion-scale));           /* a button pressed */
+  --dur-quick: calc(120ms * var(--motion-scale));
+  --dur-short: calc(160ms * var(--motion-scale));
+  --dur-soft: calc(180ms * var(--motion-scale));
+  --dur-lean: calc(220ms * var(--motion-scale));         /* a hovered print leaning toward the pointer */
+  --dur-peel: calc(260ms * var(--motion-scale));         /* a print peeling off as a drag starts, the hint card scaling in */
+  --delay-peel: calc(140ms * var(--motion-scale));
+  --dur-cue: calc(200ms * var(--motion-scale));          /* the drop label, a pressed print's rotation */
 
   font-family: var(--font-ui);
 }

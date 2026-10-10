@@ -48,13 +48,13 @@
   rotate: var(--lean, 0deg);
   transition:
     transform var(--dur-hover) var(--ease-out),
-    rotate 220ms var(--ease-out),
+    rotate var(--dur-lean) var(--ease-out),
     opacity var(--dur-fade) ease;
 }
 .slot.pressing .card {
   transform: translateY(0) rotate(calc(var(--tilt) * .2)) scale(.97);
   rotate: none;
-  transition: transform var(--dur-press) cubic-bezier(.3, 0, .2, 1), rotate 200ms ease, opacity var(--dur-fade) ease;
+  transition: transform var(--dur-press) cubic-bezier(.3, 0, .2, 1), rotate var(--dur-cue) ease, opacity var(--dur-fade) ease;
 }
 /* Drag start: the print peels off the felt from its free edge, then waits faintly. */
 .slot.dragging .card {
@@ -62,9 +62,9 @@
   transform: translateY(-3px) rotate(calc(var(--tilt) * .2));
   rotate: x 16deg;
   transition:
-    transform 260ms var(--ease-out),
-    rotate 260ms var(--ease-out),
-    opacity 220ms ease 140ms;
+    transform var(--dur-peel) var(--ease-out),
+    rotate var(--dur-peel) var(--ease-out),
+    opacity var(--dur-fade) ease var(--delay-peel);
 }
 /* The curl's shading; present only while dragging so resting prints carry no extra layer. */
 .slot.dragging .card::after {
@@ -75,7 +75,7 @@
   background: linear-gradient(180deg, transparent 35%, rgba(0, 16, 8, .10) 80%, rgba(0, 16, 8, .18));
   pointer-events: none;
   z-index: 2;
-  animation: curl-in 160ms ease backwards;
+  animation: curl-in var(--dur-short) ease backwards;
 }
 @keyframes curl-in { from { opacity: 0; } }
 
@@ -105,7 +105,7 @@
 }
 .slot.hover .shade { opacity: 1; transition-duration: var(--dur-hover); }
 .slot.pressing .shade { opacity: 0; transition-duration: var(--dur-press); }
-.slot.dragging .shade { opacity: 1; transform: translateY(5px) scale(1.02); transition: opacity 160ms ease, transform 260ms var(--ease-out); }
+.slot.dragging .shade { opacity: 1; transform: translateY(5px) scale(1.02); transition: opacity var(--dur-short) ease, transform var(--dur-peel) var(--ease-out); }
 
 .paper {
   position: absolute;
@@ -155,10 +155,10 @@
   background: linear-gradient(118deg, transparent 28%, rgba(255, 255, 255, .07) 40%, var(--photo-glare) 49%, rgba(255, 255, 255, .1) 56%, transparent 68%);
   opacity: 0;
   transform: translate(calc(var(--sheen-x, 0) * 16%), calc(var(--sheen-y, -0.7) * 16%));
-  transition: opacity var(--dur-hover-out) ease, transform 160ms var(--ease-out);
+  transition: opacity var(--dur-hover-out) ease, transform var(--dur-short) var(--ease-out);
   pointer-events: none;
 }
-.slot.hover:not(.pressing) .photo::before { opacity: 1; transition: opacity var(--dur-hover) ease, transform 160ms var(--ease-out); }
+.slot.hover:not(.pressing) .photo::before { opacity: 1; transition: opacity var(--dur-hover) ease, transform var(--dur-short) var(--ease-out); }
 
 .btn {
   position: absolute;
@@ -181,8 +181,8 @@
   transition:
     opacity var(--dur-buttons) ease,
     transform var(--dur-buttons) var(--ease-out),
-    background-color 120ms ease,
-    color 120ms ease;
+    background-color var(--dur-quick) ease,
+    color var(--dur-quick) ease;
   pointer-events: none;
   z-index: 3;
 }
@@ -199,8 +199,8 @@
 }
 .slot.hover .btn:hover { background: var(--button-bg-hover); }
 .slot.hover .btn.x:hover { color: var(--button-ink-danger); }
-.slot.hover .btn:active { transform: scale(.88); transition-duration: 80ms; transition-delay: 0s; }
-.keep .fill { fill: transparent; transition: fill 160ms ease; }
+.slot.hover .btn:active { transform: scale(.88); transition-duration: var(--dur-tap); transition-delay: 0s; }
+.keep .fill { fill: transparent; transition: fill var(--dur-short) ease; }
 .slot.kept .keep { color: var(--button-ink-kept); }
 .slot.kept .keep .fill { fill: currentColor; }
 
@@ -217,7 +217,7 @@
   white-space: nowrap;
   opacity: 0;
   transform: translateY(-2px);
-  transition: opacity 120ms ease, transform 120ms ease;
+  transition: opacity var(--dur-quick) ease, transform var(--dur-quick) ease;
   pointer-events: none;
 }
 .slot.hover:not(.dragging) .caption {

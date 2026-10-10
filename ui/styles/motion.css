@@ -4,10 +4,10 @@
    scroll smoothing and pointer tilt (state.reduced). Loaded last so it wins. */
 
 @media (prefers-reduced-motion: reduce) {
-  #board { transition: transform 160ms ease-out; }
+  #board { transition: transform var(--dur-short) ease-out; }
   #board.tucked {
     transform: translateY(calc(-100% - 24px));
-    transition: transform 140ms ease-in;
+    transition: transform calc(140ms * var(--motion-scale)) ease-in;
   }
   #board::after { display: none; }
   .slot.arriving .pin::before,
@@ -17,7 +17,7 @@
   .card, .slot.hover .card, .slot.pressing .card, .slot.dragging .card {
     transform: rotate(var(--tilt));
     rotate: none;
-    transition: opacity 150ms ease;
+    transition: opacity calc(150ms * var(--motion-scale)) ease;
   }
   .photo::before { display: none; }
   .slot.dragging .shade { transform: none; }
