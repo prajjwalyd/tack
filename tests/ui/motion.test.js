@@ -24,10 +24,10 @@ const root = fileURLToPath(new URL("../../", import.meta.url));
 
 // ---- what is not the board's motion ---------------------------------------
 
-/** Files that are not the board: the dialog windows keep their own fixed, native-feeling control timings and never load the board's speed (scripts/motion/scale.js). */
+/** Files that are not the board: the Settings window keeps its own fixed, native-feeling control timings and never load the board's speed (scripts/motion/scale.js). */
 const NOT_THE_BOARD = [
-  /^ui\/styles\/(dialog|settings|shortcuts|phone-link|phone|switch)\.css$/,
-  /^ui\/scripts\/(dialog|shortcuts|phone-link|phone-icon)\.js$/,
+  /^ui\/styles\/(dialog|settings|shortcuts|phone|switch)\.css$/,
+  /^ui\/scripts\/(dialog|shortcuts|phone-icon)\.js$/,
   /^ui\/scripts\/settings\//,
 ];
 

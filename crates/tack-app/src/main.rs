@@ -19,7 +19,6 @@ macro_rules! trace {
 
 mod captures;
 mod context_menu;
-mod dialogs;
 mod drag;
 mod ipc;
 mod keyboard;
@@ -101,7 +100,6 @@ fn main() {
                 commands::update_status,
                 commands::check_for_updates,
                 commands::install_update,
-                commands::open_phone_link,
                 commands::close_settings,
                 commands::shortcuts_state,
                 commands::set_shortcuts,
@@ -111,7 +109,6 @@ fn main() {
                 commands::answer_device,
                 commands::forget_device,
                 commands::open_netbird_download,
-                commands::close_phone_link,
                 $($extra),*
             ]
         };

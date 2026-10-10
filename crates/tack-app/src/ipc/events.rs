@@ -141,15 +141,13 @@ pub fn updates_status(app: &AppHandle, status: &crate::updates::UpdateStatus) {
 }
 
 /// The Settings window is already open and is asked to show `section` (an id
-/// from `settings_window::SECTIONS`).
+/// from `settings_window::SECTIONS`: the phone page, or a group of the list).
 pub fn settings_section(app: &AppHandle, section: &str) {
     let _ = app.emit_to(crate::settings_window::LABEL, SETTINGS_SECTION, section);
 }
 
-/// The phone state changed (see `phone::PhoneState`): the phone window and
-/// the phone card in Settings show it.
+/// The phone state changed (see `phone::PhoneState`): the phone card and the
+/// phone page of the Settings window show it.
 pub fn phone_state(app: &AppHandle, state: &crate::phone::PhoneState) {
-    for label in [crate::phone::window::LABEL, crate::settings_window::LABEL] {
-        let _ = app.emit_to(label, PHONE_STATE, state);
-    }
+    let _ = app.emit_to(crate::settings_window::LABEL, PHONE_STATE, state);
 }

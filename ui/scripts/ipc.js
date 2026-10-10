@@ -2,7 +2,7 @@
 // touches window.__TAURI__: commands go out through the wrappers below,
 // events come in through `on`. The Rust side is crates/tack-app/src/ipc/.
 // Every webview uses it: the board (main.js), the settings window
-// (settings/main.js) and the phone window (phone-link.js).
+// (settings/main.js, with the phone page).
 
 /** Event names, backend -> UI. Mirrors crates/tack-app/src/ipc/events.rs. */
 export const EVENTS = Object.freeze({
@@ -12,7 +12,7 @@ export const EVENTS = Object.freeze({
   PRINT_COPIED: "board:print-copied",        // { id }
   PRINT_DRAGGING: "board:print-dragging",    // { id }
   PRINT_DRAG_ENDED: "board:print-drag-ended",// { id }
-  REVEAL: "board:reveal",                    // { reason: "edge" | "hotkey" | "new" | "tray", motionScale: number } the speed as it is now, applied before anything moves
+  REVEAL: "board:reveal",                    // { reason: "edge" | "hotkey" | "new" | "tray" | "settings", motionScale: number } the speed as it is now, applied before anything moves
   TUCK: "board:tuck",                        // none
   WARM_UP: "board:warm-up",                  // none: draw the board once, unseen (startup)
   GUST: "board:gust",                        // none
@@ -20,9 +20,9 @@ export const EVENTS = Object.freeze({
   POINTER_LEFT: "board:pointer-left",        // none: the window went click-through
   ORDER_CHANGED: "board:order-changed",      // { ids: string[] } the whole row, display order
   NOTICE: "board:notice",                    // { text: string } a short message under the board
-  PHONE_STATE: "phone:state",                // PhoneState (phone-link.js), whenever it changes
+  PHONE_STATE: "phone:state",                // PhoneState (settings/pages/phone.js), whenever it changes
   UPDATES_STATUS: "updates:status",          // UpdateStatus, whenever the update check or install moves on
-  SETTINGS_SECTION: "settings:section",      // string: an open Settings window is asked to show that section ("phone", "appearance", "shortcuts", "updates")
+  SETTINGS_SECTION: "settings:section",      // string: an open Settings window is asked to show that page or section ("phone", "appearance", "shortcuts", "updates")
 });
 
 /** Command names, UI -> backend. Mirrors crates/tack-app/src/ipc/commands.rs. */
@@ -57,19 +57,17 @@ export const COMMANDS = Object.freeze({
   UPDATE_STATUS: "update_status",
   CHECK_FOR_UPDATES: "check_for_updates",
   INSTALL_UPDATE: "install_update",
-  OPEN_PHONE_LINK: "open_phone_link",
   CLOSE_SETTINGS: "close_settings",
   // The Shortcuts section of the Settings page.
   SHORTCUTS_STATE: "shortcuts_state",
   SET_SHORTCUTS: "set_shortcuts",
   PAUSE_SHORTCUTS: "pause_shortcuts",
-  // The phone window (its own small window).
+  // The phone page of the Settings window.
   PHONE_STATE: "phone_state",
   SET_PHONE: "set_phone",
   ANSWER_DEVICE: "answer_device",
   FORGET_DEVICE: "forget_device",
   OPEN_NETBIRD_DOWNLOAD: "open_netbird_download",
-  CLOSE_PHONE_LINK: "close_phone_link",
 });
 
 /**
@@ -204,7 +202,6 @@ export const updateStatus = () => invoke(COMMANDS.UPDATE_STATUS);
 export const checkForUpdates = () => invoke(COMMANDS.CHECK_FOR_UPDATES);
 /** Downloads and installs the version found. @returns {Promise<UpdateStatus | null>} */
 export const installUpdate = () => invoke(COMMANDS.INSTALL_UPDATE);
-export const openPhoneLink = () => invoke(COMMANDS.OPEN_PHONE_LINK);
 export const closeSettings = () => invoke(COMMANDS.CLOSE_SETTINGS);
 
 /**
@@ -222,13 +219,12 @@ export const setShortcuts = (toggle, pin) => invoke(COMMANDS.SET_SHORTCUTS, { to
 /** While a chord is being captured, Tack's own hotkeys must not fire. */
 export const pauseShortcuts = (paused) => invoke(COMMANDS.PAUSE_SHORTCUTS, { paused });
 
-// The phone window. Each answers with the new PhoneState (phone-link.js).
+// The phone page. Each answers with the new PhoneState (settings/pages/phone.js).
 export const phoneState = () => invoke(COMMANDS.PHONE_STATE);
 export const setPhone = (on) => invoke(COMMANDS.SET_PHONE, { on });
 export const answerDevice = (key, allow) => invoke(COMMANDS.ANSWER_DEVICE, { key, allow });
 export const forgetDevice = (key) => invoke(COMMANDS.FORGET_DEVICE, { key });
 export const openNetbirdDownload = () => invoke(COMMANDS.OPEN_NETBIRD_DOWNLOAD);
-export const closePhoneLink = () => invoke(COMMANDS.CLOSE_PHONE_LINK);
 
 /** Debug builds only: tells the backend's stress test what the page just did ("reveal", "pin-on", "tock"). No-op unless `window.__tackDebug` is set. */
 export function debugAck(what, { id = null, queued = null } = {}) {

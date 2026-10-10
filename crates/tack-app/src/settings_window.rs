@@ -1,14 +1,21 @@
-//! The Settings window (`ui/settings.html`): the phone card, the switches from
-//! the tray, reveal speed, board colour, the shortcuts and updates. Created
-//! while open, like the other dialogs; every change goes through
-//! [`crate::settings_apply`].
+//! The Settings window (`ui/settings.html`): a list (the phone card, the
+//! switches from the tray, reveal speed, board colour, the shortcuts and
+//! updates) and the phone page the card opens in place. Created while open;
+//! every change goes through [`crate::settings_apply`].
+//!
+//! It shares the board's WebView2 runtime: the same data folder, and the same
+//! browser arguments (a second set would not be allowed to share it, and they
+//! keep it off the network too).
 
 use tack_core::view::STRIP_H;
 use tack_core::Rect;
-use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent};
+use tauri::{
+    AppHandle, Manager, PhysicalPosition, PhysicalSize, UserAttentionType, WebviewUrl, WebviewWindow,
+    WebviewWindowBuilder, WindowEvent,
+};
 
 use crate::ipc::events;
-use crate::{dialogs, reveal, shortcuts};
+use crate::{reveal, shortcuts, webview_privacy};
 
 pub const LABEL: &str = "settings";
 const PAGE: &str = "settings.html";
@@ -25,12 +32,12 @@ const GAP: f64 = 16.0;
 /// px; the page scrolls inside it.
 const MIN_HEIGHT: f64 = 420.0;
 
-/// The sections the page can be opened at: the ids of its groups
-/// (`ui/scripts/settings/main.js`).
+/// The ids the window can be opened at (`ui/scripts/settings/router.js`):
+/// "phone" is the phone page, the others are the groups of the list.
 pub const SECTIONS: [&str; 4] = ["phone", "appearance", "shortcuts", "updates"];
 
-/// The page to load, scrolled to `section` (the page reads its `#hash`). A
-/// section the page does not have is left off.
+/// The page to load, at `section` (the page reads its `#hash`). A section the
+/// page does not have is left off.
 fn page_for(section: Option<&str>) -> String {
     match section.filter(|s| SECTIONS.contains(s)) {
         Some(section) => format!("{PAGE}#{section}"),
@@ -57,25 +64,69 @@ pub fn open(app: &AppHandle, section: Option<&str>) {
         }
         return;
     }
-    match dialogs::open_hidden(app, LABEL, &page_for(section), TITLE, SIZE) {
+    if let Err(e) = build(app, section, true) {
+        eprintln!("tack: cannot open the Settings window: {e}");
+    }
+}
+
+/// A device asks to use the board: Settings shows the question on its phone
+/// page without taking the keyboard, so a key the user was about to press can
+/// never answer it, and without holding the board (it has no focus). A window
+/// that is already open stays on the page it is on, and flashes in the
+/// taskbar. Not from the event loop's own thread.
+pub fn device_asks(app: &AppHandle) {
+    let window = match app.get_webview_window(LABEL) {
+        Some(window) => Ok(window),
+        None => build(app, Some("phone"), false),
+    };
+    match window {
         Ok(window) => {
-            let handle = app.clone();
-            // Before it shows, so the first focus is not missed.
-            window.on_window_event(move |event| match event {
-                WindowEvent::Focused(focused) => reveal::hold_for_settings(&handle, *focused),
-                WindowEvent::Destroyed => {
-                    // Closed while a shortcut was listening: the hotkeys come back.
-                    shortcuts::pause(false);
-                    reveal::hold_for_settings(&handle, false);
-                }
-                _ => {}
-            });
-            place(app, &window);
-            let _ = window.show();
-            let _ = window.set_focus();
+            let _ = window.request_user_attention(Some(UserAttentionType::Informational));
         }
         Err(e) => eprintln!("tack: cannot open the Settings window: {e}"),
     }
+}
+
+/// Builds the window under the board at `section`, with the keyboard focus if
+/// `focus`. One built without it is shown where it is created and then moved
+/// (a window made hidden would take the focus when shown); the focused one is
+/// made hidden, placed and then shown.
+fn build(app: &AppHandle, section: Option<&str>, focus: bool) -> tauri::Result<WebviewWindow> {
+    let board = app.config().app.windows.iter().find(|w| w.label == reveal::WINDOW_LABEL).cloned();
+    let mut builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App(page_for(section).into()))
+        .title(TITLE)
+        .inner_size(SIZE.0, SIZE.1)
+        .resizable(false)
+        .maximizable(false)
+        .minimizable(false)
+        .center()
+        .focused(focus)
+        .visible(!focus);
+    if let Some(dir) = reveal::webview_data_dir(app) {
+        builder = builder.data_directory(dir);
+    }
+    if let Some(args) = board.and_then(|w| w.additional_browser_args) {
+        builder = builder.additional_browser_args(&args);
+    }
+    let window = builder.build()?;
+    webview_privacy::apply_to(&window);
+    let handle = app.clone();
+    // Before it shows, so the first focus is not missed.
+    window.on_window_event(move |event| match event {
+        WindowEvent::Focused(focused) => reveal::hold_for_settings(&handle, *focused),
+        WindowEvent::Destroyed => {
+            // Closed while a shortcut was listening: the hotkeys come back.
+            shortcuts::pause(false);
+            reveal::hold_for_settings(&handle, false);
+        }
+        _ => {}
+    });
+    place(app, &window);
+    if focus {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+    Ok(window)
 }
 
 /// Where the window goes: on the monitor the board is down on, centred

@@ -19,7 +19,6 @@
 mod http;
 mod routes;
 pub mod server;
-pub mod window;
 
 use std::collections::hash_map::RandomState;
 use std::hash::BuildHasher;
@@ -34,6 +33,7 @@ use tack_windows::netbird;
 use tauri::AppHandle;
 
 use crate::ipc::events;
+use crate::settings_window;
 use crate::state::lock;
 
 /// The port the board is served on, on the NetBird address.
@@ -48,7 +48,7 @@ pub const NETBIRD_INSTALL: &str = "https://docs.netbird.io/get-started/install";
 const WATCH_WAITING: Duration = Duration::from_secs(15);
 const WATCH_SERVING: Duration = Duration::from_secs(60);
 
-/// NetBird on this PC, as the window describes it.
+/// NetBird on this PC, as the page describes it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum NetBirdState {
@@ -57,7 +57,7 @@ pub enum NetBirdState {
     Connected,
 }
 
-/// What the "Tack on your phone" window shows.
+/// What the phone card and the phone page of Settings show.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PhoneState {
@@ -165,8 +165,8 @@ fn reconcile(app: &AppHandle) {
     }
 }
 
-/// The window's state. Looks NetBird up when the switch is off, so the
-/// window can say what turning it on would need.
+/// The page's state. Looks NetBird up when the switch is off, so the page can
+/// say what turning it on would need.
 pub fn state(app: &AppHandle) -> PhoneState {
     if !lock(app).settings.phone.on {
         phone().netbird = netbird_state(netbird::status().as_ref());
@@ -272,7 +272,7 @@ fn decide(app: &AppHandle, peer: &Peer, rule: Rule) -> Verdict {
     if matches!(verdict, Verdict::Waiting { asked: true, .. }) {
         trace!("phone: a device asks to use the board");
         events::phone_state(app, &state_now(app));
-        window::ask(app);
+        settings_window::device_asks(app);
     }
     verdict
 }
@@ -284,7 +284,7 @@ fn fresh_code() -> String {
     format!("{:04}", RandomState::new().hash_one(SystemTime::now()) % 10_000)
 }
 
-/// A QR code for `address`, as SVG markup for the window.
+/// A QR code for `address`, as SVG markup for the page.
 fn qr_svg(address: &str) -> Option<String> {
     let code = qrcode::QrCode::new(address.as_bytes()).ok()?;
     Some(

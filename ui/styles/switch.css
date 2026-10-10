@@ -1,4 +1,4 @@
-/* The on/off switch of the dialog windows (phone-link.html, settings.html): a
+/* The on/off switch of the Settings window and its phone page (settings.html): a
    row that is the whole control, as in Windows Settings. Markup:
      <button class="switch" role="switch" aria-checked="false">
        <span>Label</span>                  (or a .switch-text with a .switch-desc under the label)

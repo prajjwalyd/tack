@@ -1,4 +1,4 @@
-// The phone glyph of the phone window's header (phone-link.js) and of the
+// The phone glyph of the phone page (settings/pages/phone.js) and of the
 // phone card at the top of Settings (settings/sections/phone.js): one picture,
 // so the two always match. Drawn on a 32 px grid and centred on it: the body,
 // a faint screen tint, the speaker slot and the home bar. It takes its colour

@@ -281,25 +281,18 @@ pub async fn install_update(app: AppHandle) -> UpdateStatus {
     blocking(move || updates::install(&app)).await
 }
 
-/// The phone card's button in the Settings window. Async: building a window
-/// waits for the event loop, which runs plain commands.
-#[tauri::command]
-pub async fn open_phone_link(app: AppHandle) {
-    blocking(move || phone::window::open(&app)).await
-}
-
 #[tauri::command]
 pub async fn close_settings(app: AppHandle) {
     settings_window::close(&app);
 }
 
-/// The phone window opens. Async: it may ask NetBird how it is.
+/// The phone card or page opens. Async: it may ask NetBird how it is.
 #[tauri::command]
 pub async fn phone_state(app: AppHandle) -> PhoneState {
     blocking(move || phone::state(&app)).await
 }
 
-/// The phone window's switch.
+/// The phone page's switch.
 #[tauri::command]
 pub async fn set_phone(app: AppHandle, on: bool) -> PhoneState {
     blocking(move || phone::set_on(&app, on)).await
@@ -321,9 +314,4 @@ pub async fn forget_device(app: AppHandle, key: String) -> PhoneState {
 #[tauri::command]
 pub fn open_netbird_download() {
     tack_windows::shell::open_url(phone::NETBIRD_INSTALL);
-}
-
-#[tauri::command]
-pub async fn close_phone_link(app: AppHandle) {
-    phone::window::close(&app);
 }

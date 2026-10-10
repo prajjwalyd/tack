@@ -26,7 +26,6 @@
   --on-accent: light-dark(#ffffff, #000000);
   --warn: light-dark(#9d5d00, #fce100);
   --ok: light-dark(#0f7b0f, #6ccb5f);
-  --footer: light-dark(rgba(0, 0, 0, .022), rgba(0, 0, 0, .16));
   --focus-outer: light-dark(rgba(0, 0, 0, .9), #ffffff);
   --focus-inner: light-dark(#ffffff, rgba(0, 0, 0, .7));
   --font: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
@@ -55,14 +54,6 @@ body {
   border-radius: 6px;
   background: var(--card);
   box-shadow: 0 0 0 1px var(--card-edge);
-}
-
-/* ---- footer ---- */
-footer {
-  display: flex;
-  align-items: center;
-  background: var(--footer);
-  border-top: 1px solid var(--divider);
 }
 
 /* ---- buttons ---- */
@@ -135,5 +126,4 @@ button { font: inherit; }
   .std.accent { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; }
   .text { color: LinkText; }
   .std:focus-visible, .text:focus-visible { outline: 2px solid Highlight; box-shadow: none; }
-  footer { border-top: 1px solid CanvasText; }
 }
