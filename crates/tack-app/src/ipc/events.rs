@@ -22,7 +22,7 @@ pub const TUCK: &str = "board:tuck";
 pub const WARM_UP: &str = "board:warm-up";
 // `board:gust` is in the contract but only the preview harness sends it; the
 // UI schedules its own gusts.
-pub const SETTINGS: &str = "board:settings";
+pub const SETTINGS_CHANGED: &str = "settings:changed";
 pub const POINTER_LEFT: &str = "board:pointer-left";
 pub const NOTICE: &str = "board:notice";
 pub const PHONE_STATE: &str = "phone:state";
@@ -103,8 +103,10 @@ pub fn warm_up(app: &AppHandle) {
     let _ = app.emit(WARM_UP, ());
 }
 
-pub fn settings(app: &AppHandle, sound: bool) {
-    let _ = app.emit(SETTINGS, json!({ "sound": sound }));
+/// A setting changed, from the tray or the Settings window: every window
+/// gets all of them (see `settings_apply`).
+pub fn settings_changed(app: &AppHandle, view: &crate::settings_apply::SettingsView) {
+    let _ = app.emit(SETTINGS_CHANGED, view);
 }
 
 pub fn pointer_left(app: &AppHandle) {

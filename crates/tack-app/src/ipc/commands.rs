@@ -12,9 +12,10 @@ use tauri::AppHandle;
 
 use crate::ipc::events::Removal;
 use crate::phone::{self, PhoneState};
+use crate::settings_apply::{self, SettingsView};
 use crate::shortcuts::{self, DialogState, Pair};
 use crate::state::lock;
-use crate::{context_menu, drag, keyboard, notes, prints, reveal};
+use crate::{context_menu, drag, keyboard, notes, prints, reveal, settings_window};
 
 /// Runs `job` on the async runtime's blocking pool and waits for it there,
 /// so a slow body never ties up one of the few async workers.
@@ -31,16 +32,21 @@ async fn blocking<T: Send + 'static>(job: impl FnOnce() -> T + Send + 'static) -
 pub struct Ready {
     prints: Vec<Print>,
     sound: bool,
+    /// All the settings, so the board starts with its colour and motion.
+    settings: SettingsView,
 }
 
 /// The UI has loaded and listens for events. Returns the prints already
 /// pinned, in row order (restored ones may still be arriving as events).
 #[tauri::command]
 pub fn board_ready(app: AppHandle) -> Ready {
-    let mut s = lock(&app);
-    // From here on every change reaches the UI as an event.
-    s.ui_ready = true;
-    Ready { prints: s.board.prints().to_vec(), sound: s.settings.sound }
+    let (prints, sound) = {
+        let mut s = lock(&app);
+        // From here on every change reaches the UI as an event.
+        s.ui_ready = true;
+        (s.board.prints().to_vec(), s.settings.sound)
+    };
+    Ready { prints, sound, settings: settings_apply::view(&app) }
 }
 
 /// Where the board is, in physical px relative to the window, for
@@ -194,6 +200,65 @@ pub async fn pause_shortcuts(paused: bool) {
 #[tauri::command]
 pub async fn close_shortcuts(app: AppHandle) {
     shortcuts::close_dialog(&app);
+}
+
+/// The Settings window opens: every setting.
+#[tauri::command]
+pub fn settings_state(app: AppHandle) -> SettingsView {
+    settings_apply::view(&app)
+}
+
+/// The settings below each save, update the tray and send `settings:changed`
+/// to every window; each answers with the new settings. They are quick, so
+/// plain commands.
+#[tauri::command]
+pub fn set_sound(app: AppHandle, on: bool) -> SettingsView {
+    settings_apply::set_sound(&app, on)
+}
+
+#[tauri::command]
+pub fn set_edge_reveal(app: AppHandle, on: bool) -> SettingsView {
+    settings_apply::set_edge_reveal(&app, on)
+}
+
+#[tauri::command]
+pub fn set_autostart(app: AppHandle, on: bool) -> SettingsView {
+    settings_apply::set_autostart(&app, on)
+}
+
+/// "instant", "fast" or "normal"; anything else changes nothing.
+#[tauri::command]
+pub fn set_reveal(app: AppHandle, speed: String) -> SettingsView {
+    settings_apply::set_reveal(&app, &speed)
+}
+
+/// A preset's id, "accent" or "#rrggbb"; anything else changes nothing.
+#[tauri::command]
+pub fn set_felt(app: AppHandle, value: String) -> SettingsView {
+    settings_apply::set_felt(&app, &value)
+}
+
+#[tauri::command]
+pub fn set_updates_check(app: AppHandle, on: bool) -> SettingsView {
+    settings_apply::set_updates_check(&app, on)
+}
+
+/// "Shortcuts…" in the Settings window. Async: building a window waits for
+/// the event loop, which runs plain commands.
+#[tauri::command]
+pub async fn open_shortcuts(app: AppHandle) {
+    blocking(move || shortcuts::open_dialog(&app)).await
+}
+
+/// "Use on your phone…" in the Settings window.
+#[tauri::command]
+pub async fn open_phone_link(app: AppHandle) {
+    blocking(move || phone::window::open(&app)).await
+}
+
+#[tauri::command]
+pub async fn close_settings(app: AppHandle) {
+    settings_window::close(&app);
 }
 
 /// The phone window opens. Async: it may ask NetBird how it is.

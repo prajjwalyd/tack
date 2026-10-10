@@ -28,6 +28,8 @@ mod phone;
 mod prints;
 mod reveal;
 mod screenshot_files;
+mod settings_apply;
+mod settings_window;
 mod shortcuts;
 mod state;
 #[cfg(debug_assertions)]
@@ -85,6 +87,16 @@ fn main() {
                 commands::take_focus,
                 commands::release_focus,
                 commands::hide_board,
+                commands::settings_state,
+                commands::set_sound,
+                commands::set_edge_reveal,
+                commands::set_autostart,
+                commands::set_reveal,
+                commands::set_felt,
+                commands::set_updates_check,
+                commands::open_shortcuts,
+                commands::open_phone_link,
+                commands::close_settings,
                 commands::shortcuts_state,
                 commands::set_shortcuts,
                 commands::pause_shortcuts,

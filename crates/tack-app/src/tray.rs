@@ -1,6 +1,8 @@
 //! The notification area icon and its menu. A left click toggles the board.
-//! If a shortcut could not be registered (another app has it), the menu says
-//! so and offers to change it; the menu is rebuilt whenever that changes.
+//! The menu's switches are settings, changed through `settings_apply` like the
+//! Settings window's, so the two always agree. If a shortcut could not be
+//! registered (another app has it), the menu says so and offers to change it;
+//! the menu is rebuilt whenever that changes.
 //!
 //! The icon comes in a light-taskbar and a dark-taskbar version and follows
 //! `SystemUsesLightTheme` (the taskbar's theme, not the apps').
@@ -20,11 +22,11 @@ use windows::Win32::System::Registry::{
     REG_NOTIFY_CHANGE_LAST_SET, RRF_RT_REG_DWORD,
 };
 
-use crate::ipc::events;
 use crate::state::{self, lock};
-use crate::{phone, prints, reveal, shortcuts};
+use crate::{phone, prints, reveal, settings_apply, settings_window, shortcuts};
 
-/// The check items, kept to read and set their state when clicked.
+/// The check items, kept to set their state when a setting changes.
+#[derive(Clone)]
 pub struct TrayItems {
     edge: CheckMenuItem<Wry>,
     sound: CheckMenuItem<Wry>,
@@ -51,6 +53,7 @@ fn menu(app: &AppHandle) -> tauri::Result<(Menu<Wry>, TrayItems)> {
     let sound = CheckMenuItem::with_id(app, "tray:sound", "Sound", true, settings.sound, None::<&str>)?;
     let autostart =
         CheckMenuItem::with_id(app, "tray:autostart", "Start with Windows", true, autostart::enabled(), None::<&str>)?;
+    let settings_item = MenuItem::with_id(app, "tray:settings", "Settings\u{2026}", true, None::<&str>)?;
     let keys = MenuItem::with_id(app, "tray:shortcuts", "Shortcuts\u{2026}", true, None::<&str>)?;
     let phone = MenuItem::with_id(app, "tray:phone", "Use on your phone\u{2026}", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "tray:quit", "Quit Tack", true, None::<&str>)?;
@@ -63,6 +66,7 @@ fn menu(app: &AppHandle) -> tauri::Result<(Menu<Wry>, TrayItems)> {
             &clear,
             &folder,
             &PredefinedMenuItem::separator(app)?,
+            &settings_item,
             &edge,
             &sound,
             &autostart,
@@ -110,6 +114,18 @@ pub fn refresh(app: &AppHandle) {
         }
         Err(e) => eprintln!("tack: cannot rebuild the tray menu: {e}"),
     }
+}
+
+/// Sets the check marks to the settings as they are now: after a change from
+/// the Settings window, or one that did not take (Start with Windows).
+pub fn sync_checks(app: &AppHandle) {
+    let settings = lock(app).settings.clone();
+    // A copy, so the items' lock is not held while they change: that waits for
+    // the UI thread, which may be rebuilding the menu and want the lock.
+    let Some(items) = app.state::<Items>().lock().unwrap_or_else(|p| p.into_inner()).clone() else { return };
+    let _ = items.edge.set_checked(settings.edge_reveal);
+    let _ = items.sound.set_checked(settings.sound);
+    let _ = items.autostart.set_checked(autostart::enabled());
 }
 
 const PERSONALIZE: PCWSTR = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize");
@@ -177,9 +193,15 @@ fn follow_taskbar_theme(app: AppHandle) {
     });
 }
 
-/// Menu clicks with a `tray:` id. The check state is set explicitly, so it is
-/// right whether or not the menu already flipped it.
+/// Menu clicks with a `tray:` id. A switch changes through `settings_apply`,
+/// which sets its check mark whether or not the menu already flipped it.
 pub fn handle(app: &AppHandle, id: &str) {
+    if id == "tray:settings" {
+        // Not from this handler, as for the windows below.
+        let app = app.clone();
+        spawn("tack-settings-window", move || settings_window::open(&app));
+        return;
+    }
     if id == "tray:phone" {
         let app = app.clone();
         spawn("tack-phone-window", move || phone::window::open(&app));
@@ -192,27 +214,20 @@ pub fn handle(app: &AppHandle, id: &str) {
         spawn("tack-shortcuts-window", move || shortcuts::open_dialog(&app));
         return;
     }
-    let state = app.state::<Items>();
-    let guard = state.lock().unwrap_or_else(|p| p.into_inner());
-    let Some(items) = guard.as_ref() else { return };
     match id {
         "tray:show" => reveal::reveal(app, RevealReason::Tray),
         "tray:clear" => prints::clear(app),
         "tray:folder" => shell::open_folder(&screenshots::folder()),
         "tray:edge" => {
             let on = !lock(app).settings.edge_reveal;
-            set_edge_reveal(app, on);
-            let _ = items.edge.set_checked(on);
+            settings_apply::set_edge_reveal(app, on);
         }
         "tray:sound" => {
             let on = !lock(app).settings.sound;
-            set_sound(app, on);
-            let _ = items.sound.set_checked(on);
+            settings_apply::set_sound(app, on);
         }
         "tray:autostart" => {
-            let on = !autostart::enabled();
-            autostart::set(on);
-            let _ = items.autostart.set_checked(autostart::enabled());
+            settings_apply::set_autostart(app, !autostart::enabled());
         }
         "tray:quit" => {
             // board.json is written off the lock, a moment after each
@@ -229,19 +244,4 @@ fn spawn(name: &str, job: impl FnOnce() + Send + 'static) {
     if let Err(e) = std::thread::Builder::new().name(name.into()).spawn(job) {
         eprintln!("tack: cannot start {name}: {e}");
     }
-}
-
-fn set_sound(app: &AppHandle, on: bool) {
-    {
-        let mut s = lock(app);
-        s.settings.sound = on;
-        s.save();
-    }
-    events::settings(app, on);
-}
-
-fn set_edge_reveal(app: &AppHandle, on: bool) {
-    let mut s = lock(app);
-    s.settings.edge_reveal = on;
-    s.save();
 }
