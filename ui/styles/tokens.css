@@ -73,7 +73,8 @@
   --badge-bg: rgba(24, 22, 20, .68);
   --badge-ink: #ffffff;
 
-  /* colour: empty-state card and the one-time tip */
+  /* colour: empty-state card and the one-time tip. The white paper's; scripts/paper.js sets these on
+     #board for the chosen note paper, so this is only what shows before it has. */
   --hint-paper: light-dark(#fbfaf7, #e9e6df);
   --hint-ink: rgba(44, 34, 24, .62);
   --hint-ink-strong: rgba(44, 34, 24, .82);
