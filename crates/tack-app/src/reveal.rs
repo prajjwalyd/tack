@@ -93,6 +93,19 @@ pub fn speed(app: &AppHandle) -> RevealSpeed {
     lock(app).settings.reveal
 }
 
+/// The monitor the board is down on, or will come down on (under the
+/// pointer, as a reveal picks it).
+pub fn board_placement(app: &AppHandle) -> Placement {
+    let down_at = {
+        let s = lock(app);
+        s.view.shown.then_some(s.view.window_pos)
+    };
+    match down_at {
+        Some(pos) => Placement::at(pos),
+        None => Placement::under_pointer(),
+    }
+}
+
 /// The board window's handle, kept for threads that must not wait on the
 /// main thread (its getters go through the event loop).
 static BOARD: AtomicIsize = AtomicIsize::new(0);

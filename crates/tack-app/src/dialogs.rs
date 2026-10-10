@@ -24,6 +24,30 @@ pub fn build(
     size: (f64, f64),
     focus: bool,
 ) -> tauri::Result<WebviewWindow> {
+    build_with(app, label, page, title, size, focus, true)
+}
+
+/// As [`open`], but the window is created hidden, centred, so the caller can
+/// place it and then `show` and focus it (no jump from the centre).
+pub fn open_hidden(
+    app: &AppHandle,
+    label: &str,
+    page: &str,
+    title: &str,
+    size: (f64, f64),
+) -> tauri::Result<WebviewWindow> {
+    build_with(app, label, page, title, size, true, false)
+}
+
+fn build_with(
+    app: &AppHandle,
+    label: &str,
+    page: &str,
+    title: &str,
+    size: (f64, f64),
+    focus: bool,
+    visible: bool,
+) -> tauri::Result<WebviewWindow> {
     let board = app.config().app.windows.iter().find(|w| w.label == reveal::WINDOW_LABEL).cloned();
     let mut builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(page.into()))
         .title(title)
@@ -33,7 +57,7 @@ pub fn build(
         .minimizable(false)
         .center()
         .focused(focus)
-        .visible(true);
+        .visible(visible);
     if let Some(dir) = reveal::webview_data_dir(app) {
         builder = builder.data_directory(dir);
     }
