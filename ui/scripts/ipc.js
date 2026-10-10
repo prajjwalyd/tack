@@ -22,6 +22,7 @@ export const EVENTS = Object.freeze({
   ORDER_CHANGED: "board:order-changed",      // { ids: string[] } the whole row, display order
   NOTICE: "board:notice",                    // { text: string } a short message under the board
   PHONE_STATE: "phone:state",                // PhoneState (phone-link.js), whenever it changes
+  UPDATES_STATUS: "updates:status",          // UpdateStatus, whenever the update check or install moves on
 });
 
 /** Command names, UI -> backend. Mirrors crates/tack-app/src/ipc/commands.rs. */
@@ -50,6 +51,9 @@ export const COMMANDS = Object.freeze({
   SET_REVEAL: "set_reveal",
   SET_FELT: "set_felt",
   SET_UPDATES_CHECK: "set_updates_check",
+  UPDATE_STATUS: "update_status",
+  CHECK_FOR_UPDATES: "check_for_updates",
+  INSTALL_UPDATE: "install_update",
   OPEN_SHORTCUTS: "open_shortcuts",
   OPEN_PHONE_LINK: "open_phone_link",
   CLOSE_SETTINGS: "close_settings",
@@ -88,6 +92,13 @@ export const COMMANDS = Object.freeze({
  * the CSS `AccentColor` keyword) or a custom "#rrggbb". `feltPresets`: the
  * presets, in order. `motionScale`: multiply the reveal animation's duration
  * by it (0.6, 0.8 or 1). `version`: this Tack, "0.2.0".
+ *
+ * @typedef {{ state: "idle" | "checking" | "upToDate" | "available" | "downloading" | "installing" | "error",
+ *             version: string | null, notes: string | null, progress: number | null,
+ *             error: string | null, checkedAt: number | null }} UpdateStatus
+ * `version`: the new version, once there is one. `notes`: its release notes,
+ * UNTRUSTED text: show it as text only. `progress`: 0..1 while downloading
+ * (null: not known). `checkedAt`: ms since the epoch of the last check.
  *
  * @typedef {{ text: string, link: string | null, domain: string | null,
  *             truncated: boolean }} Note
@@ -166,6 +177,13 @@ export const setReveal = (speed) => invoke(COMMANDS.SET_REVEAL, { speed });
 /** @param {string} value a preset id, "accent" or "#rrggbb" */
 export const setFelt = (value) => invoke(COMMANDS.SET_FELT, { value });
 export const setUpdatesCheck = (on) => invoke(COMMANDS.SET_UPDATES_CHECK, { on });
+// Updates. Each answers with the new UpdateStatus, and the progress comes as EVENTS.UPDATES_STATUS.
+/** @returns {Promise<UpdateStatus | null>} */
+export const updateStatus = () => invoke(COMMANDS.UPDATE_STATUS);
+/** Looks for a new version now. @returns {Promise<UpdateStatus | null>} */
+export const checkForUpdates = () => invoke(COMMANDS.CHECK_FOR_UPDATES);
+/** Downloads and installs the version found. @returns {Promise<UpdateStatus | null>} */
+export const installUpdate = () => invoke(COMMANDS.INSTALL_UPDATE);
 export const openShortcuts = () => invoke(COMMANDS.OPEN_SHORTCUTS);
 export const openPhoneLink = () => invoke(COMMANDS.OPEN_PHONE_LINK);
 export const closeSettings = () => invoke(COMMANDS.CLOSE_SETTINGS);

@@ -1,0 +1,261 @@
+/* The Settings window (settings.html, scripts/settings/): a scrolling page of
+   titled groups, each one card of rows. Shared look (palette, buttons, focus
+   ring): dialog.css; the switch: switch.css. */
+
+:root {
+  --trough: light-dark(rgba(0, 0, 0, .045), rgba(255, 255, 255, .06));
+  --swatch-edge: light-dark(rgba(0, 0, 0, .22), rgba(255, 255, 255, .28));
+}
+
+[hidden] { display: none !important; }
+
+/* Scrolls inside the fixed-size window. */
+.page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px 20px 24px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: light-dark(rgba(0, 0, 0, .3), rgba(255, 255, 255, .3)) transparent;
+}
+.page > * { flex: none; }
+h1, h2, p { margin: 0; }
+h1 { padding: 0 2px; font: 600 20px/28px var(--font-display); }
+.group-title { margin: 0 0 8px 2px; font: 600 14px/20px var(--font); }
+.quiet { padding: 0 2px; font: 400 13px/18px var(--font); color: var(--ink-2); }
+
+/* ---- cards and rows ---- */
+.card:not(.block) > * + * { border-top: 1px solid var(--divider); }
+.card > .switch, .card > .link { border-radius: 0; }
+.card > :first-child { border-radius: 6px 6px 0 0; }
+.card > :last-child { border-radius: 0 0 6px 6px; }
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 12px;
+  min-height: 52px;
+  padding: 8px 16px;
+}
+.row-text { display: grid; min-width: 0; }
+.row-title { font: 400 14px/20px var(--font); overflow-wrap: anywhere; }
+.row-desc { font: 400 12px/16px var(--font-small); color: var(--ink-2); overflow-wrap: anywhere; }
+.row-value { font: 400 13px/18px var(--font-small); color: var(--ink-2); }
+
+/* A card that is one block (a description and its control). */
+.block { padding: 12px 16px 16px; }
+.block > * + * { margin-top: 12px; }
+.block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+
+/* A row that opens another window. */
+.link {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+  outline: none;
+  transition: background-color 80ms ease;
+}
+.link:hover { background: var(--hover); }
+.link:active { background: var(--press); }
+.link svg { width: 12px; height: 12px; color: var(--ink-2); }
+
+/* Rows sit flush in their card, so their ring is drawn inside. */
+.card > .switch:focus-visible,
+.link:focus-visible {
+  outline: 2px solid var(--focus-outer);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px var(--focus-inner);
+}
+
+/* ---- speed: a segmented control ---- */
+.seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--trough);
+  box-shadow: inset 0 0 0 1px var(--card-edge);
+}
+.seg-item {
+  height: 32px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: default;
+  outline: none;
+  transition: background-color 80ms ease;
+}
+.seg-item:hover { background: var(--hover); }
+.seg-item[aria-checked="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.seg-item[aria-checked="true"]:hover { background: var(--accent-hover); }
+.seg-item:focus-visible {
+  outline: 2px solid var(--focus-outer);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px var(--focus-inner);
+}
+
+/* ---- appearance: board colour swatches ---- */
+/* Wider than the block's text, so the longest name (Burgundy) fits under its swatch. */
+.swatches {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  margin: 0 -10px;
+}
+.swatch-cell { position: relative; min-width: 0; }
+.swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  font: 400 11px/14px var(--font-small);
+  cursor: default;
+  outline: none;
+  transition: background-color 80ms ease;
+}
+.swatch:hover { background: var(--hover); }
+.swatch:active { background: var(--press); }
+.swatch[aria-checked="true"] { color: var(--ink); }
+.swatch:focus-visible {
+  outline: 2px solid var(--focus-outer);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px var(--focus-inner);
+}
+.dot {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--swatch, transparent);
+  box-shadow: 0 0 0 1px var(--swatch-edge);
+  color: #ffffff;
+}
+.swatch[aria-checked="true"] .dot { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* Custom, until it is chosen: a colour wheel. */
+.swatch[data-value="custom"][aria-checked="false"] .dot {
+  background: conic-gradient(#f2493a, #f7b731, #7ed321, #2bc4d8, #4a6cf7, #b34ae0, #f2493a);
+}
+.check { width: 16px; height: 16px; opacity: 0; filter: drop-shadow(0 0 1px rgba(0, 0, 0, .5)); }
+.swatch[aria-checked="true"] .check { opacity: 1; }
+/* The system colour picker anchors to this, over the custom swatch's colour. */
+.picker {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  width: 32px;
+  height: 32px;
+  margin: 0 0 0 -16px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---- updates ---- */
+.update .std { grid-row: 1; grid-column: 2; }
+.update .std[aria-disabled="true"] { opacity: .55; pointer-events: none; }
+.meter, .notes { grid-column: 1 / -1; }
+.meter {
+  height: 4px;
+  margin-top: 12px;
+  border-radius: 2px;
+  background: var(--trough);
+  overflow: hidden;
+}
+.meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transform-origin: left;
+  transform: scaleX(var(--progress, 0));
+  transition: transform 200ms ease;
+}
+/* No size to show: a bar that slides along. */
+.meter.unknown .meter-fill { width: 35%; transform: none; animation: meter-slide 1.4s ease-in-out infinite; }
+@keyframes meter-slide {
+  from { translate: -100% 0; }
+  to { translate: 290% 0; }
+}
+
+.notes { margin-top: 12px; }
+.notes summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin-left: -4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: var(--accent);
+  font: 400 13px/18px var(--font);
+  cursor: default;
+  outline: none;
+}
+.notes summary::-webkit-details-marker { display: none; }
+/* A chevron that turns down when open. */
+.notes summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(-45deg);
+  transition: transform 100ms ease;
+}
+.notes[open] summary::before { transform: rotate(45deg); }
+.notes summary:hover { background: var(--hover); }
+.notes-body {
+  max-height: 132px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: var(--trough);
+  font: 400 12px/16px var(--font-small);
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-y: auto;
+  user-select: text;
+  outline: none;
+}
+.notes summary:focus-visible,
+.notes-body:focus-visible {
+  outline: 2px solid var(--focus-outer);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px var(--focus-inner);
+}
+
+/* ---- High Contrast ---- */
+@media (forced-colors: active) {
+  .seg { box-shadow: none; border: 1px solid CanvasText; }
+  .seg-item[aria-checked="true"] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .seg-item:focus-visible, .swatch:focus-visible, .card > .switch:focus-visible, .link:focus-visible,
+  .notes summary:focus-visible, .notes-body:focus-visible { outline: 2px solid Highlight; box-shadow: none; }
+  .dot { forced-color-adjust: none; border: 1px solid CanvasText; box-shadow: none; }
+  .swatch[aria-checked="true"] .dot { outline: 2px solid Highlight; }
+  .link svg, .notes summary { color: LinkText; }
+  .meter { border: 1px solid CanvasText; background: Canvas; }
+  .meter-fill { forced-color-adjust: none; background: Highlight; }
+  .notes-body { border: 1px solid CanvasText; }
+}
