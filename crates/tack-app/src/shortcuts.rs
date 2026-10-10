@@ -1,8 +1,8 @@
 //! Tack's two global shortcuts, show-or-hide (`keyboard.rs`) and pin the
 //! selection (`notes.rs`): registering them, what a press does, and the
-//! Shortcuts dialog that changes them (`ui/shortcuts.html`, created only
-//! while open). While the dialog listens for a new chord the shortcuts are
-//! paused, so pressing Tack's own chord there reaches the page.
+//! commands behind the Shortcuts section of the Settings page that changes
+//! them. While that section listens for a new chord the shortcuts are paused,
+//! so pressing Tack's own chord there reaches the page.
 
 use std::sync::Mutex;
 
@@ -11,19 +11,16 @@ use tack_core::shortcut::{self, Chord, DEFAULT_PIN, DEFAULT_TOGGLE};
 use tack_core::RevealReason;
 use tack_windows::hotkey::{self, Action, Hotkeys, Status};
 use tack_windows::selection;
-use tauri::{AppHandle, Manager, WindowEvent};
+use tauri::AppHandle;
 
 use crate::state::lock;
-use crate::{dialogs, notes, reveal, tray};
-
-/// The dialog window's label.
-pub const DIALOG_LABEL: &str = "shortcuts";
+use crate::{notes, reveal, tray};
 
 /// The hotkey thread and how the last registration went.
 struct Registered {
     hotkeys: Option<Hotkeys>,
     statuses: [Status; 2],
-    /// The dialog has paused the shortcuts.
+    /// The Settings page has paused the shortcuts.
     paused: bool,
 }
 
@@ -70,7 +67,7 @@ fn on_press(app: &AppHandle, action: Action) {
     }
 }
 
-/// One shortcut as the dialog shows it.
+/// One shortcut as the Settings page shows it.
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct Shortcut {
     /// "Win+Alt+S", or "" when off.
@@ -92,9 +89,9 @@ pub struct Pair {
     pin: Shortcut,
 }
 
-/// What the dialog shows when it opens.
+/// What the Shortcuts section shows when it opens.
 #[derive(Serialize)]
-pub struct DialogState {
+pub struct State {
     toggle: Shortcut,
     pin: Shortcut,
     defaults: Defaults,
@@ -125,9 +122,9 @@ fn shown(chord: Option<Chord>) -> String {
     chord.map(|c| c.to_string()).unwrap_or_default()
 }
 
-pub fn dialog_state(app: &AppHandle) -> DialogState {
+pub fn state(app: &AppHandle) -> State {
     let Pair { toggle, pin } = current(app);
-    DialogState { toggle, pin, defaults: Defaults { toggle: DEFAULT_TOGGLE, pin: DEFAULT_PIN } }
+    State { toggle, pin, defaults: Defaults { toggle: DEFAULT_TOGGLE, pin: DEFAULT_PIN } }
 }
 
 /// The shortcuts that could not be registered, as "Win+Alt+C", for the tray.
@@ -197,7 +194,7 @@ pub fn set(app: &AppHandle, toggle: &str, pin: &str) -> Pair {
     result
 }
 
-/// The dialog listens for a new chord (true) or is done listening.
+/// The Settings page listens for a new chord (true) or is done listening.
 pub fn pause(paused: bool) {
     let mut guard = registered();
     let Some(reg) = guard.as_mut() else { return };
@@ -210,34 +207,5 @@ pub fn pause(paused: bool) {
         if !paused {
             reg.statuses = statuses;
         }
-    }
-}
-
-/// Opens the Shortcuts dialog, or brings it to the front. Never on the main
-/// thread: building a window waits for the event loop.
-pub fn open_dialog(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window(DIALOG_LABEL) {
-        let _ = window.unminimize();
-        let _ = window.set_focus();
-        return;
-    }
-    match dialogs::open(app, DIALOG_LABEL, "shortcuts.html", "Tack shortcuts", (460.0, 320.0)) {
-        Ok(window) => {
-            window.on_window_event(|event| {
-                if let WindowEvent::Destroyed = event {
-                    // Closed while listening: the shortcuts come back.
-                    pause(false);
-                }
-            });
-        }
-        Err(e) => eprintln!("tack: cannot open the Shortcuts dialog: {e}"),
-    }
-}
-
-/// Closes the Shortcuts dialog.
-pub fn close_dialog(app: &AppHandle) {
-    pause(false);
-    if let Some(window) = app.get_webview_window(DIALOG_LABEL) {
-        let _ = window.close();
     }
 }

@@ -57,14 +57,12 @@ export const COMMANDS = Object.freeze({
   UPDATE_STATUS: "update_status",
   CHECK_FOR_UPDATES: "check_for_updates",
   INSTALL_UPDATE: "install_update",
-  OPEN_SHORTCUTS: "open_shortcuts",
   OPEN_PHONE_LINK: "open_phone_link",
   CLOSE_SETTINGS: "close_settings",
-  // The shortcuts dialog (its own small window).
+  // The Shortcuts section of the Settings page.
   SHORTCUTS_STATE: "shortcuts_state",
   SET_SHORTCUTS: "set_shortcuts",
   PAUSE_SHORTCUTS: "pause_shortcuts",
-  CLOSE_SHORTCUTS: "close_shortcuts",
   // The phone window (its own small window).
   PHONE_STATE: "phone_state",
   SET_PHONE: "set_phone",
@@ -205,7 +203,6 @@ export const updateStatus = () => invoke(COMMANDS.UPDATE_STATUS);
 export const checkForUpdates = () => invoke(COMMANDS.CHECK_FOR_UPDATES);
 /** Downloads and installs the version found. @returns {Promise<UpdateStatus | null>} */
 export const installUpdate = () => invoke(COMMANDS.INSTALL_UPDATE);
-export const openShortcuts = () => invoke(COMMANDS.OPEN_SHORTCUTS);
 export const openPhoneLink = () => invoke(COMMANDS.OPEN_PHONE_LINK);
 export const closeSettings = () => invoke(COMMANDS.CLOSE_SETTINGS);
 
@@ -217,13 +214,12 @@ export const closeSettings = () => invoke(COMMANDS.CLOSE_SETTINGS);
 /** @returns {Promise<{ toggle: Shortcut, pin: Shortcut, defaults: { toggle: string, pin: string } } | null>} */
 export const shortcutsState = () => invoke(COMMANDS.SHORTCUTS_STATE);
 /**
- * Saves both shortcuts, only if every one is free ("ok") or off.
+ * Applies and saves both shortcuts, only if every one is free ("ok") or off.
  * @returns {Promise<{ toggle: Shortcut, pin: Shortcut } | null>} the statuses of the requested chords
  */
 export const setShortcuts = (toggle, pin) => invoke(COMMANDS.SET_SHORTCUTS, { toggle, pin });
 /** While a chord is being captured, Tack's own hotkeys must not fire. */
 export const pauseShortcuts = (paused) => invoke(COMMANDS.PAUSE_SHORTCUTS, { paused });
-export const closeShortcuts = () => invoke(COMMANDS.CLOSE_SHORTCUTS);
 
 // The phone window. Each answers with the new PhoneState (phone-link.js).
 export const phoneState = () => invoke(COMMANDS.PHONE_STATE);

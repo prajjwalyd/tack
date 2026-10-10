@@ -13,7 +13,7 @@ use tauri::AppHandle;
 use crate::ipc::events::Removal;
 use crate::phone::{self, PhoneState};
 use crate::settings_apply::{self, SettingsView};
-use crate::shortcuts::{self, DialogState, Pair};
+use crate::shortcuts::{self, Pair, State as ShortcutsState};
 use crate::state::lock;
 use crate::updates::{self, UpdateStatus};
 use crate::{context_menu, drag, keyboard, notes, prints, reveal, settings_window};
@@ -178,29 +178,24 @@ pub fn hide_board(app: AppHandle) {
     keyboard::hide(&app);
 }
 
-/// The Shortcuts dialog opens: the shortcuts, how they registered, and the
+/// The Shortcuts section opens: the shortcuts, how they registered, and the
 /// defaults.
 #[tauri::command]
-pub fn shortcuts_state(app: AppHandle) -> DialogState {
-    shortcuts::dialog_state(&app)
+pub fn shortcuts_state(app: AppHandle) -> ShortcutsState {
+    shortcuts::state(&app)
 }
 
-/// The Shortcuts dialog's Save: saved only if both work. Async: it waits
-/// for the hotkey thread.
+/// A new chord in the Shortcuts section: applied and saved only if both work.
+/// Async: it waits for the hotkey thread.
 #[tauri::command]
 pub async fn set_shortcuts(app: AppHandle, toggle: String, pin: String) -> Pair {
     blocking(move || shortcuts::set(&app, &toggle, &pin)).await
 }
 
-/// The Shortcuts dialog listens for a chord (shortcuts paused) or is done.
+/// The Shortcuts section listens for a chord (shortcuts paused) or is done.
 #[tauri::command]
 pub async fn pause_shortcuts(paused: bool) {
     shortcuts::pause(paused);
-}
-
-#[tauri::command]
-pub async fn close_shortcuts(app: AppHandle) {
-    shortcuts::close_dialog(&app);
 }
 
 /// The Settings window opens: every setting.
@@ -286,14 +281,8 @@ pub async fn install_update(app: AppHandle) -> UpdateStatus {
     blocking(move || updates::install(&app)).await
 }
 
-/// "Shortcuts…" in the Settings window. Async: building a window waits for
-/// the event loop, which runs plain commands.
-#[tauri::command]
-pub async fn open_shortcuts(app: AppHandle) {
-    blocking(move || shortcuts::open_dialog(&app)).await
-}
-
-/// "Use on your phone…" in the Settings window.
+/// The phone card's button in the Settings window. Async: building a window
+/// waits for the event loop, which runs plain commands.
 #[tauri::command]
 pub async fn open_phone_link(app: AppHandle) {
     blocking(move || phone::window::open(&app)).await

@@ -240,14 +240,14 @@ pub fn handle(app: &AppHandle, id: &str) {
     }
     if id == "tray:phone" {
         let app = app.clone();
-        spawn("tack-phone-window", move || settings_window::open(&app, Some("phone")));
+        spawn("tack-settings-phone", move || settings_window::open(&app, Some("phone")));
         return;
     }
     if id == "tray:shortcuts" || id.starts_with("tray:shortcuts-in-use") {
         // Not from this handler: building a window on the event loop's own
         // thread, inside one of its handlers, would wait on itself.
         let app = app.clone();
-        spawn("tack-shortcuts-window", move || shortcuts::open_dialog(&app));
+        spawn("tack-shortcuts-window", move || settings_window::open(&app, Some("shortcuts")));
         return;
     }
     match id {

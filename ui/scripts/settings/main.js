@@ -19,12 +19,12 @@ import { $, announcer, backendReady, blockBrowserKeys } from "../dialog.js";
 import { createStore } from "./store.js";
 import * as appearance from "./sections/appearance.js";
 import * as general from "./sections/general.js";
-import * as links from "./sections/links.js";
 import * as phone from "./sections/phone.js";
+import * as shortcuts from "./sections/shortcuts.js";
 import * as speed from "./sections/speed.js";
 import * as updates from "./sections/updates.js";
 
-const SECTIONS = [phone, general, speed, appearance, links, updates];
+const SECTIONS = [phone, general, speed, appearance, shortcuts, updates];
 
 /** Until the backend says otherwise (or if it does not know about updates). */
 const IDLE = { state: "idle", version: null, notes: null, progress: null, error: null, checkedAt: null };

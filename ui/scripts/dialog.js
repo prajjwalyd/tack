@@ -1,7 +1,7 @@
-// What the small dialog windows share (shortcuts.js, phone-link.js,
-// settings/main.js): the query helper, the warning icon, text escaping, a
-// relative time, the screen-reader announcer, the keys a dialog must not pass
-// to the browser, and the "is the backend there" check on load.
+// What the small dialog windows share (phone-link.js, settings/main.js): the
+// query helper, the warning icon, text escaping, a relative time, the
+// screen-reader announcer, the keys a dialog must not pass to the browser, and
+// the "is the backend there" check on load.
 
 import * as ipc from "./ipc.js";
 

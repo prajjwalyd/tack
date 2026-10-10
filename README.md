@@ -54,7 +54,7 @@ allow get in, and your board never leaves your PC.
 | **Drag** | Drop it into any app as a file |
 | **Right-click** | Keep, Unpin, Show in Explorer and more |
 
-Both shortcuts can be changed from the tray menu's **Shortcuts…**.
+Both shortcuts can be changed in Settings, under **Shortcuts** (the tray menu's **Shortcuts…** goes there).
 
 ## Private by design
 

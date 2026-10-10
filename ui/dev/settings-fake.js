@@ -5,6 +5,8 @@
 //                       the update state to start in (default upToDate)
 //   ?felt=navy|accent|%23aabbcc   ?finish=graphite   ?paper=blush   ?speed=instant|fast|normal   the starting settings
 //   ?phone=off|on|noDevices|missing|disconnected|asking|error   the phone card's state (default off)
+//   ?inuse=1            start with the pin shortcut reported in use by another app
+//                       ("Win+Alt+X" is always held by one: try it in a field)
 //   ?theme=light|dark   force the theme
 //   ?frame=520x640      lay the page out at that size (the window's) whatever the browser's
 // The panel at the right (wide browser windows only) switches the update
@@ -33,6 +35,19 @@ const settings = {
   paper: validPaper(params.get("paper")) ? params.get("paper") : DEFAULT_APPEARANCE.paper,
   paperPresets: PAPER_PRESETS,
 };
+// The shortcuts, as shortcuts.rs answers: a chord is "ok", "off", "invalid" (no Win, Ctrl or Alt) or "in-use".
+const DEFAULT_CHORDS = { toggle: "Win+Alt+S", pin: "Win+Alt+C" };
+const chords = { ...DEFAULT_CHORDS };
+const TAKEN = new Set(["Win+Alt+X"]);
+if (params.get("inuse") === "1") TAKEN.add(DEFAULT_CHORDS.pin);
+const chordStatus = (chord) => {
+  if (!chord) return "off";
+  const parts = chord.split("+");
+  if (!parts.some((p) => ["Win", "Ctrl", "Alt"].includes(p)) && !/^F\d+$/.test(parts[parts.length - 1])) return "invalid";
+  return TAKEN.has(chord) ? "in-use" : "ok";
+};
+const shortcut = (chord) => ({ chord, status: chordStatus(chord) });
+
 const copies = (list) => list.map((p) => ({ ...p }));
 const view = () => ({
   ...settings,
@@ -116,7 +131,13 @@ const commands = {
   set_paper: ({ value }) => (validPaper(value) ? set({ paper: value }) : view()),
   reset_appearance: () => set(DEFAULT_APPEARANCE),
   set_updates_check: ({ on }) => set({ updatesCheck: on }),
-  open_shortcuts: () => null,
+  shortcuts_state: () => ({ toggle: shortcut(chords.toggle), pin: shortcut(chords.pin), defaults: { ...DEFAULT_CHORDS } }),
+  set_shortcuts: ({ toggle, pin }) => {
+    const result = { toggle: shortcut(toggle), pin: shortcut(pin) };
+    if ([result.toggle, result.pin].every((s) => s.status === "ok" || s.status === "off")) Object.assign(chords, { toggle, pin });
+    return result;
+  },
+  pause_shortcuts: () => null,
   phone_state: () => ({ ...phone }),
   open_phone_link: () => null,
   close_settings: () => {

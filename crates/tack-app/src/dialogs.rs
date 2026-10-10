@@ -1,4 +1,4 @@
-//! Tack's small dialog windows (Settings, Shortcuts, the phone link). They share the
+//! Tack's small dialog windows (Settings and the phone link). They share the
 //! board's WebView2 runtime: the same data folder, and the same browser
 //! arguments (a second set would not be allowed to share it, and they keep
 //! the dialogs off the network too).
