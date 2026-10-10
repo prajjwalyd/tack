@@ -75,13 +75,12 @@ img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
 }
 
 /* The material, top layer down: the corner caps (--cap-l/r, below); light from
-   above (a wash at the top, a vignette below); the felt (a 2 px weave check,
-   warp and weft noise, slow mottling, over --felt); the frame (side rails
+   above and the felt under it (felt.css: a wash, a vignette, three wool
+   textures over --felt, all one --felt-stack); the frame (side rails
    brushed down, bottom rail brushed across, lit from above). The frame is the
    element's border (none at the top); the felt is its padding box. All static
    images and gradients, rasterised once, so nothing repaints in motion. */
 .cork {
-  --weave-size: 128px;
   position: absolute;
   inset: 0;
   border: var(--frame-w) solid transparent;
@@ -90,13 +89,7 @@ img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
   background:
     var(--cap-l) left bottom / var(--cap-size) var(--cap-size) no-repeat border-box,
     var(--cap-r) right bottom / var(--cap-size) var(--cap-size) no-repeat border-box,
-    radial-gradient(120% 95% at 50% 0, var(--felt-light), transparent 72%) padding-box,
-    radial-gradient(140% 120% at 50% 15%, transparent 52%, var(--felt-vignette)) padding-box,
-    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4' shape-rendering='crispEdges'><path d='M0 0h2v2H0zM2 2h2v2H2z' fill='%23eafff2' fill-opacity='.035'/><path d='M2 0h2v2H2zM0 2h2v2H0z' fill='%23001a0c' fill-opacity='.07'/></svg>") 0 0 / 2px 2px padding-box,
-    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.36 0.07' numOctaves='2' seed='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0.03  0 0 0 0 0.015  0.75 0 0 0 -0.31'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/></svg>") 0 0 / var(--weave-size) var(--weave-size) padding-box,
-    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.07 0.36' numOctaves='2' seed='11' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.86  0 0 0 0 1  0 0 0 0 0.93  0.32 0 0 0 -0.14'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.07 0.36' numOctaves='2' seed='31' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0.03  0 0 0 0 0.015  0.62 0 0 0 -0.26'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>") 0 0 / var(--weave-size) var(--weave-size) padding-box,
-    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='3' seed='23' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0.02  0 0 0 0 0.01  0 0.6 0 0 -0.24'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/></svg>") 0 0 / 400px 400px padding-box,
-    linear-gradient(var(--felt), var(--felt)) padding-box,
+    var(--felt-stack),
     url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='1024'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.45 0.0025' numOctaves='3' seed='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.6 0 0 0 -0.28'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.5 0.003' numOctaves='3' seed='9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.5 0 0 0 -0.24'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>") left top / var(--frame-w) 512px repeat-y border-box,
     url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='1024'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.45 0.0025' numOctaves='3' seed='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.6 0 0 0 -0.28'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.5 0.003' numOctaves='3' seed='9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.5 0 0 0 -0.24'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>") right top / var(--frame-w) 512px repeat-y border-box,
     url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='1024' height='12'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.0025 0.45' numOctaves='3' seed='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.6 0 0 0 -0.28'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.003 0.5' numOctaves='3' seed='9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.5 0 0 0 -0.24'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>") left bottom / 512px var(--frame-w) repeat-x border-box,

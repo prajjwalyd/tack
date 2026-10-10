@@ -1,0 +1,39 @@
+/* The felt: wool felt over --felt, lit from above. board.css puts --felt-stack
+   into the .cork's background, between the corner caps and the frame; this is
+   what is in it, top layer down:
+
+     crease      a soft shadow where the felt meets the rails (bottom, sides)
+     wash        light from above, brightest at the top edge
+     vignette    the falloff towards the sides and bottom
+     fade        the felt colour again, at 1 - --felt-grain, over the
+                 textures: the strength knob
+     pile        three wool textures (assets/felt-*.webp, made by
+     fibre       scripts/felt/generate.mjs): grey, seamless, drawn at 2x so
+     cloud       they are crisp at any scaling, at tile sizes that share no
+                 factor so no repeat shows. Laid on with soft-light, which
+                 moves each colour's brightness and leaves its hue alone, so
+                 one set serves every felt colour and both themes
+     the felt    --felt itself (tokens.css, or theme.js's colour)
+
+   --felt-grain   0 (flat felt) to 1 (the textures as drawn), 0.8 by default.
+   Everything is a static image or gradient, rasterised once. */
+.cork {
+  --felt-grain: .8;
+  --felt-fade: color-mix(in srgb, var(--felt) calc((1 - var(--felt-grain)) * 100%), transparent);
+  --felt-crease: color-mix(in srgb, var(--felt-inner-shade) 50%, transparent);   /* where the felt meets the rails: a soft shadow */
+  --felt-stack:
+    linear-gradient(0deg, var(--felt-crease), transparent 9px) left bottom / 100% 9px no-repeat padding-box,
+    linear-gradient(90deg, var(--felt-crease), transparent 7px) left top / 7px 100% no-repeat padding-box,
+    linear-gradient(270deg, var(--felt-crease), transparent 7px) right top / 7px 100% no-repeat padding-box,
+    radial-gradient(120% 95% at 50% 0, var(--felt-light), transparent 72%) padding-box,
+    radial-gradient(140% 120% at 50% 15%, transparent 52%, var(--felt-vignette)) padding-box,
+    linear-gradient(var(--felt-fade), var(--felt-fade)) padding-box,
+    url("../assets/felt-pile.webp") 0 0 / 193px 193px padding-box,
+    url("../assets/felt-fibre.webp") 0 0 / 256px 256px padding-box,
+    url("../assets/felt-cloud.webp") 0 0 / 357px 357px padding-box,
+    linear-gradient(var(--felt), var(--felt)) padding-box;
+  /* One per background layer, top down: the two corner caps, then the stack's
+     ten (the textures are soft-light), then the frame's, which stay normal.
+     Keep this in step with --felt-stack and the layers in board.css. */
+  background-blend-mode: normal, normal, normal, normal, normal, normal, normal, normal, soft-light, soft-light, soft-light, normal, normal, normal, normal, normal, normal, normal, normal, normal, normal;
+}

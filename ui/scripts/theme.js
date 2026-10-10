@@ -4,7 +4,7 @@
 // and the light and shade laid over it. Everything else (frame, paper, pins,
 // the caption ink) stays, so the colour is clamped to what they read on:
 // dark enough for the light caption ink and the white pins, and never so dark
-// the weave and shadows vanish.
+// the felt's texture and the shadows vanish.
 //
 // feltProperties is pure (and has no imports), so the settings page uses it
 // for its swatches too: they show what the board will be.
