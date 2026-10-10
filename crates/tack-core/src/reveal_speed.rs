@@ -210,7 +210,8 @@ mod tests {
 
     #[test]
     fn every_wait_shortens_with_the_speed() {
-        let waits: [(&str, fn(RevealSpeed) -> Duration); 5] = [
+        type Wait = fn(RevealSpeed) -> Duration;
+        let waits: [(&str, Wait); 5] = [
             ("peek", RevealSpeed::peek),
             ("flight_peek", RevealSpeed::flight_peek),
             ("notice_peek", RevealSpeed::notice_peek),

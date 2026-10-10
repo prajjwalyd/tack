@@ -251,7 +251,13 @@ mod tests {
     use super::*;
 
     fn shown() -> View {
-        View { shown: true, generation: 4, stay_open: true, peek_until: Some(std::time::Instant::now()), ..View::default() }
+        View {
+            shown: true,
+            generation: 4,
+            stay_open: true,
+            peek_until: Some(std::time::Instant::now()),
+            ..View::default()
+        }
     }
 
     #[test]
