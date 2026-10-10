@@ -71,11 +71,9 @@
   transition: opacity var(--dur-soft) ease;
 }
 .slot.kept .pin-brass { opacity: 1; }
-/* Kept pins are larger in the row and on an unfolded note (whose brass note.js
-   shows inline). `scale` composes with the keep press's transform; it animates
-   only while the board is out. */
-.slot.kept > .pin,
-.sheet .pin:has(> .pin-brass[style*="opacity"]) { scale: var(--kept-pin-scale); }
+/* Kept pins are larger. `scale` composes with the keep press's transform; it
+   animates only while the board is out. */
+.slot.kept > .pin { scale: var(--kept-pin-scale); }
 #board:not(.tucked) .slot > .pin { transition: scale var(--dur-soft) ease; }
 /* Glint: a band of light crossing the brass once. */
 .pin-brass::after {

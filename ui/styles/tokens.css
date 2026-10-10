@@ -130,7 +130,6 @@
   --caption-size: 11px;
   --hint-size: 13px;
   --note-size: 12px;         /* a note's text on the board */
-  --sheet-size: 13px;        /* an unfolded note */
 
   /* motion. --motion-scale: the Speed setting (scripts/motion/scale.js), 1 for
      Normal. Every duration and delay here (and in the other board stylesheets)
