@@ -7,11 +7,16 @@ import { esc } from "../dialog.js";
 
 export const CHEVRON_SVG = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5l4.5 4.5L6 12.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-/** Fills `host` (a <section>) with a heading and `body`; the section is named by the heading. */
+/**
+ * Fills `host` (a <section>) with a heading and `body`; the section is named
+ * by the heading, and `data-section` is the id a link to it ("#shortcuts")
+ * uses (main.js).
+ */
 export function group(host, id, title, body) {
   host.className = "group";
+  host.dataset.section = id;
   host.setAttribute("aria-labelledby", `${id}-title`);
-  host.innerHTML = `<h2 class="group-title" id="${id}-title">${esc(title)}</h2>${body}`;
+  host.innerHTML = `<h2 class="group-title" id="${id}-title" tabindex="-1">${esc(title)}</h2>${body}`;
 }
 
 /** A switch row (see switch.css). Static text only: `label` and `desc` are ours. */

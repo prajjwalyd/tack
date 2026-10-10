@@ -5,8 +5,6 @@
 
 :root {
   --card-solid: light-dark(#ffffff, #2b2b2b);
-  --accent-wash: light-dark(rgba(0, 95, 184, .10), rgba(96, 205, 255, .14));
-  --ok: light-dark(#0f7b0f, #6ccb5f);
 }
 
 /* Scrolls between the top and the footer for small screens and big text. */

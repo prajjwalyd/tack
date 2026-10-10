@@ -25,13 +25,52 @@
 h1, h2, p { margin: 0; }
 h1 { padding: 0 2px; font: 600 20px/28px var(--font-display); }
 .group-title { margin: 0 0 8px 2px; font: 600 14px/20px var(--font); }
+/* A link to a section ("#shortcuts") moves the focus to its heading; no ring, the scroll shows it. */
+.group-title:focus, .hero-title:focus { outline: none; }
+[data-section] { scroll-margin-top: 16px; }
 .quiet { padding: 0 2px; font: 400 13px/18px var(--font); color: var(--ink-2); }
 
+/* ---- the phone card: the one thing at the top ---- */
+.hero-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  column-gap: 14px;
+  padding: 14px 16px;
+}
+/* The phone window's tile (phone-link.css), a little smaller. */
+.tile {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+.tile svg { display: block; width: 30px; height: 30px; }
+.hero-text { display: grid; min-width: 0; }
+.hero-title { font: 600 16px/22px var(--font-display); }
+/* The status line: a dot that says at a glance whether it is on. */
+.hero-text .row-desc { display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 18px; }
+.hero-text .row-desc::before {
+  content: "";
+  flex: none;
+  display: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.hero-text .row-desc[data-tone="ok"]::before { display: block; color: var(--ok); }
+.hero-text .row-desc[data-tone="attn"]::before { display: block; color: var(--accent); }
+.hero-text .row-desc[data-tone="warn"]::before { display: block; color: var(--warn); }
+
 /* ---- cards and rows ---- */
-.card:not(.block) > * + * { border-top: 1px solid var(--divider); }
+.card:not(.block, .hero-card) > * + * { border-top: 1px solid var(--divider); }
 .card > .switch, .card > .link { border-radius: 0; }
-.card > :first-child { border-radius: 6px 6px 0 0; }
-.card > :last-child { border-radius: 0 0 6px 6px; }
+.card:not(.hero-card) > :first-child { border-radius: 6px 6px 0 0; }
+.card:not(.hero-card) > :last-child { border-radius: 0 0 6px 6px; }
 
 .row {
   display: grid;
@@ -298,6 +337,8 @@ h1 { padding: 0 2px; font: 600 20px/28px var(--font-display); }
   .chip { forced-color-adjust: none; box-shadow: none; outline: 1px solid CanvasText; }
   .swatch[aria-checked="true"] :is(.dot, .chip, .note-chip) { outline: 2px solid Highlight; }
   .link svg, .notes summary { color: LinkText; }
+  .tile { background: Canvas; color: CanvasText; border: 1px solid CanvasText; }
+  .hero-text .row-desc::before { forced-color-adjust: none; background: CanvasText; }
   .meter { border: 1px solid CanvasText; background: Canvas; }
   .meter-fill { forced-color-adjust: none; background: Highlight; }
   .notes-body { border: 1px solid CanvasText; }

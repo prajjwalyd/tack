@@ -23,6 +23,7 @@ pub const WARM_UP: &str = "board:warm-up";
 // `board:gust` is in the contract but only the preview harness sends it; the
 // UI schedules its own gusts.
 pub const SETTINGS_CHANGED: &str = "settings:changed";
+pub const SETTINGS_SECTION: &str = "settings:section";
 pub const POINTER_LEFT: &str = "board:pointer-left";
 pub const NOTICE: &str = "board:notice";
 pub const PHONE_STATE: &str = "phone:state";
@@ -126,7 +127,16 @@ pub fn updates_status(app: &AppHandle, status: &crate::updates::UpdateStatus) {
     let _ = app.emit(UPDATES_STATUS, status);
 }
 
-/// The phone window's state changed (see `phone::PhoneState`).
+/// The Settings window is already open and is asked to show `section` (an id
+/// from `settings_window::SECTIONS`).
+pub fn settings_section(app: &AppHandle, section: &str) {
+    let _ = app.emit_to(crate::settings_window::LABEL, SETTINGS_SECTION, section);
+}
+
+/// The phone state changed (see `phone::PhoneState`): the phone window and
+/// the phone card in Settings show it.
 pub fn phone_state(app: &AppHandle, state: &crate::phone::PhoneState) {
-    let _ = app.emit_to(crate::phone::window::LABEL, PHONE_STATE, state);
+    for label in [crate::phone::window::LABEL, crate::settings_window::LABEL] {
+        let _ = app.emit_to(label, PHONE_STATE, state);
+    }
 }

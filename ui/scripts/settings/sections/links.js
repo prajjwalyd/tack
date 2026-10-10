@@ -1,11 +1,10 @@
-// Related: rows that open the other windows (Shortcuts, Use on your phone).
+// Related: a row that opens the Shortcuts window.
 
 import * as ipc from "../../ipc.js";
 import { CHEVRON_SVG, group } from "../markup.js";
 
 const LINKS = [
   { open: ipc.openShortcuts, title: "Shortcuts", desc: "Change the keys that show the board and pin a selection." },
-  { open: ipc.openPhoneLink, title: "Use on your phone", desc: "See your board on your phone, over NetBird." },
 ];
 
 export function mount(host) {

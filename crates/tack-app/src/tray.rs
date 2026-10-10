@@ -24,7 +24,7 @@ use windows::Win32::System::Registry::{
 
 use crate::state::{self, lock};
 use crate::updates::{self, Phase, UpdateStatus};
-use crate::{phone, prints, reveal, settings_apply, settings_window, shortcuts};
+use crate::{prints, reveal, settings_apply, settings_window, shortcuts};
 
 /// The check items, kept to set their state when a setting changes.
 #[derive(Clone)]
@@ -223,13 +223,13 @@ pub fn handle(app: &AppHandle, id: &str) {
     if id == "tray:settings" {
         // Not from this handler, as for the windows below.
         let app = app.clone();
-        spawn("tack-settings-window", move || settings_window::open(&app));
+        spawn("tack-settings-window", move || settings_window::open(&app, None));
         return;
     }
     if id == "tray:updates" {
         let app = app.clone();
         spawn("tack-updates-window", move || {
-            settings_window::open(&app);
+            settings_window::open(&app, Some("updates"));
             // With an update ready, Settings is where to install it; otherwise
             // look now, and Settings shows the answer.
             if updates::status(&app).state != Phase::Available {
@@ -240,7 +240,7 @@ pub fn handle(app: &AppHandle, id: &str) {
     }
     if id == "tray:phone" {
         let app = app.clone();
-        spawn("tack-phone-window", move || phone::window::open(&app));
+        spawn("tack-phone-window", move || settings_window::open(&app, Some("phone")));
         return;
     }
     if id == "tray:shortcuts" || id.starts_with("tray:shortcuts-in-use") {

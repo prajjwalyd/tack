@@ -2,8 +2,7 @@
 // touches window.__TAURI__: commands go out through the wrappers below,
 // events come in through `on`. The Rust side is crates/tack-app/src/ipc/.
 // Every webview uses it: the board (main.js), the settings window
-// (settings/main.js), the shortcuts dialog (shortcuts.js) and the phone window
-// (phone-link.js).
+// (settings/main.js) and the phone window (phone-link.js).
 
 /** Event names, backend -> UI. Mirrors crates/tack-app/src/ipc/events.rs. */
 export const EVENTS = Object.freeze({
@@ -23,6 +22,7 @@ export const EVENTS = Object.freeze({
   NOTICE: "board:notice",                    // { text: string } a short message under the board
   PHONE_STATE: "phone:state",                // PhoneState (phone-link.js), whenever it changes
   UPDATES_STATUS: "updates:status",          // UpdateStatus, whenever the update check or install moves on
+  SETTINGS_SECTION: "settings:section",      // string: an open Settings window is asked to show that section ("phone", "appearance", "shortcuts", "updates")
 });
 
 /** Command names, UI -> backend. Mirrors crates/tack-app/src/ipc/commands.rs. */

@@ -10,7 +10,9 @@
 // so the keyboard focus stays where it is. The Updates section also follows
 // the UpdateStatus store.
 //
-// Esc closes the window.
+// A link to a section ("settings.html#shortcuts", from the tray) scrolls to it
+// and moves the keyboard focus to its heading; a window that is already open
+// is sent the same thing as settings:section. Esc closes the window.
 
 import * as ipc from "../ipc.js";
 import { $, announcer, backendReady, blockBrowserKeys } from "../dialog.js";
@@ -18,10 +20,11 @@ import { createStore } from "./store.js";
 import * as appearance from "./sections/appearance.js";
 import * as general from "./sections/general.js";
 import * as links from "./sections/links.js";
+import * as phone from "./sections/phone.js";
 import * as speed from "./sections/speed.js";
 import * as updates from "./sections/updates.js";
 
-const SECTIONS = [general, speed, appearance, links, updates];
+const SECTIONS = [phone, general, speed, appearance, links, updates];
 
 /** Until the backend says otherwise (or if it does not know about updates). */
 const IDLE = { state: "idle", version: null, notes: null, progress: null, error: null, checkedAt: null };
@@ -69,8 +72,24 @@ function build() {
   }
 }
 
+let built = false;
+let wanted = decodeURIComponent(location.hash.slice(1));   // the section to show once the page is built
+
+/** Scrolls to a section and puts the keyboard focus on its heading. An id the page does not have does nothing. */
+function showSection(id) {
+  const host = [...page.querySelectorAll("[data-section]")].find((s) => s.dataset.section === id);
+  if (!host) return;
+  host.scrollIntoView({ block: "start" });
+  host.querySelector("h2")?.focus({ preventScroll: true });
+}
+
+function goTo(id) {
+  if (built) showSection(id); else wanted = id;
+}
+
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { e.preventDefault(); ipc.closeSettings(); return; }
+  // A shortcut being captured has used the key already (sections/shortcuts.js).
+  if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); ipc.closeSettings(); return; }
   blockBrowserKeys(e);
 }, true);
 document.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -80,6 +99,7 @@ async function load() {
   await Promise.all([
     ipc.on(ipc.EVENTS.SETTINGS, settings.set),
     ipc.on(ipc.EVENTS.UPDATES_STATUS, updateStatus.set),
+    ipc.on(ipc.EVENTS.SETTINGS_SECTION, goTo),
   ]);
   const [view, status] = await Promise.all([ipc.settingsState(), ipc.updateStatus()]);
   if (!view) {
@@ -89,7 +109,9 @@ async function load() {
   settings.set(view);
   updateStatus.set(status);   // null (an older backend) keeps the idle one
   build();
+  built = true;
+  if (wanted) showSection(wanted);
 }
 
-// Nothing takes the focus on open: the tray opens it by mouse and a ring would be noise.
+// Nothing takes the focus on open unless a link asked for a section: the tray opens it by mouse and a ring would be noise.
 load();

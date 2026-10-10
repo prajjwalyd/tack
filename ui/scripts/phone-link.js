@@ -12,6 +12,7 @@
 
 import * as ipc from "./ipc.js";
 import { $, WARN_SVG, announcer, backendReady, blockBrowserKeys, esc, when } from "./dialog.js";
+import { PHONE_SVG } from "./phone-icon.js";
 
 /**
  * @typedef {{ key: string, name: string, approvedAt: number }} Device
@@ -28,8 +29,7 @@ import { $, WARN_SVG, announcer, backendReady, blockBrowserKeys, esc, when } fro
 const { phoneState, setPhone, answerDevice, forgetDevice, openNetbirdDownload, closePhoneLink } = ipc;
 
 const ICONS = {
-  // A phone, drawn on a 32 px grid and centred on it: body, a faint screen tint, the speaker slot and the home bar.
-  phone: `<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="8" y="2.2" width="16" height="27.6" rx="4.2" fill="currentColor" fill-opacity=".14" stroke="currentColor" stroke-width="1.6"/><path d="M13.5 6.3h5M13.2 25.7h5.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`,
+  phone: PHONE_SVG,
   ask: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l7 2.6v5.6c0 4.4-2.8 8-7 10-4.2-2-7-5.6-7-10V5.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 11.8l2.2 2.2L15.2 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
 };
 

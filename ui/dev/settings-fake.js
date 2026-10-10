@@ -4,12 +4,15 @@
 //   ?updates=idle|checking|upToDate|available|downloading|installing|error
 //                       the update state to start in (default upToDate)
 //   ?felt=navy|accent|%23aabbcc   ?finish=graphite   ?paper=blush   ?speed=instant|fast|normal   the starting settings
+//   ?phone=off|on|noDevices|missing|disconnected|asking|error   the phone card's state (default off)
 //   ?theme=light|dark   force the theme
 //   ?frame=520x640      lay the page out at that size (the window's) whatever the browser's
 // The panel at the right (wide browser windows only) switches the update
-// state and what the next check finds; window.__fake does the same from the
-// console. A change made in the page really changes the fake settings, so
-// the board preview (preview.html) shows what the page would do.
+// state, the phone card's state and what the next check finds;
+// window.__fake does the same from the console (also .section("shortcuts"),
+// what the tray sends an open window). A change made in the page really
+// changes the fake settings, so the board preview (preview.html) shows what
+// the page would do.
 // Must load before ../scripts/settings/main.js.
 
 import { DEFAULT_APPEARANCE, FRAME_PRESETS, PAPER_PRESETS, PRESETS, SCALES, validFelt, validFrame, validPaper } from "./appearance-presets.js";
@@ -62,7 +65,20 @@ let status = { ...BASE, ...(STATES[params.get("updates")] || STATES.upToDate) };
 let nextCheck = "available";   // what the next check finds: available | upToDate | error
 let timers = [];
 
-const listeners = { "settings:changed": [], "updates:status": [] };
+// The phone card: a PhoneState, as phone-link.js describes it.
+const PHONES = {
+  off: { on: false, netbird: "connected", devices: [] },
+  on: { on: true, netbird: "connected", serving: true, devices: [{ key: "k-pixel", name: "pixel" }, { key: "k-s24", name: "galaxy-s24" }] },
+  noDevices: { on: true, netbird: "connected", serving: true, devices: [] },
+  missing: { on: false, netbird: "missing", devices: [] },
+  disconnected: { on: true, netbird: "disconnected", devices: [] },
+  asking: { on: true, netbird: "connected", serving: true, devices: [], pending: [{ key: "k-tab", name: "galaxy-tab", fqdn: "galaxy-tab.netbird.cloud", ip: "100.90.12.34", code: "4821" }] },
+  error: { on: true, netbird: "connected", serving: false, error: "Couldn't start: port 7717 is in use", devices: [] },
+};
+const phoneView = (name) => ({ address: null, qr: null, error: null, pc: "my-pc", pending: [], serving: false, ...PHONES[name] });
+let phone = phoneView(PHONES[params.get("phone")] ? params.get("phone") : "off");
+
+const listeners = { "settings:changed": [], "updates:status": [], "phone:state": [], "settings:section": [] };
 const emit = (name, payload) => listeners[name].forEach((fn) => fn({ event: name, payload }));
 const setStatus = (patch) => { status = { ...status, ...patch }; emit("updates:status", { ...status }); return { ...status }; };
 const later = (fn, ms) => timers.push(setTimeout(fn, ms));
@@ -101,6 +117,7 @@ const commands = {
   reset_appearance: () => set(DEFAULT_APPEARANCE),
   set_updates_check: ({ on }) => set({ updatesCheck: on }),
   open_shortcuts: () => null,
+  phone_state: () => ({ ...phone }),
   open_phone_link: () => null,
   close_settings: () => {
     document.documentElement.classList.add("closed");
@@ -133,6 +150,10 @@ window.__fake = {
   /** What the next check finds. */
   finds(what) { nextCheck = what; },
   set,
+  /** Shows a phone state: one of PHONES' names. */
+  phone(name) { phone = phoneView(name); emit("phone:state", { ...phone }); },
+  /** What the tray sends a Settings window that is already open. */
+  section(id) { emit("settings:section", id); },
 };
 
 // ---- the panel (after main.js has built the page, which replaces the body) ----
@@ -142,11 +163,14 @@ window.addEventListener("DOMContentLoaded", () => {
   panel.innerHTML = `
     <h2>Preview</h2>
     <label>Update state <select id="h-state">${Object.keys(STATES).map((k) => `<option>${k}</option>`).join("")}</select></label>
+    <label>Phone card <select id="h-phone">${Object.keys(PHONES).map((k) => `<option>${k}</option>`).join("")}</select></label>
     <label>Next check finds <select id="h-finds"><option>available</option><option>upToDate</option><option>error</option></select></label>
     <label>Theme <select id="h-theme"><option value="">system</option><option>light</option><option>dark</option></select></label>`;
   document.body.append(panel);
   panel.querySelector("#h-state").value = Object.keys(STATES).includes(params.get("updates")) ? params.get("updates") : "upToDate";
   panel.querySelector("#h-state").addEventListener("change", (e) => window.__fake.updates(e.target.value));
+  panel.querySelector("#h-phone").value = PHONES[params.get("phone")] ? params.get("phone") : "off";
+  panel.querySelector("#h-phone").addEventListener("change", (e) => window.__fake.phone(e.target.value));
   panel.querySelector("#h-finds").addEventListener("change", (e) => window.__fake.finds(e.target.value));
   panel.querySelector("#h-theme").value = theme || "";
   panel.querySelector("#h-theme").addEventListener("change", (e) => {
