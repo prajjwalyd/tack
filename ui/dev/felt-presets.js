@@ -5,11 +5,11 @@
 export const PRESETS = [
   { id: "green", name: "Green", hex: "#24503f" },
   { id: "navy", name: "Navy", hex: "#233a5e" },
-  { id: "charcoal", name: "Charcoal", hex: "#3a3d42" },
-  { id: "burgundy", name: "Burgundy", hex: "#5e2a36" },
+  { id: "charcoal", name: "Charcoal", hex: "#3b3a3e" },
+  { id: "burgundy", name: "Burgundy", hex: "#682b3b" },
   { id: "plum", name: "Plum", hex: "#4a2f5c" },
   { id: "teal", name: "Teal", hex: "#1f5560" },
-  { id: "slate", name: "Slate", hex: "#3f4f5f" },
+  { id: "slate", name: "Slate", hex: "#42586e" },
 ];
 
 /** Reveal speed -> the board's motion scale. */

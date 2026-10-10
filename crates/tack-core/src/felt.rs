@@ -26,11 +26,11 @@ pub struct FeltPreset {
 pub const PRESETS: [FeltPreset; 7] = [
     FeltPreset { id: "green", name: "Green", hex: "#24503f" },
     FeltPreset { id: "navy", name: "Navy", hex: "#233a5e" },
-    FeltPreset { id: "charcoal", name: "Charcoal", hex: "#3a3d42" },
-    FeltPreset { id: "burgundy", name: "Burgundy", hex: "#5e2a36" },
+    FeltPreset { id: "charcoal", name: "Charcoal", hex: "#3b3a3e" },
+    FeltPreset { id: "burgundy", name: "Burgundy", hex: "#682b3b" },
     FeltPreset { id: "plum", name: "Plum", hex: "#4a2f5c" },
     FeltPreset { id: "teal", name: "Teal", hex: "#1f5560" },
-    FeltPreset { id: "slate", name: "Slate", hex: "#3f4f5f" },
+    FeltPreset { id: "slate", name: "Slate", hex: "#42586e" },
 ];
 
 /// The id that follows the Windows accent colour.
