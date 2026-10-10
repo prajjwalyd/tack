@@ -1,8 +1,9 @@
 // The UI's side of the IPC contract. The only module that
 // touches window.__TAURI__: commands go out through the wrappers below,
 // events come in through `on`. The Rust side is crates/tack-app/src/ipc/.
-// Every webview uses it: the board (main.js), the shortcuts dialog
-// (shortcuts.js) and the phone window (phone-link.js).
+// Every webview uses it: the board (main.js), the settings window
+// (settings/main.js), the shortcuts dialog (shortcuts.js) and the phone window
+// (phone-link.js).
 
 /** Event names, backend -> UI. Mirrors crates/tack-app/src/ipc/events.rs. */
 export const EVENTS = Object.freeze({
@@ -16,7 +17,7 @@ export const EVENTS = Object.freeze({
   TUCK: "board:tuck",                        // none
   WARM_UP: "board:warm-up",                  // none: draw the board once, unseen (startup)
   GUST: "board:gust",                        // none
-  SETTINGS: "board:settings",                // { sound: boolean }
+  SETTINGS: "settings:changed",              // SettingsView: all of them, whenever any changes (every window)
   POINTER_LEFT: "board:pointer-left",        // none: the window went click-through
   ORDER_CHANGED: "board:order-changed",      // { ids: string[] } the whole row, display order
   NOTICE: "board:notice",                    // { text: string } a short message under the board
@@ -41,6 +42,17 @@ export const COMMANDS = Object.freeze({
   TAKE_FOCUS: "take_focus",
   RELEASE_FOCUS: "release_focus",
   HIDE_BOARD: "hide_board",
+  // The settings window (its own window). Each setter answers with the new SettingsView.
+  SETTINGS_STATE: "settings_state",
+  SET_SOUND: "set_sound",
+  SET_EDGE_REVEAL: "set_edge_reveal",
+  SET_AUTOSTART: "set_autostart",
+  SET_REVEAL: "set_reveal",
+  SET_FELT: "set_felt",
+  SET_UPDATES_CHECK: "set_updates_check",
+  OPEN_SHORTCUTS: "open_shortcuts",
+  OPEN_PHONE_LINK: "open_phone_link",
+  CLOSE_SETTINGS: "close_settings",
   // The shortcuts dialog (its own small window).
   SHORTCUTS_STATE: "shortcuts_state",
   SET_SHORTCUTS: "set_shortcuts",
@@ -63,6 +75,19 @@ export const COMMANDS = Object.freeze({
  * kept first (by keptAt), then the rest newest first. A missing `kind` means
  * "image". A note has `thumb` "", `width` and `height` 0, and a name like
  * "Note 2026-10-08 141530.txt".
+ *
+ * @typedef {{ id: string, name: string, hex: string }} FeltPreset
+ * `hex`: the felt in a light theme, "#rrggbb"; darken it for a dark one.
+ *
+ * @typedef {{ sound: boolean, edgeReveal: boolean, autostart: boolean,
+ *             reveal: "instant" | "fast" | "normal",
+ *             felt: string, feltPresets: FeltPreset[], motionScale: number,
+ *             updatesCheck: boolean, version: string }} SettingsView
+ * `felt`: the board colour: a preset's id ("green", "navy", "charcoal",
+ * "burgundy", "plum", "teal", "slate"), "accent" (the Windows accent colour:
+ * the CSS `AccentColor` keyword) or a custom "#rrggbb". `feltPresets`: the
+ * presets, in order. `motionScale`: multiply the reveal animation's duration
+ * by it (0.6, 0.8 or 1). `version`: this Tack, "0.2.0".
  *
  * @typedef {{ text: string, link: string | null, domain: string | null,
  *             truncated: boolean }} Note
@@ -99,7 +124,7 @@ export function on(name, fn) {
   return tauri().event.listen(name, (e) => fn(e.payload || {}));
 }
 
-/** @returns {Promise<{ prints: Print[], sound: boolean } | null>} */
+/** @returns {Promise<{ prints: Print[], sound: boolean, settings: SettingsView } | null>} */
 export const boardReady = () => invoke(COMMANDS.BOARD_READY);
 /** The board rect in physical px relative to the window. */
 export const setBoardRect = (rect) => invoke(COMMANDS.SET_BOARD_RECT, rect);
@@ -127,6 +152,23 @@ export const takeFocus = () => invoke(COMMANDS.TAKE_FOCUS);
 export const releaseFocus = () => invoke(COMMANDS.RELEASE_FOCUS);
 /** Esc: tuck the board (the backend sends board:tuck). */
 export const hideBoard = () => invoke(COMMANDS.HIDE_BOARD);
+
+// The settings window. Each setter answers with the new SettingsView, and
+// every window gets EVENTS.SETTINGS. A speed or colour that is not valid
+// changes nothing.
+/** @returns {Promise<SettingsView | null>} */
+export const settingsState = () => invoke(COMMANDS.SETTINGS_STATE);
+export const setSound = (on) => invoke(COMMANDS.SET_SOUND, { on });
+export const setEdgeReveal = (on) => invoke(COMMANDS.SET_EDGE_REVEAL, { on });
+export const setAutostart = (on) => invoke(COMMANDS.SET_AUTOSTART, { on });
+/** @param {"instant" | "fast" | "normal"} speed */
+export const setReveal = (speed) => invoke(COMMANDS.SET_REVEAL, { speed });
+/** @param {string} value a preset id, "accent" or "#rrggbb" */
+export const setFelt = (value) => invoke(COMMANDS.SET_FELT, { value });
+export const setUpdatesCheck = (on) => invoke(COMMANDS.SET_UPDATES_CHECK, { on });
+export const openShortcuts = () => invoke(COMMANDS.OPEN_SHORTCUTS);
+export const openPhoneLink = () => invoke(COMMANDS.OPEN_PHONE_LINK);
+export const closeSettings = () => invoke(COMMANDS.CLOSE_SETTINGS);
 
 /**
  * @typedef {{ chord: string, status: "ok" | "in-use" | "off" | "invalid" }} Shortcut
