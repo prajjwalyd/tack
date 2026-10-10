@@ -4,11 +4,15 @@
 //! and announced to every window as `settings:changed` with the new
 //! [`SettingsView`].
 //!
-//! An invalid value (a speed or colour that is not one) changes nothing.
+//! An invalid value (a speed, colour, finish or paper that is not one) changes
+//! nothing.
 
 use serde::Serialize;
 use tack_core::felt::{self, FeltPreset};
-use tack_core::{Felt, RevealSpeed, Settings};
+use tack_core::frame::{self, FramePreset};
+use tack_core::paper::{self, PaperPreset};
+use tack_core::settings::Appearance;
+use tack_core::{Felt, Frame, NotePaper, RevealSpeed, Settings};
 use tack_windows::{autostart, edge_reveal};
 use tauri::AppHandle;
 
@@ -32,6 +36,14 @@ pub struct SettingsView {
     felt: Felt,
     /// The colours to choose from, in order.
     felt_presets: &'static [FeltPreset],
+    /// The frame finish: a preset's id.
+    frame: Frame,
+    /// The finishes to choose from, in order.
+    frame_presets: &'static [FramePreset],
+    /// The note paper: a preset's id.
+    paper: NotePaper,
+    /// The paper colours to choose from, in order, each with its swatch colour.
+    paper_presets: &'static [PaperPreset],
     /// What the reveal animation's duration is multiplied by.
     motion_scale: f64,
     /// Tack looks for new versions.
@@ -50,6 +62,10 @@ pub fn view(app: &AppHandle) -> SettingsView {
         reveal: settings.reveal,
         felt: settings.appearance.felt,
         felt_presets: &felt::PRESETS,
+        frame: settings.appearance.frame,
+        frame_presets: &frame::PRESETS,
+        paper: settings.appearance.paper,
+        paper_presets: &paper::PRESETS,
         motion_scale: settings.reveal.motion_scale(),
         updates_check: settings.updates.check,
         version: app.package_info().version.to_string(),
@@ -110,6 +126,28 @@ pub fn set_felt(app: &AppHandle, value: &str) -> SettingsView {
         Some(felt) => change(app, |s| s.appearance.felt = felt),
         None => view(app),
     }
+}
+
+/// A finish's id; anything else changes nothing.
+pub fn set_frame(app: &AppHandle, value: &str) -> SettingsView {
+    match Frame::try_parse(value) {
+        Some(frame) => change(app, |s| s.appearance.frame = frame),
+        None => view(app),
+    }
+}
+
+/// A paper colour's id; anything else changes nothing.
+pub fn set_paper(app: &AppHandle, value: &str) -> SettingsView {
+    match NotePaper::try_parse(value) {
+        Some(paper) => change(app, |s| s.appearance.paper = paper),
+        None => view(app),
+    }
+}
+
+/// The board colour, the frame and the note paper back to the way Tack
+/// started. The other settings (the reveal speed among them) stay.
+pub fn reset_appearance(app: &AppHandle) -> SettingsView {
+    change(app, |s| s.appearance = Appearance::default())
 }
 
 pub fn set_updates_check(app: &AppHandle, on: bool) -> SettingsView {

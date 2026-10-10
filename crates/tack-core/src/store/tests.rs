@@ -201,7 +201,11 @@ fn save_then_load_round_trips_without_leaving_a_temp_file() {
         sound: false,
         edge_reveal: false,
         reveal: crate::RevealSpeed::Fast,
-        appearance: crate::settings::Appearance { felt: crate::Felt::parse("#a1b2c3") },
+        appearance: crate::settings::Appearance {
+            felt: crate::Felt::parse("#a1b2c3"),
+            frame: crate::Frame::parse("graphite"),
+            paper: crate::NotePaper::parse("sky"),
+        },
         updates: crate::settings::UpdateSettings { check: false },
         snip_tip_shown: true,
         toggle_shortcut: "Ctrl+Alt+F9".into(),

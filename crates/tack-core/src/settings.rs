@@ -4,6 +4,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::felt::Felt;
+use crate::frame::Frame;
+use crate::paper::NotePaper;
 use crate::phone::PhoneSettings;
 use crate::reveal_speed::RevealSpeed;
 use crate::shortcut::{Chord, DEFAULT_PIN, DEFAULT_TOGGLE};
@@ -56,6 +58,10 @@ impl Default for Settings {
 pub struct Appearance {
     /// The board's colour.
     pub felt: Felt,
+    /// The finish of the metal frame around it.
+    pub frame: Frame,
+    /// The colour of the paper notes.
+    pub paper: NotePaper,
 }
 
 /// Looking for new versions.
@@ -128,6 +134,8 @@ mod tests {
         let settings = Settings::default();
         assert_eq!(settings.reveal, RevealSpeed::Normal);
         assert_eq!(settings.appearance.felt, Felt::default());
+        assert_eq!(settings.appearance.frame.id(), "aluminium");
+        assert_eq!(settings.appearance.paper.id(), "white");
         assert!(settings.updates.check);
     }
 
@@ -135,7 +143,7 @@ mod tests {
     fn they_are_saved_as_camel_case_json() {
         let json = serde_json::to_value(Settings::default()).unwrap();
         assert_eq!(json["reveal"], "normal");
-        assert_eq!(json["appearance"], serde_json::json!({ "felt": "green" }));
+        assert_eq!(json["appearance"], serde_json::json!({ "felt": "green", "frame": "aluminium", "paper": "white" }));
         assert_eq!(json["updates"], serde_json::json!({ "check": true }));
     }
 
@@ -143,12 +151,16 @@ mod tests {
     fn they_survive_a_round_trip() {
         let settings = Settings {
             reveal: RevealSpeed::Instant,
-            appearance: Appearance { felt: Felt::parse("#A1B2C3") },
+            appearance: Appearance {
+                felt: Felt::parse("#A1B2C3"),
+                frame: Frame::parse("brass"),
+                paper: NotePaper::parse("mint"),
+            },
             updates: UpdateSettings { check: false },
             ..Settings::default()
         };
         let json = serde_json::to_string(&settings).unwrap();
-        assert!(json.contains(r##""appearance":{"felt":"#a1b2c3"}"##), "{json}");
+        assert!(json.contains(r##""appearance":{"felt":"#a1b2c3","frame":"brass","paper":"mint"}"##), "{json}");
         assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), settings);
     }
 
@@ -168,14 +180,31 @@ mod tests {
 
     #[test]
     fn bad_values_fall_back_and_never_stop_the_file_loading() {
-        let bad = r##"{ "sound": false, "reveal": "turbo", "appearance": { "felt": "#12" }, "updates": { "check": false } }"##;
+        let bad = r##"{ "sound": false, "reveal": "turbo", "appearance": { "felt": "#12", "frame": "gold", "paper": 3 }, "updates": { "check": false } }"##;
         let settings: Settings = serde_json::from_str(bad).unwrap();
         assert_eq!(settings.reveal, RevealSpeed::Normal);
-        assert_eq!(settings.appearance.felt, Felt::default());
+        assert_eq!(settings.appearance, Appearance::default());
         assert!(!settings.sound && !settings.updates.check, "the good values stay");
-        let wrong_types = r#"{ "reveal": 3, "appearance": { "felt": null } }"#;
+        let wrong_types = r#"{ "reveal": 3, "appearance": { "felt": null, "frame": [], "paper": {} } }"#;
         let settings: Settings = serde_json::from_str(wrong_types).unwrap();
-        assert_eq!((settings.reveal, settings.appearance.felt), (RevealSpeed::Normal, Felt::default()));
+        assert_eq!((settings.reveal, settings.appearance), (RevealSpeed::Normal, Appearance::default()));
+    }
+
+    #[test]
+    fn each_appearance_setting_falls_back_on_its_own() {
+        let one_bad = r##"{ "appearance": { "felt": "navy", "frame": "gold", "paper": "blush" } }"##;
+        let appearance = serde_json::from_str::<Settings>(one_bad).unwrap().appearance;
+        assert_eq!(appearance.felt.to_string(), "navy");
+        assert_eq!(appearance.frame, Frame::default());
+        assert_eq!(appearance.paper.id(), "blush");
+    }
+
+    #[test]
+    fn a_file_from_before_the_frame_and_paper_keeps_its_felt() {
+        let old = r##"{ "appearance": { "felt": "plum" } }"##;
+        let appearance = serde_json::from_str::<Settings>(old).unwrap().appearance;
+        assert_eq!(appearance.felt.to_string(), "plum");
+        assert_eq!((appearance.frame, appearance.paper), (Frame::default(), NotePaper::default()));
     }
 
     #[test]

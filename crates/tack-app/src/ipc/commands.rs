@@ -239,6 +239,26 @@ pub fn set_felt(app: AppHandle, value: String) -> SettingsView {
     settings_apply::set_felt(&app, &value)
 }
 
+/// A frame finish's id ("aluminium", "graphite", "brass", "silver"); anything
+/// else changes nothing.
+#[tauri::command]
+pub fn set_frame(app: AppHandle, value: String) -> SettingsView {
+    settings_apply::set_frame(&app, &value)
+}
+
+/// A note paper's id ("white", "cream", "butter", "blush", "sky", "mint");
+/// anything else changes nothing.
+#[tauri::command]
+pub fn set_paper(app: AppHandle, value: String) -> SettingsView {
+    settings_apply::set_paper(&app, &value)
+}
+
+/// The board colour, frame and note paper back to their defaults.
+#[tauri::command]
+pub fn reset_appearance(app: AppHandle) -> SettingsView {
+    settings_apply::reset_appearance(&app)
+}
+
 #[tauri::command]
 pub fn set_updates_check(app: AppHandle, on: bool) -> SettingsView {
     settings_apply::set_updates_check(&app, on)
