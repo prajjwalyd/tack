@@ -14,9 +14,9 @@ use windows::Win32::UI::Shell::{
     SHQueryUserNotificationState, QUNS_BUSY, QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWL_EXSTYLE, HWND_NOTOPMOST, HWND_TOPMOST,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE, SW_SHOWNOACTIVATE, WS_EX_LAYERED,
-    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT,
+    GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWL_EXSTYLE, HWND_TOPMOST, SWP_NOACTIVATE,
+    SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE, SW_SHOWNOACTIVATE, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    WS_EX_TRANSPARENT,
 };
 
 /// A monitor, in physical pixels.
@@ -93,18 +93,6 @@ pub fn show_at(hwnd: HWND, pos: (i32, i32), size: (i32, i32)) {
         let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), pos.0, pos.1, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
         let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), pos.0, pos.1, size.0, size.1, SWP_NOACTIVATE | SWP_SHOWWINDOW);
         let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-    }
-}
-
-/// Puts another window (the Settings window, while it holds the board down)
-/// above the board's overlay, or back among the ordinary windows. Both are
-/// topmost, and the later one raised is on top, so this is called after
-/// every [`show_at`] while held. Never moves, resizes or activates it, and
-/// does nothing if the window is gone.
-pub fn set_topmost(hwnd: HWND, topmost: bool) {
-    let after = if topmost { HWND_TOPMOST } else { HWND_NOTOPMOST };
-    unsafe {
-        let _ = SetWindowPos(hwnd, Some(after), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
 }
 

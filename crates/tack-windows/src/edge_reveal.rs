@@ -281,7 +281,7 @@ impl Poller {
                 // down would make it bounce straight back.
                 // Nor in Settings, which counts as outside the board but is
                 // what holds it down.
-                let clicked_outside = (left_pressed || right_pressed) && !over_board && !on_taskbar && !v.settings_open;
+                let clicked_outside = (left_pressed || right_pressed) && !over_board && !on_taskbar && !v.settings_held;
 
                 // The window covers the whole work area, and the drag loop
                 // drops on whatever window is under the pointer: off the
@@ -293,9 +293,9 @@ impl Poller {
                 }
 
                 let peeking = !v.entered && v.peek_until.is_some_and(|t| now < t);
-                // Settings open: the board stays down (no leave, no peek end)
-                // for as long as it is.
-                let busy = held || self.press_inside || v.stay_open || peeking || v.settings_open;
+                // Settings has the focus: the board stays down (no leave, no
+                // peek end) for as long as it does.
+                let busy = held || self.press_inside || v.stay_open || peeking || v.settings_held;
 
                 // A full-screen app coming to the front sends the edge's and a
                 // new capture's board back up; Snipping Tool's overlay only
@@ -305,12 +305,12 @@ impl Poller {
                     && (match v.reason {
                         RevealReason::Edge => true,
                         RevealReason::New => !v.snipping,
-                        RevealReason::Hotkey | RevealReason::Tray => false,
+                        RevealReason::Hotkey | RevealReason::Tray | RevealReason::Settings => false,
                     }
                         // A full-screen app wins over the Settings hold,
                         // whoever revealed the board; the hold ends with the
                         // tuck (but not for Snipping Tool's own overlay).
-                        || (v.settings_open && !v.snipping));
+                        || (v.settings_held && !v.snipping));
                 if (!held && clicked_outside) || (!held && fullscreen_tucks) {
                     if cfg!(debug_assertions) {
                         eprintln!(

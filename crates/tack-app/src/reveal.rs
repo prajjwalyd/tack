@@ -19,7 +19,7 @@ use windows::Win32::Foundation::POINT;
 
 use crate::ipc::events;
 use crate::state::lock;
-use crate::{settings_window, webview_power, webview_privacy};
+use crate::{webview_power, webview_privacy};
 
 /// The board window's label in tauri.conf.json.
 pub const WINDOW_LABEL: &str = "board";
@@ -291,7 +291,7 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
                 v.peek_until = v.peek_until.max(Some(now + peek));
                 trace!("reveal {reason:?}: peek {peek:?} at scale {scale}");
             }
-            RevealReason::Edge => {}
+            RevealReason::Edge | RevealReason::Settings => {}
         }
         if v.shown {
             if reason == RevealReason::New && (v.window_pos != place.pos || v.window_size != place.size) {
@@ -312,7 +312,6 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
                     if let Some(hwnd) = board_hwnd(&handle) {
                         overlay::show_at(hwnd, place.pos, place.size);
                         sync_click_through();
-                        raise_settings_if_held(&handle);
                     }
                 });
             } else {
@@ -356,7 +355,6 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
             let Some(hwnd) = board_hwnd(&app) else { return };
             overlay::show_at(hwnd, pos, size);
             sync_click_through();
-            raise_settings_if_held(&app);
             trace!("reveal gen={generation}: window shown");
             events::reveal(&app, reason);
             trace!("reveal gen={generation}: board:reveal sent");
@@ -418,22 +416,17 @@ fn forced_fullscreen() -> bool {
 ///
 /// Any tuck ends the Settings hold ([`hold_for_settings`]): it is the user's
 /// own say (the shortcut, the tray, Esc) or a full-screen app's, and neither
-/// is overruled by an open Settings window. The board stays up only until
-/// the next reveal then; opening Settings again holds it again.
+/// is overruled by a Settings window that has the focus. Settings holds the
+/// board again when it regains the focus.
 pub fn tuck(app: &AppHandle) {
-    let (tucked, hide_after) = {
+    let (generation, hide_after) = {
         let mut s = lock(app);
         let hide_after = s.settings.reveal.tuck_hide_delay();
-        let Some(tucked) = s.view.tuck() else { return };
-        (tucked, hide_after)
+        let Some(generation) = s.view.tuck() else { return };
+        (generation, hide_after)
     };
-    let generation = tucked.generation;
     events::tuck(app);
     trace!("tuck gen={generation}: board:tuck sent, the window hides in {hide_after:?}");
-    if tucked.hold_ended {
-        trace!("tuck gen={generation}: the Settings hold ended");
-        lower_settings(app);
-    }
     let handle = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(hide_after);
@@ -455,81 +448,35 @@ pub fn tuck(app: &AppHandle) {
     });
 }
 
-/// The Settings window opens (`on`) or closes: while it is open the board
-/// stays down, so a change of colour, frame, paper or speed shows live, and
-/// it tucks when Settings closes.
+/// Sets whether the Settings window holds the board down: it holds it while
+/// it has the keyboard focus (`settings_window` passes the window's focus
+/// events on), so a change of colour, frame, paper or speed shows live.
 ///
-/// Opening reveals the board if it is not down, as the tray does (it never
-/// takes the keyboard from Settings: the reason is [`RevealReason::Tray`],
-/// and only the shortcut's reveal asks for focus), unless a full-screen app
-/// is in front. A board already down is just kept: no new swing. While
-/// held, the pointer poller does not tuck it (leaving, the peek ending, a
-/// click in Settings), a full-screen app still does, and so does an explicit
-/// tuck; both end the hold. The Settings window is raised above the board's
-/// overlay for as long as it is held (on a short screen they overlap).
+/// Holding brings the board down if it is up, unless a full-screen app is in
+/// front; it never takes the keyboard from Settings (the reason is
+/// [`RevealReason::Settings`], which only the shortcut's reveal differs from).
+/// A board already down is just kept: no new swing. While held, the pointer
+/// poller does not tuck it (leaving, the peek ending, a click in Settings; the
+/// board is never activated by a click, so using it keeps Settings focused),
+/// a full-screen app still does, and so does an explicit tuck; both end the
+/// hold. Letting go tucks nothing itself: the poller's usual rules take over,
+/// so a board the shortcut or the tray opened, or one the pointer is on,
+/// stays, and any other goes after the leave delay.
 ///
-/// Call it from a worker thread (a reveal may be requested) or the main
-/// thread (the window's destroyed event).
+/// Asking twice for the same thing does nothing. From the main thread (the
+/// window's events).
 pub fn hold_for_settings(app: &AppHandle, on: bool) {
-    if !on {
-        let tuck_now = lock(app).view.release_settings();
-        trace!("settings closed: hold released, tuck={tuck_now}");
-        lower_settings(app);
-        if tuck_now {
-            tuck(app);
-        }
-        return;
-    }
-    let (needs_reveal, ready) = {
-        let mut s = lock(app);
-        (s.view.hold_for_settings(), s.ui_ready)
-    };
-    trace!("settings open: hold requested, reveal needed={needs_reveal}, ui_ready={ready}");
-    if !ready {
-        // The flag is kept: the board is held once it is revealed.
-        return;
-    }
-    if !needs_reveal {
-        let handle = app.clone();
-        let _ = app.run_on_main_thread(move || raise_settings_if_held(&handle));
+    if !lock(app).view.hold_for_settings(on) {
         return;
     }
     // Asked afresh, not the poller's last reading, which may be stale while
     // the board is tucked. Snipping Tool's own overlay does not count.
     if overlay::fullscreen_app_in_front() && !snipping_tool::in_front() {
-        lock(app).view.settings_open = false;
-        trace!("settings open: full screen in front, the board stays up");
+        lock(app).view.settings_held = false;
+        trace!("settings focused: full screen in front, the board stays up");
         return;
     }
-    show(app, RevealReason::Tray, Placement::under_pointer(), Duration::ZERO);
-}
-
-/// The Settings window's handle, if it is open.
-fn settings_hwnd(app: &AppHandle) -> Option<HWND> {
-    app.get_webview_window(settings_window::LABEL)?.hwnd().ok()
-}
-
-/// Puts Settings above the board's overlay (both are topmost, and showing
-/// the board puts it on top), if Settings is holding the board. Main thread.
-fn raise_settings_if_held(app: &AppHandle) {
-    if !lock(app).view.settings_open {
-        return;
-    }
-    if let Some(hwnd) = settings_hwnd(app) {
-        overlay::set_topmost(hwnd, true);
-    }
-}
-
-/// Settings back among the ordinary windows. Queued for the main thread,
-/// which also runs after the window's destruction, when there is nothing
-/// left to do.
-fn lower_settings(app: &AppHandle) {
-    let handle = app.clone();
-    let _ = app.run_on_main_thread(move || {
-        if let Some(hwnd) = settings_hwnd(&handle) {
-            overlay::set_topmost(hwnd, false);
-        }
-    });
+    show(app, RevealReason::Settings, Placement::under_pointer(), Duration::ZERO);
 }
 
 /// The one-time tip under the board: showing at `rect` (physical px,

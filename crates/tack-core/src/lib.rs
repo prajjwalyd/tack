@@ -41,4 +41,4 @@ pub use print::{Kind, NoteBody, Origin, Print};
 pub use reveal_speed::RevealSpeed;
 pub use settings::Settings;
 pub use thumbnail::Thumb;
-pub use view::{CssRect, Rect, RevealReason, Tucked, View};
+pub use view::{CssRect, Rect, RevealReason, View};

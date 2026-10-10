@@ -16,8 +16,8 @@ const TITLE: &str = "Tack settings";
 /// The page scrolls inside it.
 const SIZE: (f64, f64) = (520.0, 640.0);
 
-/// Settings opens below the board, which it holds down, so it must not cover
-/// it. The board's strip ([`STRIP_H`]: board, frame and pinned prints) ends
+/// Settings opens below the board, which it holds down while it has the
+/// focus, so it must not cover it. The board's strip ([`STRIP_H`]: board, frame and pinned prints) ends
 /// this far above the window, and the window keeps this far from the bottom
 /// of the work area, CSS px.
 const GAP: f64 = 16.0;
@@ -42,6 +42,10 @@ fn page_for(section: Option<&str>) -> String {
 /// `section` if there is one (a window that is open is told with
 /// `settings:section`). Not from the event loop's own thread: building a
 /// window waits for it.
+///
+/// The window holds the board down while it has the keyboard focus (see
+/// [`reveal::hold_for_settings`]): its focus events are all it takes, so
+/// bringing it forward needs no call of its own.
 pub fn open(app: &AppHandle, section: Option<&str>) {
     if let Some(window) = app.get_webview_window(LABEL) {
         place(app, &window);
@@ -51,26 +55,24 @@ pub fn open(app: &AppHandle, section: Option<&str>) {
         if let Some(section) = section.filter(|s| SECTIONS.contains(s)) {
             events::settings_section(app, section);
         }
-        reveal::hold_for_settings(app, true);
         return;
     }
     match dialogs::open_hidden(app, LABEL, &page_for(section), TITLE, SIZE) {
         Ok(window) => {
+            let handle = app.clone();
+            // Before it shows, so the first focus is not missed.
+            window.on_window_event(move |event| match event {
+                WindowEvent::Focused(focused) => reveal::hold_for_settings(&handle, *focused),
+                WindowEvent::Destroyed => {
+                    // Closed while a shortcut was listening: the hotkeys come back.
+                    shortcuts::pause(false);
+                    reveal::hold_for_settings(&handle, false);
+                }
+                _ => {}
+            });
             place(app, &window);
             let _ = window.show();
             let _ = window.set_focus();
-            let handle = app.clone();
-            window.on_window_event(move |event| {
-                if let WindowEvent::Destroyed = event {
-                    // Closed while a shortcut was listening: the hotkeys come back.
-                    shortcuts::pause(false);
-                    // However it closed (X, Esc, the page's own close): the
-                    // board it held down goes back up.
-                    reveal::hold_for_settings(&handle, false);
-                }
-            });
-            // While it is open the board stays down, so changes show live.
-            reveal::hold_for_settings(app, true);
         }
         Err(e) => eprintln!("tack: cannot open the Settings window: {e}"),
     }
