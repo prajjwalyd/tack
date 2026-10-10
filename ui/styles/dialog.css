@@ -1,4 +1,4 @@
-/* What the small dialog windows share (phone-link.html, settings.html), in a
+/* What the Settings window shares with its pages (settings.html), in a
    Windows 11 style: solid system-themed background, Fluent cards, 32 px
    buttons, two-tone focus ring. Link it before the dialog's own stylesheet,
    which adds its colours and layout.

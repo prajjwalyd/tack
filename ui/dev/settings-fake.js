@@ -4,20 +4,24 @@
 //   ?updates=idle|checking|upToDate|available|downloading|installing|error
 //                       the update state to start in (default upToDate)
 //   ?felt=navy|accent|%23aabbcc   ?finish=graphite   ?paper=blush   ?speed=instant|fast|normal   the starting settings
-//   ?phone=off|on|noDevices|missing|disconnected|asking|error   the phone card's state (default off)
+//   ?phone=off|on|noDevices|missing|disconnected|asking|combo|error   the phone card's and page's state (default off)
 //   ?inuse=1            start with the pin shortcut reported in use by another app
 //                       ("Win+Alt+X" is always held by one: try it in a field)
 //   ?theme=light|dark   force the theme
 //   ?frame=520x640      lay the page out at that size (the window's) whatever the browser's
+// settings-preview.html#phone opens on the phone page, #shortcuts and the other
+// groups scroll the list, as the tray's links do.
 // The panel at the right (wide browser windows only) switches the update
-// state, the phone card's state and what the next check finds;
-// window.__fake does the same from the console (also .section("shortcuts"),
-// what the tray sends an open window). A change made in the page really
+// state, the phone state and what the next check finds;
+// window.__fake does the same from the console (also .section("shortcuts") or
+// .section("phone"), what the tray sends an open window, and .ask("name"), a
+// device asking). A change made in the page really
 // changes the fake settings, so the board preview (preview.html) shows what
 // the page would do.
 // Must load before ../scripts/settings/main.js.
 
 import { DEFAULT_APPEARANCE, FRAME_PRESETS, PAPER_PRESETS, PRESETS, SCALES, validFelt, validFrame, validPaper } from "./appearance-presets.js";
+import { PHONE_NAMES, createPhone } from "./phone-fake.js";
 
 const params = new URLSearchParams(location.search);
 const theme = params.get("theme");
@@ -80,18 +84,8 @@ let status = { ...BASE, ...(STATES[params.get("updates")] || STATES.upToDate) };
 let nextCheck = "available";   // what the next check finds: available | upToDate | error
 let timers = [];
 
-// The phone card: a PhoneState, as phone-link.js describes it.
-const PHONES = {
-  off: { on: false, netbird: "connected", devices: [] },
-  on: { on: true, netbird: "connected", serving: true, devices: [{ key: "k-pixel", name: "pixel" }, { key: "k-s24", name: "galaxy-s24" }] },
-  noDevices: { on: true, netbird: "connected", serving: true, devices: [] },
-  missing: { on: false, netbird: "missing", devices: [] },
-  disconnected: { on: true, netbird: "disconnected", devices: [] },
-  asking: { on: true, netbird: "connected", serving: true, devices: [], pending: [{ key: "k-tab", name: "galaxy-tab", fqdn: "galaxy-tab.netbird.cloud", ip: "100.90.12.34", code: "4821" }] },
-  error: { on: true, netbird: "connected", serving: false, error: "Couldn't start: port 7717 is in use", devices: [] },
-};
-const phoneView = (name) => ({ address: null, qr: null, error: null, pc: "my-pc", pending: [], serving: false, ...PHONES[name] });
-let phone = phoneView(PHONES[params.get("phone")] ? params.get("phone") : "off");
+// The phone card and page: a PhoneState (phone-fake.js).
+const phone = createPhone(params.get("phone"), (view) => emit("phone:state", view));
 
 const listeners = { "settings:changed": [], "updates:status": [], "phone:state": [], "settings:section": [] };
 const emit = (name, payload) => listeners[name].forEach((fn) => fn({ event: name, payload }));
@@ -138,8 +132,7 @@ const commands = {
     return result;
   },
   pause_shortcuts: () => null,
-  phone_state: () => ({ ...phone }),
-  open_phone_link: () => null,
+  ...phone.commands,
   close_settings: () => {
     document.documentElement.classList.add("closed");
     return null;
@@ -171,8 +164,10 @@ window.__fake = {
   /** What the next check finds. */
   finds(what) { nextCheck = what; },
   set,
-  /** Shows a phone state: one of PHONES' names. */
-  phone(name) { phone = phoneView(name); emit("phone:state", { ...phone }); },
+  /** Shows a phone state: one of PHONE_NAMES. */
+  phone: phone.use,
+  /** A device asks to use the board. */
+  ask: phone.ask,
   /** What the tray sends a Settings window that is already open. */
   section(id) { emit("settings:section", id); },
 };
@@ -184,14 +179,14 @@ window.addEventListener("DOMContentLoaded", () => {
   panel.innerHTML = `
     <h2>Preview</h2>
     <label>Update state <select id="h-state">${Object.keys(STATES).map((k) => `<option>${k}</option>`).join("")}</select></label>
-    <label>Phone card <select id="h-phone">${Object.keys(PHONES).map((k) => `<option>${k}</option>`).join("")}</select></label>
+    <label>Phone <select id="h-phone">${PHONE_NAMES.map((k) => `<option>${k}</option>`).join("")}</select></label>
     <label>Next check finds <select id="h-finds"><option>available</option><option>upToDate</option><option>error</option></select></label>
     <label>Window <select id="h-size"><option value="">browser</option><option>520x420</option><option>520x520</option><option>520x640</option></select></label>
     <label>Theme <select id="h-theme"><option value="">system</option><option>light</option><option>dark</option></select></label>`;
   document.body.append(panel);
   panel.querySelector("#h-state").value = Object.keys(STATES).includes(params.get("updates")) ? params.get("updates") : "upToDate";
   panel.querySelector("#h-state").addEventListener("change", (e) => window.__fake.updates(e.target.value));
-  panel.querySelector("#h-phone").value = PHONES[params.get("phone")] ? params.get("phone") : "off";
+  panel.querySelector("#h-phone").value = PHONE_NAMES.includes(params.get("phone")) ? params.get("phone") : "off";
   panel.querySelector("#h-phone").addEventListener("change", (e) => window.__fake.phone(e.target.value));
   panel.querySelector("#h-finds").addEventListener("change", (e) => window.__fake.finds(e.target.value));
   panel.querySelector("#h-size").value = frame ? `${frame[1]}x${frame[2]}` : "";

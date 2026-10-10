@@ -18,7 +18,7 @@ test("the card counts the allowed devices once the board is being served", () =>
   assert.equal(describe(state({ ...on })).tone, "ok");
 });
 
-test("the card says what NetBird needs, in the phone window's words", () => {
+test("the card says what NetBird needs, in the phone page's words", () => {
   assert.equal(describe(state({ netbird: "missing" })).status, "NetBird isn't installed");
   assert.equal(describe(state({ on: true, netbird: "disconnected" })).status, "NetBird isn't connected");
   assert.equal(describe(state({ on: true, netbird: "disconnected" })).tone, "warn");

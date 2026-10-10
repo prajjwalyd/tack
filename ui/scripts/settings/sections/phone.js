@@ -1,10 +1,7 @@
 // Use on your phone: the card at the top of Settings. It says how the phone
-// link stands (the PhoneState of phone-link.js, the same phone_state command
-// and phone:state event) and holds one button that opens the phone window,
-// where the switch, the QR code and the allowed devices are. That window stays
-// separate: it also opens by itself when a device asks to use the board.
+// link stands (the PhoneState in `api.phone`) and holds one button that opens
+// the phone page, where the switch, the QR code and the allowed devices are.
 
-import * as ipc from "../../ipc.js";
 import { PHONE_SVG } from "../../phone-icon.js";
 
 /** What the card says until the backend has answered (or if it cannot). */
@@ -15,8 +12,8 @@ const devices = (n) => (n === 0 ? "no devices yet" : `${n} device${n === 1 ? "" 
 /**
  * What to show for a PhoneState (null: not known yet): the status line, a
  * `tone` for its dot ("ok", "attn", "warn" or "none"), and the button's label.
- * Pure, so the wording is easy to check. The words are the phone window's.
- * @param {import("../../phone-link.js").PhoneState | null} s
+ * Pure, so the wording is easy to check. The words are the phone page's.
+ * @param {import("../pages/phone.js").PhoneState | null} s
  */
 export function describe(s) {
   if (!s) return { status: TAGLINE, tone: "none", button: "Set up" };
@@ -49,7 +46,7 @@ export function mount(host, api) {
     </div>`;
   const status = host.querySelector("#phone-status");
   const button = host.querySelector("#phone-button");
-  let shown = null;   // the status line last shown, so only a change is announced
+  let shown = null;   // the status line of the last state, so only a change is announced
 
   function render(state) {
     const d = describe(state);
@@ -57,13 +54,14 @@ export function mount(host, api) {
     status.dataset.tone = d.tone;
     button.textContent = d.button;
     button.classList.toggle("accent", d.button === "Set up");
-    if (shown !== null && shown !== d.status && state) api.announce(`Use on your phone: ${d.status}`);
+    if (!state) return;
+    // Said only while the list is showing: the phone page speaks for itself.
+    if (shown !== null && shown !== d.status && api.page() === "settings") api.announce(`Use on your phone: ${d.status}`);
     shown = d.status;
   }
 
   render(null);
-  button.addEventListener("click", () => ipc.openPhoneLink());
-  ipc.on(ipc.EVENTS.PHONE_STATE, render);
-  ipc.phoneState().then((state) => { if (state) render(state); });
+  button.addEventListener("click", () => api.go("phone"));
+  api.phone.subscribe(render);
   return {};
 }

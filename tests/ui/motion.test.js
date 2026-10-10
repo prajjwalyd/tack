@@ -26,7 +26,7 @@ const root = fileURLToPath(new URL("../../", import.meta.url));
 
 /** Files that are not the board: the dialog windows keep their own fixed, native-feeling control timings and never load the board's speed (scripts/motion/scale.js). */
 const NOT_THE_BOARD = [
-  /^ui\/styles\/(dialog|settings|shortcuts|phone-link|switch)\.css$/,
+  /^ui\/styles\/(dialog|settings|shortcuts|phone-link|phone|switch)\.css$/,
   /^ui\/scripts\/(dialog|shortcuts|phone-link|phone-icon)\.js$/,
   /^ui\/scripts\/settings\//,
 ];

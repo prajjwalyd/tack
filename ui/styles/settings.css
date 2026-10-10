@@ -19,10 +19,22 @@
 /* The window is 520 wide and 420 to 640 tall: the title stays, the page scrolls under it. */
 .head {
   flex: none;
+  display: flex;
+  align-items: center;
   padding: 14px 20px 8px;
   transition: box-shadow 80ms ease;
 }
 .head.scrolled { box-shadow: 0 1px 0 var(--divider); }
+/* On the phone page the title reads "Settings > Use on your phone", the first part the way back. */
+.back {
+  height: 28px;
+  margin-left: -4px;
+  padding: 0 6px;
+  color: var(--ink-2);
+  font: 600 20px/28px var(--font-display);
+}
+.back:hover { color: var(--ink); }
+.crumb { padding: 0 6px; color: var(--ink-2); font: 600 20px/28px var(--font-display); }
 .page {
   flex: 1;
   min-height: 0;
@@ -38,8 +50,8 @@
 h1, h2, p { margin: 0; }
 h1 { padding: 0 2px; font: 600 20px/28px var(--font-display); }
 .group-title { margin: 0 0 8px 2px; font: 600 14px/20px var(--font); }
-/* A link to a section ("#shortcuts") moves the focus to its heading; no ring, the scroll shows it. */
-.group-title:focus, .hero-title:focus { outline: none; }
+/* A link to a section ("#shortcuts") or the phone page moves the focus to its heading; no ring, the scroll shows it. */
+h1:focus, .group-title:focus, .hero-title:focus { outline: none; }
 [data-section] { scroll-margin-top: 4px; }
 .quiet { padding: 0 2px; font: 400 13px/18px var(--font); color: var(--ink-2); }
 
@@ -51,7 +63,7 @@ h1 { padding: 0 2px; font: 600 20px/28px var(--font-display); }
   column-gap: 14px;
   padding: 14px 16px;
 }
-/* The phone window's tile (phone-link.css), a little smaller. */
+/* The phone icon's tile, on the card and the phone page. */
 .tile {
   display: grid;
   place-items: center;
@@ -84,6 +96,7 @@ h1 { padding: 0 2px; font: 600 20px/28px var(--font-display); }
 .card > .switch { border-radius: 0; }
 .card:not(.hero-card) > :first-child { border-radius: 6px 6px 0 0; }
 .card:not(.hero-card) > :last-child { border-radius: 0 0 6px 6px; }
+.card > .switch:only-child { border-radius: 6px; }
 
 .row {
   display: grid;
