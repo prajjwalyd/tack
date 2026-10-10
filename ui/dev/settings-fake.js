@@ -186,6 +186,7 @@ window.addEventListener("DOMContentLoaded", () => {
     <label>Update state <select id="h-state">${Object.keys(STATES).map((k) => `<option>${k}</option>`).join("")}</select></label>
     <label>Phone card <select id="h-phone">${Object.keys(PHONES).map((k) => `<option>${k}</option>`).join("")}</select></label>
     <label>Next check finds <select id="h-finds"><option>available</option><option>upToDate</option><option>error</option></select></label>
+    <label>Window <select id="h-size"><option value="">browser</option><option>520x420</option><option>520x520</option><option>520x640</option></select></label>
     <label>Theme <select id="h-theme"><option value="">system</option><option>light</option><option>dark</option></select></label>`;
   document.body.append(panel);
   panel.querySelector("#h-state").value = Object.keys(STATES).includes(params.get("updates")) ? params.get("updates") : "upToDate";
@@ -193,6 +194,11 @@ window.addEventListener("DOMContentLoaded", () => {
   panel.querySelector("#h-phone").value = PHONES[params.get("phone")] ? params.get("phone") : "off";
   panel.querySelector("#h-phone").addEventListener("change", (e) => window.__fake.phone(e.target.value));
   panel.querySelector("#h-finds").addEventListener("change", (e) => window.__fake.finds(e.target.value));
+  panel.querySelector("#h-size").value = frame ? `${frame[1]}x${frame[2]}` : "";
+  panel.querySelector("#h-size").addEventListener("change", (e) => {
+    const [w, h] = e.target.value ? e.target.value.split("x") : ["", ""];
+    Object.assign(document.documentElement.style, w ? { width: `${w}px`, height: `${h}px`, overflow: "hidden" } : { width: "", height: "", overflow: "" });
+  });
   panel.querySelector("#h-theme").value = theme || "";
   panel.querySelector("#h-theme").addEventListener("change", (e) => {
     if (e.target.value) document.documentElement.dataset.theme = e.target.value; else delete document.documentElement.dataset.theme;

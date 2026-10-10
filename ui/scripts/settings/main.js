@@ -29,12 +29,15 @@ const SECTIONS = [phone, general, speed, appearance, shortcuts, updates];
 /** Until the backend says otherwise (or if it does not know about updates). */
 const IDLE = { state: "idle", version: null, notes: null, progress: null, error: null, checkedAt: null };
 
+// The title stays where it is and the page scrolls under it: the window can be
+// short (the board may hold the top of the screen, and the window sits below it).
 document.body.innerHTML = `
-  <main class="page" id="page">
-    <h1 id="title">Settings</h1>
-  </main>
+  <header class="head" id="head"><h1 id="title">Settings</h1></header>
+  <main class="page" id="page" aria-labelledby="title"></main>
   <div class="visually-hidden" id="live" role="status" aria-live="polite"></div>`;
 const page = $("#page");
+// A hairline under the title once there is something scrolled beneath it.
+page.addEventListener("scroll", () => $("#head").classList.toggle("scrolled", page.scrollTop > 0), { passive: true });
 
 const settings = createStore();
 const updateStatus = createStore();
@@ -79,7 +82,7 @@ let wanted = decodeURIComponent(location.hash.slice(1));   // the section to sho
 function showSection(id) {
   const host = [...page.querySelectorAll("[data-section]")].find((s) => s.dataset.section === id);
   if (!host) return;
-  host.scrollIntoView({ block: "start" });
+  host.scrollIntoView({ block: "start" });   // scroll-margin-top (settings.css) leaves the heading clear of the edge
   host.querySelector("h2")?.focus({ preventScroll: true });
 }
 
