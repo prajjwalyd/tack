@@ -7,9 +7,10 @@
 //! thread; from another thread the cross-thread SendMessage calls can
 //! deadlock against the board lock.
 
-use windows::Win32::Foundation::{HWND, POINT, RECT};
+use windows::core::BOOL;
+use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, MonitorFromPoint, HMONITOR, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    EnumDisplayMonitors, GetMonitorInfoW, MonitorFromPoint, HDC, HMONITOR, MONITORINFO, MONITOR_DEFAULTTONEAREST,
 };
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::Shell::{
@@ -31,7 +32,7 @@ pub struct Monitor {
 }
 
 /// The monitor holding `pt`, or the nearest one.
-pub(crate) fn monitor_of(pt: POINT) -> HMONITOR {
+fn monitor_of(pt: POINT) -> HMONITOR {
     unsafe { MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST) }
 }
 
@@ -43,9 +44,22 @@ fn monitor_info(hmon: HMONITOR) -> MONITORINFO {
     info
 }
 
-/// Where the monitor starts (not the work area), physical px.
-pub(crate) fn top_of(hmon: HMONITOR) -> i32 {
-    monitor_info(hmon).rcMonitor.top
+/// The whole of the monitor holding `pt` (not the work area), physical px.
+pub(crate) fn monitor_rect_at(pt: POINT) -> RECT {
+    monitor_info(monitor_of(pt)).rcMonitor
+}
+
+/// Every monitor, whole, physical px.
+pub(crate) fn monitor_rects() -> Vec<RECT> {
+    unsafe extern "system" fn each(hmon: HMONITOR, _: HDC, _: *mut RECT, rects: LPARAM) -> BOOL {
+        unsafe { (*(rects.0 as *mut Vec<RECT>)).push(monitor_info(hmon).rcMonitor) };
+        true.into()
+    }
+    let mut rects = Vec::new();
+    unsafe {
+        let _ = EnumDisplayMonitors(None, None, Some(each), LPARAM(&mut rects as *mut _ as isize));
+    }
+    rects
 }
 
 pub fn monitor_at(pt: POINT) -> Monitor {

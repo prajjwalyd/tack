@@ -101,7 +101,7 @@ pub fn set_sound(app: &AppHandle, on: bool) -> SettingsView {
 
 pub fn set_edge_reveal(app: &AppHandle, on: bool) -> SettingsView {
     let view = change(app, |s| s.edge_reveal = on);
-    // The poller idles while edge reveal is off; it looks again at once.
+    // The poller sleeps while edge reveal is off, and the edge strips follow it.
     edge_reveal::wake();
     view
 }

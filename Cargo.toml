@@ -28,6 +28,8 @@ trash = "5.2.9"
 # The same version Tauri's WebView2 backend (wry) uses, so its types match.
 webview2-com = "0.39.1"
 windows = "0.62"
+# The `implement` macro names it directly.
+windows-core = "0.62"
 
 [profile.release]
 opt-level = "s"

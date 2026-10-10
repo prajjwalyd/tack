@@ -3441,6 +3441,7 @@ dependencies = [
  "tack-core",
  "trash",
  "windows",
+ "windows-core",
 ]
 
 [[package]]

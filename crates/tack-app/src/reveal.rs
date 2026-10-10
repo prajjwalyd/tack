@@ -331,7 +331,7 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
         IGNORING.store(true, Ordering::Release);
         (v.generation, v.window_pos, v.window_size)
     };
-    // It may be idling (edge reveal off); the board needs it from now on.
+    // It may be asleep (tucked); the board needs it from now on.
     edge_reveal::wake();
 
     let handle = app.clone();
