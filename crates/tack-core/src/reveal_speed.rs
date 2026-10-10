@@ -67,8 +67,8 @@ impl RevealSpeed {
     /// reveals.
     pub fn dwell(self) -> Duration {
         Duration::from_millis(match self {
-            RevealSpeed::Instant => 100,
-            RevealSpeed::Fast => 250,
+            RevealSpeed::Instant => 40,
+            RevealSpeed::Fast => 150,
             RevealSpeed::Normal => 400,
         })
     }
@@ -196,8 +196,8 @@ mod tests {
 
     #[test]
     fn quicker_speeds_wait_less_and_move_quicker() {
-        assert_eq!(RevealSpeed::Instant.dwell(), ms(100));
-        assert_eq!(RevealSpeed::Fast.dwell(), ms(250));
+        assert_eq!(RevealSpeed::Instant.dwell(), ms(40));
+        assert_eq!(RevealSpeed::Fast.dwell(), ms(150));
         for pair in ALL.windows(2) {
             assert!(pair[0].dwell() < pair[1].dwell());
             assert!(pair[0].motion_scale() < pair[1].motion_scale());
