@@ -1,13 +1,12 @@
 /* The "Tack on your phone" window (phone-link.html, scripts/phone-link.js): a
    switch, a QR code on a white card, the allowed devices and a footer. Shared
-   look (palette, buttons, focus ring): dialog.css. A request to use the board
+   look: dialog.css (palette, buttons, focus ring) and switch.css. A request to use the board
    is the one loud thing: an accent-ringed card at the top. */
 
 :root {
   --card-solid: light-dark(#ffffff, #2b2b2b);
   --accent-wash: light-dark(rgba(0, 95, 184, .10), rgba(96, 205, 255, .14));
   --ok: light-dark(#0f7b0f, #6ccb5f);
-  --off-edge: light-dark(rgba(0, 0, 0, .56), rgba(255, 255, 255, .54));
   --font-display: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
 }
 
@@ -65,69 +64,21 @@ h1:focus, .ask-title:focus { outline: none; }
 }
 
 /* ---- the header ---- */
+/* The tile is as tall as the text beside it (heading and two lines, 62 px, less the leading). */
 .hero { display: flex; gap: 14px; align-items: center; padding: 2px 0 0; }
 .hero-icon {
   flex: none;
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
   background: var(--accent-wash);
   color: var(--accent);
 }
-.hero-icon svg { display: block; width: 24px; height: 24px; }
+.hero-icon svg { display: block; width: 34px; height: 34px; }
 .hero h1 { font: 600 20px/26px var(--font-display); }
 .hero p { margin-top: 2px; font: 400 13px/18px var(--font); color: var(--ink-2); }
-
-/* ---- cards ---- */
-/* The switch: the whole row is the control, as in Windows Settings. */
-.switch {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  align-items: center;
-  column-gap: 12px;
-  width: 100%;
-  min-height: 52px;
-  padding: 8px 16px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: default;
-  outline: none;
-  transition: background-color 80ms ease;
-}
-.switch:hover { background: var(--hover); }
-.switch:active { background: var(--press); }
-.switch[aria-busy="true"] { opacity: .7; }
-.switch .state { color: var(--ink-2); font: 400 13px/18px var(--font-small); }
-
-.track {
-  position: relative;
-  width: 40px;
-  height: 20px;
-  border-radius: 10px;
-  box-shadow: inset 0 0 0 1px var(--off-edge);
-  transition: background-color 120ms ease, box-shadow 120ms ease;
-}
-.track::before {
-  content: "";
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--off-edge);
-  transition: transform 140ms ease, width 100ms ease, background-color 120ms ease;
-}
-.switch:hover .track::before { width: 14px; top: 3px; }
-.switch[aria-checked="true"] .track { background: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-.switch[aria-checked="true"] .track::before { background: var(--on-accent); transform: translateX(20px); }
-.switch[aria-checked="true"]:hover .track::before { transform: translateX(19px); }
 
 /* ---- the body ---- */
 .note { padding: 14px 16px; }
@@ -211,13 +162,6 @@ footer {
 .addr-row .std { min-width: 72px; }
 .addr-row .std.done { color: var(--ok); }
 
-/* The switch's ring; buttons get theirs from dialog.css. */
-.switch:focus-visible {
-  outline: 2px solid var(--focus-outer);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 1px var(--focus-inner);
-}
-
 .visually-hidden {
   position: absolute !important;
   width: 1px;
@@ -231,19 +175,10 @@ footer {
   border: 0;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
-}
-
 /* ---- High Contrast ---- */
 @media (forced-colors: active) {
   .ask { border: 2px solid CanvasText; box-shadow: none; }
   .ask-icon, .hero-icon { background: Canvas; color: CanvasText; border: 1px solid CanvasText; }
-  .track { forced-color-adjust: none; box-shadow: none; border: 1px solid ButtonText; background: Canvas; }
-  .track::before { background: ButtonText; }
-  .switch[aria-checked="true"] .track { background: Highlight; border-color: Highlight; }
-  .switch[aria-checked="true"] .track::before { background: HighlightText; }
   .addr-row { border: 1px solid CanvasText; }
-  .switch:focus-visible { outline: 2px solid Highlight; box-shadow: none; }
   .problem svg { color: CanvasText; }
 }

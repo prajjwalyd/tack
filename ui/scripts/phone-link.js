@@ -11,7 +11,7 @@
 // focus, Enter acts only on the focused button, and Esc closes without allowing.
 
 import * as ipc from "./ipc.js";
-import { $, WARN_SVG, blockBrowserKeys, backendReady } from "./dialog.js";
+import { $, WARN_SVG, announcer, backendReady, blockBrowserKeys, esc, when } from "./dialog.js";
 
 /**
  * @typedef {{ key: string, name: string, approvedAt: number }} Device
@@ -28,7 +28,8 @@ import { $, WARN_SVG, blockBrowserKeys, backendReady } from "./dialog.js";
 const { phoneState, setPhone, answerDevice, forgetDevice, openNetbirdDownload, closePhoneLink } = ipc;
 
 const ICONS = {
-  phone: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.75" y="2.75" width="10.5" height="18.5" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.75 18h2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+  // A phone, drawn on a 32 px grid and centred on it: body, a faint screen tint, the speaker slot and the home bar.
+  phone: `<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="8" y="2.2" width="16" height="27.6" rx="4.2" fill="currentColor" fill-opacity=".14" stroke="currentColor" stroke-width="1.6"/><path d="M13.5 6.3h5M13.2 25.7h5.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`,
   ask: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l7 2.6v5.6c0 4.4-2.8 8-7 10-4.2-2-7-5.6-7-10V5.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 11.8l2.2 2.2L15.2 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
 };
 
@@ -38,7 +39,6 @@ let loaded = false;
 let switching = false;   // set_phone in flight
 const sigs = {};         // what each part was last built from
 let copyTimer = 0;
-let announceTimer = 0;
 
 document.body.innerHTML = `
   <main class="dialog">
@@ -67,14 +67,7 @@ document.body.innerHTML = `
 
 const el = { asks: $("#asks"), body: $("#body"), devices: $("#devices"), sw: $("#switch"), live: $("#live"), title: $("#title") };
 
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-
-/** Says something to a screen reader without moving anything on screen. */
-function announce(text) {
-  clearTimeout(announceTimer);
-  el.live.textContent = "";
-  announceTimer = setTimeout(() => { el.live.textContent = text; }, 60);
-}
+const announce = announcer(el.live);
 
 /** Runs `build` (which returns the new HTML) only if `slice` changed since last time. */
 function rebuild(part, host, slice, build) {
@@ -83,20 +76,6 @@ function rebuild(part, host, slice, build) {
   sigs[part] = sig;
   host.innerHTML = build();
   return true;
-}
-
-/** "just now", "5 minutes ago", "yesterday", "3 days ago", or a date. */
-function when(ms) {
-  const mins = Math.floor((Date.now() - ms) / 60000);
-  if (!(mins >= 1)) return "just now";
-  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
-  const midnight = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const days = Math.round((midnight(new Date()) - midnight(new Date(ms))) / 86400000);
-  if (days <= 1) return "yesterday";
-  if (days < 7) return `${days} days ago`;
-  return `on ${new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: days > 300 ? "numeric" : undefined })}`;
 }
 
 function renderSwitch(s) {

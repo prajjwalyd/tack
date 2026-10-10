@@ -1,8 +1,8 @@
-/* What the small dialog windows share (shortcuts.html, phone-link.html), in a
-   Windows 11 style: solid system-themed background, Fluent cards, 32 px
-   buttons, two-tone focus ring. Link it before the dialog's own stylesheet,
-   which adds its colours and layout. <html data-theme="light|dark"> forces
-   a theme (dev preview). */
+/* What the small dialog windows share (shortcuts.html, phone-link.html,
+   settings.html), in a Windows 11 style: solid system-themed background,
+   Fluent cards, 32 px buttons, two-tone focus ring. Link it before the
+   dialog's own stylesheet, which adds its colours and layout.
+   <html data-theme="light|dark"> forces a theme (dev preview). */
 
 :root {
   color-scheme: light dark;
@@ -104,6 +104,10 @@ button { font: inherit; }
   outline: 2px solid var(--focus-outer);
   outline-offset: 1px;
   box-shadow: 0 0 0 1px var(--focus-inner);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
 /* ---- High Contrast ---- */
