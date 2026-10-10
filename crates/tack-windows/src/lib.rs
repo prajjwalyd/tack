@@ -12,6 +12,7 @@
 pub mod autostart;
 pub mod capture_origin;
 mod clipboard;
+mod dir_watch;
 pub mod drag_out;
 pub mod edge_reveal;
 pub mod focus;
