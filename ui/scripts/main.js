@@ -10,13 +10,15 @@ import { clearDrop } from "./drop.js";
 import { onDragEnded, onDragging, onPointerLeft } from "./gestures.js";
 import { keyboardOpen, keyboardTuck } from "./keyboard.js";
 import { forgetRect, layout, restScroll } from "./layout.js";
-import { REVEAL_MS } from "./motion/spring.js";
+import { setMotionScale } from "./motion/scale.js";
+import { revealMs } from "./motion/spring.js";
 import { gust, scheduleGust, stopGusts } from "./motion/swing.js";
 import { fold } from "./note.js";
 import { hideNotice, notice, noticeAfterReveal } from "./notice.js";
 import { addPrint, applyOrder, printById, removePrint, showCopied, updatePrint } from "./print.js";
 import { reveal, tuck, warmUp } from "./reveal.js";
 import { dom, reducedMotion, state } from "./state.js";
+import { applyFelt } from "./theme.js";
 
 reducedMotion.addEventListener?.("change", (e) => {
   state.reduced = e.matches;
@@ -83,12 +85,13 @@ async function init() {
     ipc.on(EVENTS.PRINT_DRAG_ENDED, (p) => onDragEnded(printById(p.id), p.id)),
     ipc.on(EVENTS.POINTER_LEFT, () => onPointerLeft()),
     ipc.on(EVENTS.GUST, () => gust()),
-    ipc.on(EVENTS.SETTINGS, (p) => { if (typeof p.sound === "boolean") state.sound = p.sound; }),
+    ipc.on(EVENTS.SETTINGS, applySettings),
   ]);
 
   const ready = await ipc.boardReady();
   if (ready) {
     if (typeof ready.sound === "boolean") state.sound = ready.sound;
+    if (ready.settings) applySettings(ready.settings);
     // Already in row order.
     for (const print of ready.prints || []) addPrint(print, false, true);
   }
@@ -96,11 +99,18 @@ async function init() {
   restScroll();
 }
 
+/** The settings the board follows: sound, colour and speed. `s` is a SettingsView (an event may carry only some of it). */
+function applySettings(s) {
+  if (typeof s.sound === "boolean") state.sound = s.sound;
+  if (s.felt) applyFelt(dom.board, s.felt, s.feltPresets);
+  if (s.motionScale) setMotionScale(s.motionScale);
+}
+
 /** board:reveal. The hotkey is a keyboard open: the page takes the focus (keyboard.js). */
 function onReveal(reason) {
   const was = state.revealed;
   reveal();
-  if (reason === "hotkey") keyboardOpen(was ? 0 : (state.reduced ? 100 : REVEAL_MS));
+  if (reason === "hotkey") keyboardOpen(was ? 0 : (state.reduced ? 100 : revealMs()));
   noticeAfterReveal(was);
 }
 

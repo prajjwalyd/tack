@@ -6,6 +6,7 @@
 // event names (../scripts/ipc.js).
 
 import { COMMANDS, EVENTS } from "../scripts/ipc.js";
+import { PRESETS, SCALES, validFelt } from "./felt-presets.js";
 
 const handlers = new Map();
 const log = (msg) => {
@@ -195,12 +196,18 @@ const arrange = () => prints.sort((a, b) =>
 const emitOrder = () => emit(EVENTS.ORDER_CHANGED, { ids: prints.map((x) => x.id) });
 arrange();
 let sound = true;
+// ?felt=navy|accent|%23aabbcc and ?speed=instant|fast|normal start with that board colour and speed.
+const settings = {
+  sound, felt: validFelt(params.get("felt")) ? params.get("felt") : "green", feltPresets: PRESETS,
+  reveal: params.get("speed") in SCALES ? params.get("speed") : "normal",
+};
+const view = () => ({ ...settings, sound, motionScale: SCALES[settings.reveal] });
 
 const commands = {
   [COMMANDS.BOARD_READY]: () => {
     // Reveal shortly after the page is listening, like the backend would.
     setTimeout(() => preview.reveal(), 350);
-    return { prints: prints.slice(), sound };
+    return { prints: prints.slice(), sound, settings: view() };
   },
   [COMMANDS.SET_BOARD_RECT]: ({ x, y, w, h }) => {
     const dpr = window.devicePixelRatio || 1;
@@ -335,6 +342,9 @@ const preview = {
   },
   pointerLeft: () => emit(EVENTS.POINTER_LEFT),
   sound: () => { sound = !sound; emit(EVENTS.SETTINGS, { sound }); return sound; },
+  // The Settings window's changes, as the board hears them (settings:changed carries it all).
+  felt: (value) => { settings.felt = value; emit(EVENTS.SETTINGS, view()); },
+  speed: (name) => { settings.reveal = name; emit(EVENTS.SETTINGS, view()); },
 };
 window.preview = preview;
 
@@ -349,6 +359,21 @@ const toggles = {
     return !!next;
   },
   "show-rect": () => document.body.classList.toggle("show-rect"),
+  // Board colour: each preset, the Windows accent, a light custom colour (clamped darker) and a near-black one.
+  felt: (button) => {
+    const all = [...PRESETS.map((p) => p.id), "accent", "#f2e3a8", "#050508"];
+    const next = all[(all.indexOf(settings.felt) + 1) % all.length];
+    preview.felt(next);
+    button.textContent = `Felt: ${next}`;
+    return next !== "green";
+  },
+  speed: (button) => {
+    const all = Object.keys(SCALES);
+    const next = all[(all.indexOf(settings.reveal) + 1) % all.length];
+    preview.speed(next);
+    button.textContent = `Speed: ${next}`;
+    return next !== "normal";
+  },
 };
 for (const button of document.querySelectorAll("#controls button")) {
   const { action, toggle } = button.dataset;
