@@ -21,7 +21,12 @@ cargo test --workspace       # unit tests (the board model lives in tack-core)
 ```
 
 The installer: `npm run build` writes it to `target/release/bundle/nsis/`.
-Releases are built by CI from a `v*` tag (`.github/workflows/release.yml`).
+It is built with updater signatures (`bundle.createUpdaterArtifacts`), so
+without the signing key (see Releases) it stops at the signing step. For a
+local installer, set `TAURI_SIGNING_PRIVATE_KEY` to a throwaway key from
+`npx tauri signer generate` (never the release key): no installed Tack
+accepts an update signed with it. CI's plain build (`tauri build
+--no-bundle`) makes no installer and needs no key.
 
 Only one Tack runs at a time: quit the tray icon (or
 `taskkill /IM tack.exe /F`) before starting another build.
@@ -78,9 +83,54 @@ Social preview** each time it changes.
 - Use the domain words: the **board**, a **print** (one pinned screenshot),
   its **pin**, a **capture** (from the clipboard) versus a **screenshot
   file** (from the folder), **reveal** and **tuck**.
-- The app never reaches out to the network: no update checks, analytics or
-  fetching. The only listening is the phone board (`crates/tack-app/src/phone/`),
-  on the NetBird address alone, when the user switches it on. Keep it that way.
+- The app's only outgoing connection is the update check and download
+  (`crates/tack-app/src/updates/`, one HTTPS endpoint, signature-verified);
+  there are no analytics and no fetching of anything else, and the web views
+  stay off the network. The only listening is the phone board
+  (`crates/tack-app/src/phone/`), on the NetBird address alone, when the user
+  switches it on. Keep it that way, and keep `docs/privacy.md` true when it
+  changes (`updates/config_guard.rs` fails the build if an update safeguard
+  or the web views' limits are loosened).
 
 CI runs formatting, clippy, the tests and a release build on Windows for
 every push.
+
+## Releases
+
+Push a tag that matches the version in `Cargo.toml` and
+`crates/tack-app/tauri.conf.json` (`v0.2.0` for `0.2.0`). The release workflow
+builds the x64 and arm64 installers, signs them for the updater, and
+attaches them, their `.sig` files and `latest.json` to a **draft** release.
+Its last job checks `latest.json` (version, both builds, signatures made for
+that version) and fails if it is wrong. Nothing reaches users until a
+maintainer publishes the draft: the in-app updater reads
+`releases/latest/download/latest.json`, which GitHub points at the newest
+published (non-draft, non-prerelease) release.
+
+The installers are signed with the updater key, a minisign key pair made by
+`npx tauri signer generate`. The public key is in
+`crates/tack-app/tauri.conf.json` (`plugins.updater.pubkey`); every installed
+Tack trusts updates signed by the matching private key and nothing else. The
+repository secrets:
+
+- `TAURI_SIGNING_PRIVATE_KEY`: the private key's contents.
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: its password.
+
+They are passed to the build step only (not the whole job), and the tag's
+code is what is built. **Keep a backup of the private key and its password**
+outside GitHub (a password manager); the secrets cannot be read back. Never
+commit the key, paste it in an issue or a log, or put it on a shared drive.
+
+If the private key is lost or leaked, installed copies cannot be updated by
+the usual route, because they only accept the old key and the key is built
+into them:
+
+1. Generate a new pair, put the new public key in `tauri.conf.json`, replace
+   the two secrets, and release a version signed with it.
+2. Copies that already have the old public key will not install it: tell
+   people (the README, the release notes) to download and run the new
+   installer once by hand. After that, updates work again.
+3. If the key leaked rather than was lost, treat any release signed after
+   the leak as suspect, publish the new one at once, and say so in the
+   notes; whoever has the old key can sign an update that old copies accept
+   until they have moved to the new one.
