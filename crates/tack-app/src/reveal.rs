@@ -83,7 +83,7 @@ impl Placement {
 
     /// On the monitor under the pointer.
     pub fn under_pointer() -> Placement {
-        let pt = pointer::cursor_pos();
+        let pt = pointer::cursor_pos().unwrap_or_default();
         Placement::at((pt.x, pt.y))
     }
 }

@@ -3,8 +3,16 @@
 //! pointer crosses the board. A drag carried from another app to the edge
 //! opens it too ([`DragGate`]). A polling thread rather than a global mouse
 //! hook, which would add latency to every app on the system. Tucked, it
-//! polls less the less can happen: slower far from the top, and hardly at
-//! all with edge reveal off.
+//! polls less the less can happen. Wake-ups per second:
+//!
+//! - shown: 40
+//! - tucked, the user at the controls (input in the last [`ACTIVE_FOR`]):
+//!   25 near the top, 10 elsewhere
+//! - tucked, untouched since: one per reveal dwell, 10 / 4 / 2.5 from the
+//!   fastest speed to the slowest ([`hidden_pause`])
+//! - tucked, edge reveal off: 2
+//! - the pointer unreadable (a UAC prompt): 1 for three seconds, then 0.1
+//! - session locked or display off: 0, until [`session`] wakes it
 
 use std::collections::VecDeque;
 use std::sync::OnceLock;
@@ -14,9 +22,10 @@ use std::time::{Duration, Instant};
 use tack_core::view::STRIP_H;
 use tack_core::{Rect, RevealReason, Settings, View};
 use windows::Win32::Foundation::POINT;
+use windows::Win32::Graphics::Gdi::HMONITOR;
 
 use crate::pointer::{self, VK_LBUTTON, VK_RBUTTON};
-use crate::{overlay, snipping_tool};
+use crate::{overlay, session, snipping_tool};
 
 const POLL_SHOWN: Duration = Duration::from_millis(25);
 /// Tucked, with the pointer near the top.
@@ -24,6 +33,13 @@ const POLL_HIDDEN: Duration = Duration::from_millis(40);
 /// Tucked, with the pointer far from the top: getting to the edge takes a
 /// moment, and resting there a little more.
 const POLL_FAR: Duration = Duration::from_millis(100);
+/// Tucked, and the keyboard and mouse were last touched long ago (see
+/// [`ACTIVE_FOR`]): one look per reveal dwell, but never oftener than this.
+const POLL_RESTING_MIN: Duration = Duration::from_millis(100);
+/// The time since the last input within which the user counts as at the
+/// controls. Longer than any wait for a drag at the edge ([`DRAG_DWELL`]),
+/// which needs a look every tick, and than any reveal dwell.
+const ACTIVE_FOR: Duration = Duration::from_secs(2);
 /// How far below the monitor top counts as near it, px.
 const NEAR_TOP: i32 = 200;
 /// Tucked with edge reveal off: nothing to watch for but the setting coming
@@ -41,6 +57,7 @@ const EDGE_JITTER: i32 = 3;
 /// pointer would.
 const DRAG_DWELL: Duration = Duration::from_millis(220);
 const DRAG_JITTER: i32 = 8;
+const _: () = assert!(ACTIVE_FOR.as_millis() > DRAG_DWELL.as_millis());
 /// How far below the monitor top still counts as "the very top", px.
 const EDGE_BAND: i32 = 2;
 // The grace period once the pointer is outside the board's zone is the
@@ -51,6 +68,12 @@ const EDGE_BAND: i32 = 2;
 const LEAVE_MARGIN: f64 = 10.0;
 /// SHQueryUserNotificationState is not free; nobody notices half a second.
 const FULLSCREEN_CHECK: Duration = Duration::from_millis(500);
+/// The pointer cannot be read: another desktop has the input (a UAC prompt,
+/// or the lock screen where [`session`] did not say). Look again this soon,
+/// this many times, then this seldom.
+const POLL_UNREADABLE: Duration = Duration::from_secs(1);
+const UNREADABLE_RETRIES: u32 = 3;
+const POLL_UNREADABLE_SLOW: Duration = Duration::from_secs(10);
 
 /// What the poller needs from the app.
 pub trait EdgeHost: Send + 'static {
@@ -74,7 +97,8 @@ enum Action {
 
 /// What the poller remembers between ticks.
 struct Poller {
-    hot_since: Option<(Instant, POINT)>,
+    edge: EdgeRest,
+    monitor_top: MonitorTop,
     away_since: Option<Instant>,
     prev_left: bool,
     prev_right: bool,
@@ -84,8 +108,10 @@ struct Poller {
     press_inside: bool,
     last_fullscreen_check: Option<Instant>,
     drag: DragGate,
-    /// The last tick was an idle one: the buttons were not watched.
-    idle: bool,
+    /// The last tick did not watch the buttons.
+    unwatched: bool,
+    /// Ticks in a row that could not read the pointer.
+    unreadable: u32,
 }
 
 /// The poller's thread, for [`wake`].
@@ -98,26 +124,32 @@ pub fn start<H: EdgeHost>(host: H) {
         .spawn(move || {
             let _ = POLLER.set(std::thread::current());
             let mut p = Poller {
-                hot_since: None,
+                edge: EdgeRest::default(),
+                monitor_top: MonitorTop::default(),
                 away_since: None,
                 prev_left: false,
                 prev_right: false,
                 press_inside: false,
                 last_fullscreen_check: None,
                 drag: DragGate::default(),
-                idle: false,
+                unwatched: false,
+                unreadable: 0,
             };
             loop {
-                let pause = p.tick(&host);
-                std::thread::park_timeout(pause);
+                match p.tick(&host) {
+                    Some(pause) => std::thread::park_timeout(pause),
+                    // Nothing to watch until [`wake`].
+                    None => std::thread::park(),
+                }
             }
         })
         .expect("pointer thread");
+    session::start();
 }
 
-/// The board just came down: the poller looks at once rather than at its
-/// next (perhaps idle) tick, so click-through follows the pointer from the
-/// start.
+/// The board just came down, or edge reveal came on, or the session woke:
+/// the poller looks at once rather than at its next (perhaps idle or parked)
+/// tick, so click-through follows the pointer from the start.
 pub fn wake() {
     if let Some(poller) = POLLER.get() {
         poller.unpark();
@@ -125,9 +157,25 @@ pub fn wake() {
 }
 
 impl Poller {
-    /// One look at the pointer; returns how long to wait for the next.
-    fn tick(&mut self, host: &impl EdgeHost) -> Duration {
+    /// Nothing is being watched: forget what a watch builds up.
+    fn forget(&mut self, now: Instant) {
+        self.edge.reset();
+        self.away_since = None;
+        self.press_inside = false;
+        self.drag.sample(now, 0, false, false);
+        // Asked afresh when there is a reason to again.
+        self.last_fullscreen_check = None;
+        self.unwatched = true;
+    }
+
+    /// One look at the pointer; returns how long to wait for the next, or
+    /// `None` to wait for [`wake`].
+    fn tick(&mut self, host: &impl EdgeHost) -> Option<Duration> {
         let now = Instant::now();
+        if session::asleep() {
+            self.forget(now);
+            return None;
+        }
         let (shown, edge_reveal) = host.with_view(|v, settings| {
             if !v.shown {
                 v.drag_in = false;
@@ -135,21 +183,21 @@ impl Poller {
             (v.shown, settings.edge_reveal)
         });
         if !shown && !edge_reveal {
-            self.hot_since = None;
-            self.away_since = None;
-            self.press_inside = false;
-            self.drag.sample(now, 0, false, false);
-            // Asked afresh when there is a reason to again.
-            self.last_fullscreen_check = None;
-            self.idle = true;
-            return POLL_IDLE;
+            self.forget(now);
+            return Some(POLL_IDLE);
         }
 
-        let pt = pointer::cursor_pos();
+        let Some(pt) = pointer::cursor_pos() else {
+            // Not (0, 0), which would read as the top edge.
+            self.forget(now);
+            self.unreadable = self.unreadable.saturating_add(1);
+            return Some(if self.unreadable <= UNREADABLE_RETRIES { POLL_UNREADABLE } else { POLL_UNREADABLE_SLOW });
+        };
+        self.unreadable = 0;
         let left = pointer::key_down(VK_LBUTTON.0);
         let right = pointer::key_down(VK_RBUTTON.0);
-        if std::mem::take(&mut self.idle) {
-            // Buttons held since an idle stretch were not pressed just now.
+        if std::mem::take(&mut self.unwatched) {
+            // Buttons held since an unwatched stretch were not pressed just now.
             self.prev_left = left;
             self.prev_right = right;
         }
@@ -164,7 +212,8 @@ impl Poller {
         // Not under the board lock: WindowFromPoint may send the window
         // under the pointer a message and wait for its answer.
         let on_taskbar = (left_pressed || right_pressed) && pointer::on_taskbar(pt);
-        let top = (!shown).then(|| overlay::monitor_at(pt).monitor.top);
+        let top = (!shown).then(|| self.monitor_top.at(pt));
+        let idle = if shown { Duration::ZERO } else { pointer::input_idle() };
 
         // (full screen, and it is Snipping Tool's own overlay.) Only a board
         // that is down (a full-screen app tucks it) or the pointer at the
@@ -196,12 +245,12 @@ impl Poller {
                 self.away_since = None;
                 self.press_inside = false;
                 v.drag_in = false;
-                let top = top.unwrap_or_else(|| overlay::monitor_at(pt).monitor.top);
+                let top = top.unwrap_or_else(|| self.monitor_top.at(pt));
                 let at_top = pt.y < top + EDGE_BAND;
                 if !at_top {
                     v.edge_armed = true;
                 }
-                pause = if pt.y - top < NEAR_TOP { POLL_HIDDEN } else { POLL_FAR };
+                pause = hidden_pause(idle, pt.y - top < NEAR_TOP, edge_dwell);
                 // Something carried here from another app, held over the edge.
                 let dragging = self.drag.sample(now, pt.y - top, left && !right, at_top)
                     && pointer::cursor_kind().may_be_dragging()
@@ -210,29 +259,16 @@ impl Poller {
                 let (dwell, jitter) =
                     if dragging { (DRAG_DWELL.min(edge_dwell), DRAG_JITTER) } else { (edge_dwell, EDGE_JITTER) };
                 if !settings.edge_reveal || !at_top || !v.edge_armed || !buttons_ok || v.fullscreen {
-                    self.hot_since = None;
+                    self.edge.reset();
                     Action::None
+                } else if self.edge.rested(now, pt, jitter, dwell, idle) {
+                    v.drag_in = dragging;
+                    Action::Reveal
                 } else {
-                    match self.hot_since {
-                        Some((since, anchor))
-                            if (pt.x - anchor.x).abs() < jitter && (pt.y - anchor.y).abs() < jitter =>
-                        {
-                            if now - since >= dwell {
-                                self.hot_since = None;
-                                v.drag_in = dragging;
-                                Action::Reveal
-                            } else {
-                                Action::None
-                            }
-                        }
-                        _ => {
-                            self.hot_since = Some((now, pt));
-                            Action::None
-                        }
-                    }
+                    Action::None
                 }
             } else {
-                self.hot_since = None;
+                self.edge.reset();
                 self.drag.sample(now, 0, false, false);
                 if !left {
                     // Dropped (or let go elsewhere): from now on it leaves
@@ -341,7 +377,7 @@ impl Poller {
                 host.pointer_left();
             }
         }
-        match action {
+        Some(match action {
             Action::None => pause,
             Action::Reveal => {
                 host.reveal();
@@ -352,7 +388,80 @@ impl Poller {
                 host.tuck();
                 pause
             }
+        })
+    }
+}
+
+/// How long a tucked poller waits, edge reveal being on. While the user is at
+/// the controls: as often as a pointer on its way to the edge needs. Once
+/// nothing was touched for [`ACTIVE_FOR`] the pointer is resting wherever it
+/// is; a look per dwell is enough, as any input (the pointer coming up to the
+/// edge, a press for a drag) first shows as the next look, and from then on
+/// the active pace takes over. A pointer that arrives at the edge from there
+/// still reveals within one active tick of its dwell ([`EdgeRest::rested`]).
+fn hidden_pause(idle: Duration, near_top: bool, dwell: Duration) -> Duration {
+    match (idle < ACTIVE_FOR, near_top) {
+        (true, true) => POLL_HIDDEN,
+        (true, false) => POLL_FAR,
+        (false, _) => dwell.max(POLL_RESTING_MIN),
+    }
+}
+
+/// The pointer resting against the top edge. Pure, so the timing is tested
+/// without a mouse.
+#[derive(Default)]
+struct EdgeRest {
+    since: Option<(Instant, POINT)>,
+}
+
+impl EdgeRest {
+    fn reset(&mut self) {
+        self.since = None;
+    }
+
+    /// One look with the pointer at the edge and nothing against a reveal;
+    /// true once it has rested there for `dwell` (and starts over).
+    ///
+    /// `idle` is how long ago the user last touched the keyboard or mouse. The
+    /// pointer cannot have moved since, so it has rested at least that long,
+    /// however seldom it was looked at: a rest of `dwell` is served at once,
+    /// which is what lets a poller that sleeps while nothing is touched lose
+    /// no time. Otherwise the rest is counted from the first look, within
+    /// `jitter` of where it was.
+    fn rested(&mut self, now: Instant, pt: POINT, jitter: i32, dwell: Duration, idle: Duration) -> bool {
+        let rested = idle >= dwell
+            || match self.since {
+                Some((since, anchor)) if (pt.x - anchor.x).abs() < jitter && (pt.y - anchor.y).abs() < jitter => {
+                    now - since >= dwell
+                }
+                _ => {
+                    self.since = Some((now, pt));
+                    false
+                }
+            };
+        if rested {
+            self.since = None;
         }
+        rested
+    }
+}
+
+/// The top of the monitor under the pointer. Windows is asked only when the
+/// pointer is on another monitor or the displays changed ([`session`]).
+#[derive(Default)]
+struct MonitorTop {
+    known: Option<(HMONITOR, u32)>,
+    top: i32,
+}
+
+impl MonitorTop {
+    fn at(&mut self, pt: POINT) -> i32 {
+        let key = (overlay::monitor_of(pt), session::display_epoch());
+        if self.known != Some(key) {
+            self.top = overlay::top_of(key.0);
+            self.known = Some(key);
+        }
+        self.top
     }
 }
 
@@ -404,9 +513,121 @@ impl DragGate {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tack_core::RevealSpeed;
 
     fn ms(n: u64) -> Duration {
         Duration::from_millis(n)
+    }
+
+    const SPEEDS: [RevealSpeed; 3] = [RevealSpeed::Instant, RevealSpeed::Fast, RevealSpeed::Normal];
+    const AT_EDGE: POINT = POINT { x: 800, y: 0 };
+
+    #[test]
+    fn a_tucked_poller_keeps_its_pace_while_the_user_is_at_the_controls() {
+        let dwell = RevealSpeed::Normal.dwell();
+        assert_eq!(hidden_pause(ms(0), true, dwell), POLL_HIDDEN);
+        assert_eq!(hidden_pause(ms(0), false, dwell), POLL_FAR);
+        assert_eq!(hidden_pause(ACTIVE_FOR - ms(1), true, dwell), POLL_HIDDEN);
+        assert_eq!(hidden_pause(ACTIVE_FOR - ms(1), false, dwell), POLL_FAR);
+    }
+
+    #[test]
+    fn an_untouched_poller_looks_once_per_dwell_never_oftener_than_a_tenth_of_a_second() {
+        for (speed, wait) in SPEEDS.into_iter().zip([100, 250, 400]) {
+            for near_top in [true, false] {
+                assert_eq!(hidden_pause(ACTIVE_FOR, near_top, speed.dwell()), ms(wait));
+            }
+        }
+        assert_eq!(hidden_pause(ms(60_000), true, ms(40)), POLL_RESTING_MIN);
+    }
+
+    #[test]
+    fn the_active_window_outlasts_every_wait_a_poll_needs() {
+        // Reveal dwells, and a drag at the edge, are served on active ticks.
+        for speed in SPEEDS {
+            assert!(ACTIVE_FOR > speed.dwell());
+        }
+        assert!(ACTIVE_FOR > DRAG_DWELL);
+    }
+
+    #[test]
+    fn a_pointer_untouched_for_the_dwell_has_rested_it() {
+        let (t0, dwell) = (Instant::now(), RevealSpeed::Normal.dwell());
+        let mut edge = EdgeRest::default();
+        // Just short of it: the count starts at this look.
+        assert!(!edge.rested(t0, AT_EDGE, EDGE_JITTER, dwell, dwell - ms(1)));
+        // The same pointer, untouched for the dwell: no further look needed.
+        assert!(edge.rested(t0 + ms(40), AT_EDGE, EDGE_JITTER, dwell, dwell));
+        // Starts over after a reveal.
+        assert!(!edge.rested(t0 + ms(80), AT_EDGE, EDGE_JITTER, dwell, ms(0)));
+    }
+
+    #[test]
+    fn a_pointer_just_arrived_counts_from_the_first_look() {
+        let (t0, dwell) = (Instant::now(), RevealSpeed::Fast.dwell());
+        let mut edge = EdgeRest::default();
+        let nudged = POINT { x: AT_EDGE.x + EDGE_JITTER - 1, y: 1 };
+        assert!(!edge.rested(t0, AT_EDGE, EDGE_JITTER, dwell, ms(10)));
+        // Moving by less than the jitter keeps the count going, however
+        // recent the input; the look at the dwell reveals.
+        assert!(!edge.rested(t0 + ms(120), nudged, EDGE_JITTER, dwell, ms(5)));
+        assert!(!edge.rested(t0 + dwell - ms(1), AT_EDGE, EDGE_JITTER, dwell, ms(5)));
+        assert!(edge.rested(t0 + dwell, nudged, EDGE_JITTER, dwell, ms(5)));
+    }
+
+    #[test]
+    fn a_pointer_that_moves_on_starts_the_count_again() {
+        let (t0, dwell) = (Instant::now(), RevealSpeed::Normal.dwell());
+        let mut edge = EdgeRest::default();
+        let moved = POINT { x: AT_EDGE.x + EDGE_JITTER, y: 0 };
+        assert!(!edge.rested(t0, AT_EDGE, EDGE_JITTER, dwell, ms(10)));
+        assert!(!edge.rested(t0 + dwell - ms(40), moved, EDGE_JITTER, dwell, ms(10)));
+        assert!(!edge.rested(t0 + dwell, moved, EDGE_JITTER, dwell, ms(10)));
+        assert!(edge.rested(t0 + dwell - ms(40) + dwell, moved, EDGE_JITTER, dwell, ms(10)));
+        // The edge is left: whatever was counted is forgotten.
+        edge.reset();
+        assert!(!edge.rested(t0 + ms(2000), moved, EDGE_JITTER, dwell, ms(10)));
+    }
+
+    /// Plays the tucked poller against a pointer that flicks to the top edge at
+    /// `arrival` ms and stays, nothing touched after. Before, the user had last
+    /// touched the keyboard or mouse `gap` ms before the arrival. The poller's
+    /// first look is at `first` ms. Returns when it reveals.
+    fn reveal_at(dwell: Duration, gap: u64, arrival: u64, first: u64) -> u64 {
+        let t0 = Instant::now();
+        let mut edge = EdgeRest::default();
+        let mut t = first;
+        loop {
+            let at_top = t >= arrival;
+            let idle = ms(if at_top { t - arrival } else { (t + gap).saturating_sub(arrival) });
+            if at_top && edge.rested(t0 + ms(t), AT_EDGE, EDGE_JITTER, dwell, idle) {
+                return t;
+            }
+            if !at_top {
+                edge.reset();
+            }
+            t += hidden_pause(idle, at_top, dwell).as_millis() as u64;
+        }
+    }
+
+    #[test]
+    fn a_sleeping_poller_still_reveals_within_one_active_tick_of_the_dwell() {
+        // Whatever the speed, however long the keyboard and mouse had been
+        // left alone, and wherever in its sleep the poller was when the
+        // pointer came (every phase): never early, and no later than one tick
+        // after the dwell. Today's poller is up to 140 ms after it (a 100 ms
+        // far look, a tick for the count, a tick to notice the dwell).
+        let arrival = 10_000;
+        for speed in SPEEDS {
+            let dwell = speed.dwell().as_millis() as u64;
+            for gap in [0, 500, 1_999, 2_000, 5_000, 60_000] {
+                for first in arrival - 2_500..arrival {
+                    let at = reveal_at(speed.dwell(), gap, arrival, first);
+                    let (soon, late) = (arrival + dwell, arrival + dwell + POLL_HIDDEN.as_millis() as u64);
+                    assert!((soon..=late).contains(&at), "{speed:?}, gap {gap}, first look {first}: {at}");
+                }
+            }
+        }
     }
 
     /// Feeds (ms, depth) readings with the button held; returns the last answer.

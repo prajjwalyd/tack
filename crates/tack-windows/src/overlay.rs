@@ -8,7 +8,9 @@
 //! deadlock against the board lock.
 
 use windows::Win32::Foundation::{HWND, POINT, RECT};
-use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTONEAREST};
+use windows::Win32::Graphics::Gdi::{
+    GetMonitorInfoW, MonitorFromPoint, HMONITOR, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+};
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::Shell::{
     SHQueryUserNotificationState, QUNS_BUSY, QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN,
@@ -28,11 +30,28 @@ pub struct Monitor {
     pub scale: f64,
 }
 
+/// The monitor holding `pt`, or the nearest one.
+pub(crate) fn monitor_of(pt: POINT) -> HMONITOR {
+    unsafe { MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST) }
+}
+
+fn monitor_info(hmon: HMONITOR) -> MONITORINFO {
+    let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+    unsafe {
+        let _ = GetMonitorInfoW(hmon, &mut info);
+    }
+    info
+}
+
+/// Where the monitor starts (not the work area), physical px.
+pub(crate) fn top_of(hmon: HMONITOR) -> i32 {
+    monitor_info(hmon).rcMonitor.top
+}
+
 pub fn monitor_at(pt: POINT) -> Monitor {
     unsafe {
-        let hmon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
-        let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
-        let _ = GetMonitorInfoW(hmon, &mut info);
+        let hmon = monitor_of(pt);
+        let info = monitor_info(hmon);
         let (mut dx, mut dy) = (96u32, 96u32);
         let scale = if GetDpiForMonitor(hmon, MDT_EFFECTIVE_DPI, &mut dx, &mut dy).is_ok() && dx > 0 {
             dx as f64 / 96.0

@@ -2,8 +2,11 @@
 //! board window is click-through most of the time, so it cannot rely on its
 //! own mouse events.
 
+use std::time::Duration;
+
 use windows::Win32::Foundation::POINT;
-use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
+use windows::Win32::System::SystemInformation::GetTickCount64;
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, GetLastInputInfo, LASTINPUTINFO};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetAncestor, GetClassNameW, GetCursorInfo, GetCursorPos, GetGUIThreadInfo, LoadCursorW, WindowFromPoint,
     CURSORINFO, GA_ROOT, GUITHREADINFO, GUI_INMOVESIZE, IDC_ARROW, IDC_IBEAM, IDC_SIZEALL, IDC_SIZENESW, IDC_SIZENS,
@@ -12,12 +15,27 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 pub(crate) use windows::Win32::UI::Input::KeyboardAndMouse::{VK_LBUTTON, VK_RBUTTON};
 
-pub fn cursor_pos() -> POINT {
+/// Where the pointer is; `None` when Windows will not say (the lock screen,
+/// a UAC prompt: another desktop has the input).
+pub fn cursor_pos() -> Option<POINT> {
     let mut pt = POINT::default();
-    unsafe {
-        let _ = GetCursorPos(&mut pt);
+    unsafe { GetCursorPos(&mut pt) }.ok().map(|()| pt)
+}
+
+/// How long ago the keyboard or mouse was last touched, by anyone (this
+/// session's input, injected too). Zero if Windows will not say.
+pub(crate) fn input_idle() -> Duration {
+    let mut info = LASTINPUTINFO { cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32, dwTime: 0 };
+    if !unsafe { GetLastInputInfo(&mut info) }.as_bool() {
+        return Duration::ZERO;
     }
-    pt
+    idle_since(unsafe { GetTickCount64() } as u32, info.dwTime)
+}
+
+/// Between two readings of a 32-bit millisecond tick count, which wraps every
+/// 49 days.
+fn idle_since(now: u32, last: u32) -> Duration {
+    Duration::from_millis(now.wrapping_sub(last).into())
 }
 
 /// The key or mouse button is held right now.
@@ -91,5 +109,17 @@ pub(crate) fn window_moving() -> bool {
         let mut info = GUITHREADINFO { cbSize: std::mem::size_of::<GUITHREADINFO>() as u32, ..Default::default() };
         // Thread 0: the foreground thread.
         GetGUIThreadInfo(0, &mut info).is_ok() && info.flags.contains(GUI_INMOVESIZE)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn idle_time_survives_the_tick_count_wrapping() {
+        assert_eq!(idle_since(5_000, 4_000), Duration::from_millis(1_000));
+        assert_eq!(idle_since(7, u32::MAX - 2), Duration::from_millis(10));
+        assert_eq!(idle_since(9, 9), Duration::ZERO);
     }
 }
