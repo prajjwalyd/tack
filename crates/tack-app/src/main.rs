@@ -116,6 +116,9 @@ fn main() {
     // The updater is driven from Rust only (see updates/plugin.rs): no web
     // view is granted its commands in capabilities/default.json.
     let builder = tauri::Builder::default()
+        // Nothing reads raw input, which would be sent for every pointer move
+        // while the board or Settings has the focus.
+        .device_event_filter(tauri::DeviceEventFilter::Always)
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Mutex::new(AppState::load()));
     #[cfg(debug_assertions)]
