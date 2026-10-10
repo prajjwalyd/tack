@@ -22,20 +22,23 @@ const POLL_SHOWN: Duration = Duration::from_millis(25);
 /// Tucked, with the pointer near the top.
 const POLL_HIDDEN: Duration = Duration::from_millis(40);
 /// Tucked, with the pointer far from the top: getting to the edge takes a
-/// moment, and resting there 400 ms more.
+/// moment, and resting there a little more.
 const POLL_FAR: Duration = Duration::from_millis(100);
 /// How far below the monitor top counts as near it, px.
 const NEAR_TOP: i32 = 200;
 /// Tucked with edge reveal off: nothing to watch for but the setting coming
 /// back on, as a reveal wakes the poller ([`wake`]).
 const POLL_IDLE: Duration = Duration::from_millis(500);
-/// Dwell time at the top edge before revealing. Reaching for a title bar or a
-/// browser tab passes through the edge too, and should not count.
-const EDGE_DWELL: Duration = Duration::from_millis(400);
-/// Movement that still counts as resting, px.
+/// Movement that still counts as resting at the top edge, px. The dwell
+/// itself, how long the pointer must rest before revealing, is the user's
+/// reveal speed ([`tack_core::RevealSpeed::dwell`]). At the slowest it is
+/// long enough that reaching for a title bar or a browser tab, which passes
+/// through the edge too, does not count.
 const EDGE_JITTER: i32 = 3;
 /// The same two for a drag held at the edge: the user is waiting for the
 /// board with something in hand, and a hand holding a button wobbles more.
+/// The dwell is at most the edge's: a drag never waits longer than the
+/// pointer would.
 const DRAG_DWELL: Duration = Duration::from_millis(220);
 const DRAG_JITTER: i32 = 8;
 /// How far below the monitor top still counts as "the very top", px.
@@ -181,6 +184,7 @@ impl Poller {
         let mut click_through = None;
         let mut pause = POLL_SHOWN;
         let action = host.with_view(|v, settings| {
+            let edge_dwell = settings.reveal.dwell();
             if let Some((fs, snipping)) = fullscreen {
                 v.fullscreen = fs;
                 v.snipping = snipping;
@@ -201,7 +205,8 @@ impl Poller {
                     && pointer::cursor_kind().may_be_dragging()
                     && !pointer::window_moving();
                 let buttons_ok = (!left && !right) || dragging;
-                let (dwell, jitter) = if dragging { (DRAG_DWELL, DRAG_JITTER) } else { (EDGE_DWELL, EDGE_JITTER) };
+                let (dwell, jitter) =
+                    if dragging { (DRAG_DWELL.min(edge_dwell), DRAG_JITTER) } else { (edge_dwell, EDGE_JITTER) };
                 if !settings.edge_reveal || !at_top || !v.edge_armed || !buttons_ok || v.fullscreen {
                     self.hot_since = None;
                     Action::None
