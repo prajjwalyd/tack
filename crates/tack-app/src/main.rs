@@ -37,6 +37,7 @@ mod stress;
 #[cfg(debug_assertions)]
 mod trace;
 mod tray;
+mod updates;
 mod webview_power;
 mod webview_privacy;
 
@@ -94,6 +95,9 @@ fn main() {
                 commands::set_reveal,
                 commands::set_felt,
                 commands::set_updates_check,
+                commands::update_status,
+                commands::check_for_updates,
+                commands::install_update,
                 commands::open_shortcuts,
                 commands::open_phone_link,
                 commands::close_settings,
@@ -111,7 +115,11 @@ fn main() {
             ]
         };
     }
-    let builder = tauri::Builder::default().manage(Mutex::new(AppState::load()));
+    // The updater is driven from Rust only (see updates/plugin.rs): no web
+    // view is granted its commands in capabilities/default.json.
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(Mutex::new(AppState::load()));
     #[cfg(debug_assertions)]
     let builder = builder.invoke_handler(handler!(stress::debug_ack));
     #[cfg(not(debug_assertions))]
@@ -144,6 +152,7 @@ fn main() {
             screenshot_files::watch(handle.clone(), note::notes_folder());
             captures::start(handle.clone());
             phone::start(handle.clone());
+            updates::start(&handle);
             edge_reveal::start(reveal::EdgeGlue(handle.clone()));
             #[cfg(debug_assertions)]
             notes::debug::start(&handle);

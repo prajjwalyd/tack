@@ -26,6 +26,7 @@ pub const SETTINGS_CHANGED: &str = "settings:changed";
 pub const POINTER_LEFT: &str = "board:pointer-left";
 pub const NOTICE: &str = "board:notice";
 pub const PHONE_STATE: &str = "phone:state";
+pub const UPDATES_STATUS: &str = "updates:status";
 
 /// How the UI animates an unpinned print.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
@@ -117,6 +118,12 @@ pub fn pointer_left(app: &AppHandle) {
 /// ("Nothing selected", "Already pinned"...). Also read out by screen readers.
 pub fn notice(app: &AppHandle, text: &str) {
     let _ = app.emit(NOTICE, json!({ "text": text }));
+}
+
+/// The update status changed (a check, a download's progress, an install):
+/// every window gets it whole.
+pub fn updates_status(app: &AppHandle, status: &crate::updates::UpdateStatus) {
+    let _ = app.emit(UPDATES_STATUS, status);
 }
 
 /// The phone window's state changed (see `phone::PhoneState`).

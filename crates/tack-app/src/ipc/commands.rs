@@ -15,6 +15,7 @@ use crate::phone::{self, PhoneState};
 use crate::settings_apply::{self, SettingsView};
 use crate::shortcuts::{self, DialogState, Pair};
 use crate::state::lock;
+use crate::updates::{self, UpdateStatus};
 use crate::{context_menu, drag, keyboard, notes, prints, reveal, settings_window};
 
 /// Runs `job` on the async runtime's blocking pool and waits for it there,
@@ -241,6 +242,28 @@ pub fn set_felt(app: AppHandle, value: String) -> SettingsView {
 #[tauri::command]
 pub fn set_updates_check(app: AppHandle, on: bool) -> SettingsView {
     settings_apply::set_updates_check(&app, on)
+}
+
+/// Where updates stand. The window also hears `updates:status` on every change.
+#[tauri::command]
+pub fn update_status(app: AppHandle) -> UpdateStatus {
+    updates::status(&app)
+}
+
+/// "Check now": asks the update server and answers with the result. Async:
+/// it waits for the network.
+#[tauri::command]
+pub async fn check_for_updates(app: AppHandle) -> UpdateStatus {
+    blocking(move || updates::check(&app)).await
+}
+
+/// "Install": downloads and verifies the update found, then starts its
+/// installer, which restarts Tack. Answers with the status it ends in (and
+/// sends it as `updates:status`): after a failure, the error; after a success
+/// there is no answer, because Tack has quit.
+#[tauri::command]
+pub async fn install_update(app: AppHandle) -> UpdateStatus {
+    blocking(move || updates::install(&app)).await
 }
 
 /// "Shortcuts…" in the Settings window. Async: building a window waits for

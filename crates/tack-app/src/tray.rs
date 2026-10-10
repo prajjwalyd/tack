@@ -23,6 +23,7 @@ use windows::Win32::System::Registry::{
 };
 
 use crate::state::{self, lock};
+use crate::updates::{self, Phase, UpdateStatus};
 use crate::{phone, prints, reveal, settings_apply, settings_window, shortcuts};
 
 /// The check items, kept to set their state when a setting changes.
@@ -31,6 +32,8 @@ pub struct TrayItems {
     edge: CheckMenuItem<Wry>,
     sound: CheckMenuItem<Wry>,
     autostart: CheckMenuItem<Wry>,
+    /// "Check for updates…", or the version that is ready.
+    updates: MenuItem<Wry>,
 }
 
 /// The current menu's check items; replaced when the menu is rebuilt.
@@ -56,6 +59,7 @@ fn menu(app: &AppHandle) -> tauri::Result<(Menu<Wry>, TrayItems)> {
     let settings_item = MenuItem::with_id(app, "tray:settings", "Settings\u{2026}", true, None::<&str>)?;
     let keys = MenuItem::with_id(app, "tray:shortcuts", "Shortcuts\u{2026}", true, None::<&str>)?;
     let phone = MenuItem::with_id(app, "tray:phone", "Use on your phone\u{2026}", true, None::<&str>)?;
+    let updates = MenuItem::with_id(app, "tray:updates", update_label(&updates::status(app)), true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "tray:quit", "Quit Tack", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
@@ -71,6 +75,7 @@ fn menu(app: &AppHandle) -> tauri::Result<(Menu<Wry>, TrayItems)> {
             &sound,
             &autostart,
             &keys,
+            &updates,
             &PredefinedMenuItem::separator(app)?,
             &quit,
         ],
@@ -81,7 +86,7 @@ fn menu(app: &AppHandle) -> tauri::Result<(Menu<Wry>, TrayItems)> {
         let warning = MenuItem::with_id(app, format!("tray:shortcuts-in-use-{n}"), text, true, None::<&str>)?;
         menu.insert(&warning, 5 + n)?;
     }
-    Ok((menu, TrayItems { edge, sound, autostart }))
+    Ok((menu, TrayItems { edge, sound, autostart, updates }))
 }
 
 pub fn build(app: &AppHandle) -> tauri::Result<()> {
@@ -126,6 +131,25 @@ pub fn sync_checks(app: &AppHandle) {
     let _ = items.edge.set_checked(settings.edge_reveal);
     let _ = items.sound.set_checked(settings.sound);
     let _ = items.autostart.set_checked(autostart::enabled());
+}
+
+/// The updates item's text: the new version once one is ready, else the
+/// way to look for one.
+pub fn update_label(status: &UpdateStatus) -> String {
+    match (&status.state, &status.version) {
+        (Phase::Available, Some(version)) => format!("Update available: v{version}"),
+        _ => "Check for updates\u{2026}".to_string(),
+    }
+}
+
+/// Shows `label` on the updates item (the update status changed).
+pub fn set_update_label(app: &AppHandle, label: &str) {
+    // The tray does not exist before setup has built it.
+    let Some(items) = app.try_state::<Items>() else { return };
+    let item = items.lock().unwrap_or_else(|p| p.into_inner()).as_ref().map(|items| items.updates.clone());
+    if let Some(item) = item {
+        let _ = item.set_text(label);
+    }
 }
 
 const PERSONALIZE: PCWSTR = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize");
@@ -202,6 +226,18 @@ pub fn handle(app: &AppHandle, id: &str) {
         spawn("tack-settings-window", move || settings_window::open(&app));
         return;
     }
+    if id == "tray:updates" {
+        let app = app.clone();
+        spawn("tack-updates-window", move || {
+            settings_window::open(&app);
+            // With an update ready, Settings is where to install it; otherwise
+            // look now, and Settings shows the answer.
+            if updates::status(&app).state != Phase::Available {
+                updates::check(&app);
+            }
+        });
+        return;
+    }
     if id == "tray:phone" {
         let app = app.clone();
         spawn("tack-phone-window", move || phone::window::open(&app));
@@ -243,5 +279,21 @@ pub fn handle(app: &AppHandle, id: &str) {
 fn spawn(name: &str, job: impl FnOnce() + Send + 'static) {
     if let Err(e) = std::thread::Builder::new().name(name.into()).spawn(job) {
         eprintln!("tack: cannot start {name}: {e}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_updates_item_names_the_version_that_is_ready() {
+        let mut status = UpdateStatus::idle();
+        assert_eq!(update_label(&status), "Check for updates\u{2026}");
+        status.state = Phase::Available;
+        status.version = Some("0.2.0".into());
+        assert_eq!(update_label(&status), "Update available: v0.2.0");
+        status.state = Phase::Downloading;
+        assert_eq!(update_label(&status), "Check for updates\u{2026}");
     }
 }
