@@ -19,6 +19,8 @@ use crate::captures;
 use crate::ipc::events::{self, Flight, Removal};
 use crate::state::{lock, AppState};
 
+/// The beat between pins popping out in Clear's ripple, at Normal.
+const RIPPLE_GAP: Duration = Duration::from_millis(45);
 /// How often the history is checked for prints that have grown too old.
 const AGEING_INTERVAL: Duration = Duration::from_secs(60 * 60);
 
@@ -270,12 +272,17 @@ pub fn remove_path(app: &AppHandle, path: &Path, how: Removal) {
 /// Unpins every print that is not kept, one after another so the pins pop
 /// out in a ripple. Kept prints were kept on purpose; only Unpin removes them.
 pub fn clear(app: &AppHandle) {
-    let ids: Vec<String> = lock(app).board.prints().iter().filter(|p| !p.kept).map(|p| p.id.clone()).collect();
+    let (ids, ripple) = {
+        let s = lock(app);
+        // Class A: the pins pop at the speed's pace, so the ripple's beat does too.
+        let ids: Vec<String> = s.board.prints().iter().filter(|p| !p.kept).map(|p| p.id.clone()).collect();
+        (ids, s.settings.reveal.scaled(RIPPLE_GAP))
+    };
     let app = app.clone();
     let spawned = std::thread::Builder::new().name("tack-clear".into()).spawn(move || {
         for (n, id) in ids.iter().enumerate() {
             if n > 0 {
-                std::thread::sleep(Duration::from_millis(45));
+                std::thread::sleep(ripple);
             }
             remove(&app, id, Removal::Fall);
         }

@@ -11,7 +11,7 @@
 use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::time::{Duration, Instant};
 
-use tack_core::{Rect, RevealReason, Settings, View};
+use tack_core::{Rect, RevealReason, RevealSpeed, Settings, View};
 use tack_windows::edge_reveal::{self, EdgeHost};
 use tack_windows::{overlay, pointer, snipping_tool, HWND};
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
@@ -19,22 +19,23 @@ use windows::Win32::Foundation::POINT;
 
 use crate::ipc::events;
 use crate::state::lock;
-use crate::{webview_power, webview_privacy};
+use crate::{settings_window, webview_power, webview_privacy};
 
 /// The board window's label in tauri.conf.json.
 pub const WINDOW_LABEL: &str = "board";
-/// How long a new screenshot keeps the board down on its own.
-const PEEK: Duration = Duration::from_secs(3);
-/// The same for a capture that flies in. The flight and the pin's landing
-/// use the first part of it, and the poller's leave delay comes on top.
-pub const FLIGHT_PEEK: Duration = Duration::from_millis(1750);
+// How long a new screenshot, a capture that flies in or a notice keeps the
+// board down on its own, how long the poller waits after the pointer leaves
+// and how long the window waits to hide after a tuck all follow the user's
+// speed: see `RevealSpeed` (peek, flight_peek, notice_peek, leave_delay,
+// tuck_hide_delay), which also says which timers never scale. The ones below
+// are class C or D.
 /// How long the one-time tip under the board keeps it down for reading,
-/// unless the pointer comes over it (and then leaves) first.
+/// unless the pointer comes over it (and then leaves) first. Class D: text
+/// to read, so it is the same at every speed.
 const TIP_PEEK: Duration = Duration::from_secs(9);
-/// The UI's tuck slide; the window hides once it is over.
-const TUCK_HIDE_DELAY: Duration = Duration::from_millis(300);
 /// After the UI first says it is ready, how long the hidden board's web view
-/// stays awake to finish laying out and decoding the restored prints.
+/// stays awake to finish laying out and decoding the restored prints. Class C
+/// (invisible startup work), like [`WARM_UP`] and the full-screen waits.
 const FIRST_SLEEP_DELAY: Duration = Duration::from_millis(1500);
 /// How long the window is shown once at startup, the board drawn unseen
 /// (see [`sleep_once_ready`]).
@@ -85,6 +86,11 @@ impl Placement {
         let pt = pointer::cursor_pos();
         Placement::at((pt.x, pt.y))
     }
+}
+
+/// The user's speed setting, as it is now (a short look at the state).
+pub fn speed(app: &AppHandle) -> RevealSpeed {
+    lock(app).settings.reveal
 }
 
 /// The board window's handle, kept for threads that must not wait on the
@@ -227,7 +233,7 @@ pub fn reveal(app: &AppHandle, reason: RevealReason) {
         // The print is pinned all the same, and shows at the next reveal.
         return;
     }
-    show(app, reason, Placement::under_pointer(), PEEK);
+    show(app, reason, Placement::under_pointer(), speed(app).peek());
 }
 
 /// Whether a new screenshot may bring the board down now, i.e. nothing full
@@ -238,8 +244,9 @@ pub fn new_may_reveal(app: &AppHandle) -> bool {
 }
 
 /// Slides the board down at `place`, with no full-screen check. For a new
-/// screenshot, `peek` is how long it stays down on its own. A board already
-/// down on another monitor moves to `place`.
+/// screenshot, `peek` is how long it stays down on its own (the speed's
+/// `peek`, `flight_peek` or `notice_peek`). A board already down on another
+/// monitor moves to `place`.
 pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Duration) {
     let now = Instant::now();
     let (generation, pos, size) = {
@@ -254,6 +261,7 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
         if !s.ui_ready {
             return;
         }
+        let scale = s.settings.reveal.motion_scale();
         let v = &mut s.view;
         // Explicit requests always win; the edge does not interrupt a full
         // screen app (the poller has only just looked), and a new capture
@@ -265,7 +273,10 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
         match reason {
             RevealReason::Hotkey | RevealReason::Tray => v.stay_open = true,
             // Never cut short a longer peek (the tip's) already running.
-            RevealReason::New => v.peek_until = v.peek_until.max(Some(now + peek)),
+            RevealReason::New => {
+                v.peek_until = v.peek_until.max(Some(now + peek));
+                trace!("reveal {reason:?}: peek {peek:?} at scale {scale}");
+            }
             RevealReason::Edge => {}
         }
         if v.shown {
@@ -287,6 +298,7 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
                     if let Some(hwnd) = board_hwnd(&handle) {
                         overlay::show_at(hwnd, place.pos, place.size);
                         sync_click_through();
+                        raise_settings_if_held(&handle);
                     }
                 });
             } else {
@@ -330,6 +342,7 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
             let Some(hwnd) = board_hwnd(&app) else { return };
             overlay::show_at(hwnd, pos, size);
             sync_click_through();
+            raise_settings_if_held(&app);
             trace!("reveal gen={generation}: window shown");
             events::reveal(&app, reason);
             trace!("reveal gen={generation}: board:reveal sent");
@@ -386,27 +399,30 @@ fn forced_fullscreen() -> bool {
     false
 }
 
-/// Slides the board up, and hides the window once the slide is over.
+/// Slides the board up, and hides the window once the slide is over (the
+/// speed's `tuck_hide_delay`, read when the tuck starts).
+///
+/// Any tuck ends the Settings hold ([`hold_for_settings`]): it is the user's
+/// own say (the shortcut, the tray, Esc) or a full-screen app's, and neither
+/// is overruled by an open Settings window. The board stays up only until
+/// the next reveal then; opening Settings again holds it again.
 pub fn tuck(app: &AppHandle) {
-    let generation = {
+    let (tucked, hide_after) = {
         let mut s = lock(app);
-        let v = &mut s.view;
-        if !v.shown {
-            return;
-        }
-        v.shown = false;
-        v.generation += 1;
-        v.stay_open = false;
-        v.peek_until = None;
-        v.edge_armed = false;
-        v.tip = None;
-        v.generation
+        let hide_after = s.settings.reveal.tuck_hide_delay();
+        let Some(tucked) = s.view.tuck() else { return };
+        (tucked, hide_after)
     };
+    let generation = tucked.generation;
     events::tuck(app);
-    trace!("tuck gen={generation}: board:tuck sent");
+    trace!("tuck gen={generation}: board:tuck sent, the window hides in {hide_after:?}");
+    if tucked.hold_ended {
+        trace!("tuck gen={generation}: the Settings hold ended");
+        lower_settings(app);
+    }
     let handle = app.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(TUCK_HIDE_DELAY);
+        std::thread::sleep(hide_after);
         let inner = handle.clone();
         let _ = handle.run_on_main_thread(move || {
             {
@@ -422,6 +438,83 @@ pub fn tuck(app: &AppHandle) {
                 webview_power::sleep();
             }
         });
+    });
+}
+
+/// The Settings window opens (`on`) or closes: while it is open the board
+/// stays down, so a change of colour, frame, paper or speed shows live, and
+/// it tucks when Settings closes.
+///
+/// Opening reveals the board if it is not down, as the tray does (it never
+/// takes the keyboard from Settings: the reason is [`RevealReason::Tray`],
+/// and only the shortcut's reveal asks for focus), unless a full-screen app
+/// is in front. A board already down is just kept: no new swing. While
+/// held, the pointer poller does not tuck it (leaving, the peek ending, a
+/// click in Settings), a full-screen app still does, and so does an explicit
+/// tuck; both end the hold. The Settings window is raised above the board's
+/// overlay for as long as it is held (on a short screen they overlap).
+///
+/// Call it from a worker thread (a reveal may be requested) or the main
+/// thread (the window's destroyed event).
+pub fn hold_for_settings(app: &AppHandle, on: bool) {
+    if !on {
+        let tuck_now = lock(app).view.release_settings();
+        trace!("settings closed: hold released, tuck={tuck_now}");
+        lower_settings(app);
+        if tuck_now {
+            tuck(app);
+        }
+        return;
+    }
+    let (needs_reveal, ready) = {
+        let mut s = lock(app);
+        (s.view.hold_for_settings(), s.ui_ready)
+    };
+    trace!("settings open: hold requested, reveal needed={needs_reveal}, ui_ready={ready}");
+    if !ready {
+        // The flag is kept: the board is held once it is revealed.
+        return;
+    }
+    if !needs_reveal {
+        let handle = app.clone();
+        let _ = app.run_on_main_thread(move || raise_settings_if_held(&handle));
+        return;
+    }
+    // Asked afresh, not the poller's last reading, which may be stale while
+    // the board is tucked. Snipping Tool's own overlay does not count.
+    if overlay::fullscreen_app_in_front() && !snipping_tool::in_front() {
+        lock(app).view.settings_open = false;
+        trace!("settings open: full screen in front, the board stays up");
+        return;
+    }
+    show(app, RevealReason::Tray, Placement::under_pointer(), Duration::ZERO);
+}
+
+/// The Settings window's handle, if it is open.
+fn settings_hwnd(app: &AppHandle) -> Option<HWND> {
+    app.get_webview_window(settings_window::LABEL)?.hwnd().ok()
+}
+
+/// Puts Settings above the board's overlay (both are topmost, and showing
+/// the board puts it on top), if Settings is holding the board. Main thread.
+fn raise_settings_if_held(app: &AppHandle) {
+    if !lock(app).view.settings_open {
+        return;
+    }
+    if let Some(hwnd) = settings_hwnd(app) {
+        overlay::set_topmost(hwnd, true);
+    }
+}
+
+/// Settings back among the ordinary windows. Queued for the main thread,
+/// which also runs after the window's destruction, when there is nothing
+/// left to do.
+fn lower_settings(app: &AppHandle) {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(hwnd) = settings_hwnd(&handle) {
+            overlay::set_topmost(hwnd, false);
+        }
     });
 }
 
@@ -456,6 +549,7 @@ pub fn set_tip(app: &AppHandle, rect: Option<Rect>) {
 /// The hotkey and the tray icon: down if it is up, up if it is down.
 pub fn toggle(app: &AppHandle, reason: RevealReason) {
     if lock(app).view.shown {
+        trace!("tuck requested: {reason:?} toggle");
         tuck(app);
     } else {
         reveal(app, reason);
@@ -485,6 +579,7 @@ impl EdgeHost for EdgeGlue {
         if crate::stress::running() {
             return;
         }
+        trace!("tuck requested: the pointer poller (peek over, pointer left, click outside or full screen)");
         tuck(&self.0);
     }
 

@@ -10,6 +10,8 @@ use serde_json::json;
 use tack_core::{CssRect, Print, RevealReason};
 use tauri::{AppHandle, Emitter};
 
+use crate::state::lock;
+
 pub const PRINT_ADDED: &str = "board:print-added";
 pub const PRINT_REMOVED: &str = "board:print-removed";
 pub const PRINT_UPDATED: &str = "board:print-updated";
@@ -54,6 +56,12 @@ pub struct Flight {
     /// Show the one-time tip about Snipping Tool's notification after it
     /// lands (see the `set_tip` command).
     pub tip: bool,
+    /// The speed's motion scale as it is now, for the flight to play at: the
+    /// page may handle this event before the reveal that carries the scale
+    /// too (the print is pinned first, and a tucked page runs queued events
+    /// as it wakes).
+    #[serde(rename = "motionScale")]
+    pub motion_scale: f64,
 }
 
 /// A print was pinned. `animate`: a live arrival, pressed on with a pin
@@ -91,8 +99,13 @@ pub fn print_drag_ended(app: &AppHandle, id: &str) {
     let _ = app.emit(PRINT_DRAG_ENDED, json!({ "id": id }));
 }
 
+/// The board comes down. `motionScale` is the user's speed as it is now, so
+/// the page applies it before animating anything, whatever `settings:changed`
+/// events it has or has not run yet (it was asleep while tucked). Not called
+/// with the state lock held.
 pub fn reveal(app: &AppHandle, reason: RevealReason) {
-    let _ = app.emit(REVEAL, json!({ "reason": reason }));
+    let motion_scale = lock(app).settings.reveal.motion_scale();
+    let _ = app.emit(REVEAL, json!({ "reason": reason, "motionScale": motion_scale }));
 }
 
 pub fn tuck(app: &AppHandle) {

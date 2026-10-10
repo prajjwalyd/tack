@@ -136,7 +136,10 @@ fn pin_capture(app: &AppHandle, repeats: &mut RepeatFilter, img: DynamicImage, p
     let show = match lookup {
         Some(lookup) if reveal::new_may_reveal(app) => {
             let place = Placement::at(lookup.rect.center());
-            let tip = !lock(app).settings.snip_tip_shown;
+            let (tip, motion_scale) = {
+                let s = lock(app);
+                (!s.settings.snip_tip_shown, s.settings.reveal.motion_scale())
+            };
             let from = lookup.rect.to_css(place.pos, place.scale);
             trace!(
                 "capture: flight from {:?} ({}), {} look(s), {:.1} ms CPU, found after {:.0} ms; pictures drawn after {:.0} ms",
@@ -147,7 +150,7 @@ fn pin_capture(app: &AppHandle, repeats: &mut RepeatFilter, img: DynamicImage, p
                 lookup.took.as_secs_f64() * 1000.0,
                 drawn.as_secs_f64() * 1000.0,
             );
-            Show::Fly(place, Flight { from, image, found: lookup.found.is_some(), tip })
+            Show::Fly(place, Flight { from, image, found: lookup.found.is_some(), tip, motion_scale })
         }
         Some(_) => Show::Quietly,
         None => Show::Reveal,
@@ -167,7 +170,7 @@ fn pin_saved(app: &AppHandle, path: PathBuf, thumb: Thumb, show: Show) -> String
     match prints::pin(app, path.clone(), thumb, Origin::Capture, prints::live(), flight) {
         Pin::New(aged) => {
             match show {
-                Show::Fly(place, _) => reveal::show(app, RevealReason::New, place, reveal::FLIGHT_PEEK),
+                Show::Fly(place, _) => reveal::show(app, RevealReason::New, place, reveal::speed(app).flight_peek()),
                 Show::Reveal => reveal::reveal(app, RevealReason::New),
                 Show::Quietly => {}
             }

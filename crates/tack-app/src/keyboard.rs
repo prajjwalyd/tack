@@ -70,6 +70,7 @@ pub fn release(app: &AppHandle) {
 
 /// Esc: the board goes back up.
 pub fn hide(app: &AppHandle) {
+    trace!("tuck requested: Esc on the board");
     reveal::tuck(app);
 }
 
