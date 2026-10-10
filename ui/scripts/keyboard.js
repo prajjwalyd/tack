@@ -19,7 +19,7 @@
 import * as ipc from "./ipc.js";
 import { clearHover, setHover } from "./gestures.js";
 import { PRINT_TOP, showPrint } from "./layout.js";
-import { revealMs } from "./motion/spring.js";
+import { restMs } from "./motion/spring.js";
 import { fold, isUnfolded, openItem, sheetElement } from "./note.js";
 import { toggleKeep } from "./print.js";
 import { onScrollState, scrollPos } from "./scroll.js";
@@ -32,7 +32,7 @@ const items = () => state.order.map((id) => state.prints.get(id)).filter((p) => 
 const focused = () => (focusId ? state.prints.get(focusId) || null : null);
 
 /** A keyboard open (board:reveal with reason "hotkey"). `settleMs`: until the board is at rest. */
-export function keyboardOpen(settleMs = revealMs()) {
+export function keyboardOpen(settleMs = restMs()) {
   took = true;
   dom.board.classList.add("kbd");
   const first = focused() && !focused().leaving ? focused() : items()[0] || null;

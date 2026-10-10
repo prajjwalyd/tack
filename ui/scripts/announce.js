@@ -12,6 +12,8 @@ region.setAttribute("aria-live", "polite");
 region.setAttribute("aria-atomic", "true");
 document.body.appendChild(region);
 
+import { fixed } from "./motion/scale.js";
+
 let clearTimer = 0;
 
 /** Says `text` politely. The same text twice in a row is said twice. */
@@ -23,8 +25,9 @@ export function announce(text) {
   clearTimer = setTimeout(() => {
     region.textContent = text;
     // Cleared later so a stale "Copied" is never read out by browsing.
-    clearTimer = setTimeout(() => { clearTimer = 0; region.textContent = ""; }, 4000);
-  }, 40);
+    clearTimer = setTimeout(() => { clearTimer = 0; region.textContent = ""; },
+      fixed(4000, "a screen reader needs the time to read it out"));
+  }, fixed(40, "a live region speaks only on a change after a task of its own"));
 }
 
 /** The board tucked: clear the region and its timer. */

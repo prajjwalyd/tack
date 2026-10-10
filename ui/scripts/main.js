@@ -10,8 +10,8 @@ import { clearDrop } from "./drop.js";
 import { onDragEnded, onDragging, onPointerLeft } from "./gestures.js";
 import { keyboardOpen, keyboardTuck } from "./keyboard.js";
 import { forgetRect, layout, restScroll } from "./layout.js";
-import { setMotionScale } from "./motion/scale.js";
-import { revealMs } from "./motion/spring.js";
+import { fixed, setMotionScale } from "./motion/scale.js";
+import { restMs } from "./motion/spring.js";
 import { gust, scheduleGust, stopGusts } from "./motion/swing.js";
 import { fold } from "./note.js";
 import { hideNotice, notice, noticeAfterReveal } from "./notice.js";
@@ -53,7 +53,7 @@ window.addEventListener("resize", () => {
     forgetRect();
     layout({ instant: true });
     if (!state.revealed) restScroll();
-  }, 60);
+  }, fixed(60, "debounces the window's resize events"));
 });
 
 dom.board.addEventListener("pointerenter", () => ipc.setHovering(true));
@@ -65,10 +65,12 @@ async function init() {
     return;
   }
   await Promise.all([
-    ipc.on(EVENTS.REVEAL, (p) => onReveal(p.reason)),
+    ipc.on(EVENTS.REVEAL, (p) => onReveal(p.reason, p.motionScale)),
     ipc.on(EVENTS.TUCK, () => onTuck()),
     ipc.on(EVENTS.WARM_UP, () => warmUp()),
     ipc.on(EVENTS.PRINT_ADDED, (p) => {
+      // A capture's flight is sent before the board is revealed, so a sleeping page hears it first: it carries the speed too.
+      if (p.flight?.motionScale) setMotionScale(p.flight.motionScale);
       addPrint(p.print, !!p.animate, false, p.flight);
       if (p.animate) announce("Pinned");
     }),
@@ -110,11 +112,17 @@ function applySettings(s) {
   if (s.motionScale) setMotionScale(s.motionScale);
 }
 
-/** board:reveal. The hotkey is a keyboard open: the page takes the focus (keyboard.js). */
-function onReveal(reason) {
+/**
+ * board:reveal. The hotkey is a keyboard open: the page takes the focus
+ * (keyboard.js). `motionScale` is the speed as it is now: applied first, so
+ * everything that moves from here on moves at it, even if the settings
+ * change reached this page while it slept (or has not yet).
+ */
+function onReveal(reason, motionScale) {
+  if (motionScale) setMotionScale(motionScale);
   const was = state.revealed;
   reveal();
-  if (reason === "hotkey") keyboardOpen(was ? 0 : (state.reduced ? 100 : revealMs()));
+  if (reason === "hotkey") keyboardOpen(was ? 0 : restMs());
   noticeAfterReveal(was);
 }
 

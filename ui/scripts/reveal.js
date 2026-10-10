@@ -9,15 +9,15 @@ import { debugAck } from "./ipc.js";
 import { abortFlights, dropTip, restingBox } from "./flight.js";
 import { clearHover, endPress } from "./gestures.js";
 import { forgetRect, restScroll, sendRect, showPrint, stopRectTimers } from "./layout.js";
-import { scaled } from "./motion/scale.js";
-import { revealMs } from "./motion/spring.js";
+import { fixed, scaled } from "./motion/scale.js";
+import { restMs } from "./motion/spring.js";
 import { scheduleGust, stopGusts } from "./motion/swing.js";
 import { flushOrder, flyIn, pinOn } from "./print.js";
 import { halt } from "./scroll.js";
 import { sleepSound, wakeSound } from "./sound.js";
 import { dom, later, state } from "./state.js";
 
-const TUCK_MS = 200;        // --dur-tuck, at normal speed
+const TUCK_MS = 190;        // --dur-tuck at normal speed; the backend hides the window TUCK_MS (tack-core) scaled, plus a margin, after board:tuck
 
 let tuckTimer = 0;
 
@@ -60,7 +60,7 @@ export function reveal() {
   if (!newest) return;
   // A new capture flies in at once, alongside the board's swing.
   if (newest.flight) { flyIn(newest, rest); return; }
-  const start = wasRevealed ? 0 : (state.reduced ? 100 : revealMs());
+  const start = wasRevealed ? 0 : restMs();
   later(() => {
     if (newest.leaving) return;
     newest.slot.classList.remove("awaiting");
@@ -97,9 +97,10 @@ export function warmUp() {
   Object.assign(stand.style, { left: "40px", top: "200px", width: "168px", height: "100px", opacity: "0.01" });
   stand.innerHTML = `<div class="flight-shade" style="opacity:1"></div><div class="flight-paper" style="opacity:1"></div><div class="flight-photo"></div>`;
   document.body.appendChild(stand);
-  stand.animate([{ transform: "scale(3)" }, { transform: "rotate(2deg)" }], { duration: 400 });
-  timers.push(setTimeout(() => { b.style.transform = "none"; }, 250));
-  timers.push(setTimeout(() => endWarmUp?.(false), 600));
+  // Nothing of it is seen, so its own fixed timing (class C, motion/scale.js).
+  stand.animate([{ transform: "scale(3)" }, { transform: "rotate(2deg)" }], { duration: fixed(400, "the warm-up draws unseen at startup") });
+  timers.push(setTimeout(() => { b.style.transform = "none"; }, fixed(250, "the warm-up draws unseen at startup")));
+  timers.push(setTimeout(() => endWarmUp?.(false), fixed(600, "the warm-up draws unseen at startup")));
 }
 
 /** When a print was pinned, for picking the newest of a backlog. */
@@ -139,5 +140,5 @@ export function tuck() {
     stopRectTimers();
     sleepSound();
     dom.board.classList.add("gone");
-  }, scaled(TUCK_MS) + 30);
+  }, scaled(TUCK_MS) + fixed(30, "a margin of frames after the slide"));
 }

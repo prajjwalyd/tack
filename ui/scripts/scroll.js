@@ -4,18 +4,22 @@
 // are followed almost directly. Vertical wheel turns scroll sideways. The rAF
 // loop runs only while the row moves; edge fades show where more prints wait.
 
+import { fixed, scaled } from "./motion/scale.js";
 import { state, dom } from "./state.js";
 
-const WHEEL_TAU = 95;      // ms: how quickly a wheel glide catches up with its target
-const PAD_TAU = 22;        // ms: a touchpad brings its own momentum
-const GLIDE_TAU = 110;     // ms: scrolls the board makes itself (new print, shorter row)
+// How quickly a glide catches up with its target, ms at normal speed. The
+// glides scale (class A, motion/scale.js), so Instant is nearly direct; a
+// touchpad's smoothing is a filter on its own momentum, not an animation.
+const WHEEL_TAU = 95;      // a wheel's coarse steps
+const PAD_TAU = 22;        // a touchpad brings its own momentum
+const GLIDE_TAU = 110;     // scrolls the board makes itself (new print, shorter row)
 const LINE_PX = 40;        // deltaMode 1 (lines) to px
 const SETTLED = 0.25;      // px: close enough, snap and stop
 
 let pos = 0;               // shown
 let target = 0;            // heading to
 let max = 0;               // furthest scroll, 0 when the row fits
-let tau = WHEEL_TAU;
+let tau = scaled(WHEEL_TAU);
 let raf = 0;
 let lastT = 0;
 let edges = "";
@@ -35,7 +39,7 @@ export function setExtent(contentW, viewW) {
   if (target > max || pos > max) {
     // Shorter row while scrolled to its end: glide back, never jump.
     target = Math.min(target, max);
-    if (state.revealed && !state.reduced) { tau = GLIDE_TAU; start(); }
+    if (state.revealed && !state.reduced) { tau = scaled(GLIDE_TAU); start(); }
     else { stop(); pos = Math.min(pos, max); apply(); }
   }
   updateEdges();
@@ -45,7 +49,7 @@ export function setExtent(contentW, viewW) {
 export function scrollTo(x, instant = false) {
   target = clamp(x);
   if (instant || state.reduced || !state.revealed) { stop(); pos = target; apply(); updateEdges(); return; }
-  tau = GLIDE_TAU;
+  tau = scaled(GLIDE_TAU);
   start();
 }
 
@@ -113,7 +117,7 @@ function onWheel(e) {
   if (!d) return;
   // Wheels step in large round notches (100/120 px); touchpads send many small, fractional deltas.
   const notch = e.deltaMode !== 0 || (Math.abs(d) >= 50 && Number.isInteger(d) && !dx);
-  tau = state.reduced ? 1 : notch ? WHEEL_TAU : PAD_TAU;
+  tau = state.reduced ? 1 : notch ? scaled(WHEEL_TAU) : fixed(PAD_TAU, "a touchpad's smoothing filter, not an animation");
   // A notch while gliding stacks onto the target, not the current spot.
   target = clamp(target + d);
   start();

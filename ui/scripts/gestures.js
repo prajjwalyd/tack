@@ -11,11 +11,13 @@
 // toward the pointer and its sheen (print.css), once per frame while hovered.
 
 import * as ipc from "./ipc.js";
+import { fixed } from "./motion/scale.js";
 import { openItem } from "./note.js";
 import { hideCaption, showCaption, toggleKeep } from "./print.js";
 import { isScrolling, onScrollState } from "./scroll.js";
 import { dom, state } from "./state.js";
 
+// Physical gesture times (class C, motion/scale.js): the speed never changes them.
 const HOLD_MS = 520;     // keep in step with --dur-press in tokens.css
 const DBL_MS = 260;
 const DRAG_PX = 4;
@@ -153,7 +155,7 @@ export function wireGestures(print) {
     e.preventDefault();
     const now = performance.now();
     const pc = state.pendingClick;
-    if (pc && pc.id === id && now - pc.t < DBL_MS) {
+    if (pc && pc.id === id && now - pc.t < fixed(DBL_MS, "the double-click window is a physical gesture time")) {
       // Second click: open instead of copying twice.
       clearTimeout(pc.timer);
       state.pendingClick = null;
@@ -173,7 +175,7 @@ export function wireGestures(print) {
       p.long = true;
       slot.classList.remove("pressing");
       onHold(print);
-    }, HOLD_MS);
+    }, fixed(HOLD_MS, "press-and-hold is a physical gesture time"));
     state.press = p;
     slot.classList.add("pressing");
     setHover(print, true);
@@ -202,7 +204,7 @@ export function wireGestures(print) {
     pc.timer = setTimeout(() => {
       if (state.pendingClick === pc) state.pendingClick = null;
       ipc.copyPrint(id);
-    }, DBL_MS);
+    }, fixed(DBL_MS, "the double-click window is a physical gesture time"));
     if (state.pendingClick) { // a different print was clicked just before: let it copy now
       clearTimeout(state.pendingClick.timer);
       ipc.copyPrint(state.pendingClick.id);

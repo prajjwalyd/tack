@@ -1,9 +1,11 @@
 // Spring easings: a damped spring's step response sampled into a CSS linear()
 // easing drives the reveal swing, the row's slides and the hover settle.
 // Importing this module publishes them as CSS custom properties (tokens.css
-// has cubic-bezier fallbacks for webviews without linear()). The reveal's
-// duration follows the Reveal speed setting (scale.js).
+// has cubic-bezier fallbacks for webviews without linear()). Their durations
+// follow the Speed setting (scale.js): the CSS ones through --motion-scale,
+// the script ones through layoutMs() and revealMs().
 
+import { state } from "../state.js";
 import { scaled } from "./scale.js";
 
 /**
@@ -37,13 +39,13 @@ if (hasLinear) {
   root.setProperty("--ease-reveal", REVEAL.easing);
   root.setProperty("--dur-reveal", `calc(${REVEAL.ms}ms * var(--motion-scale))`);
   root.setProperty("--ease-layout", LAYOUT.easing);
-  root.setProperty("--dur-layout", `${LAYOUT.ms}ms`);
+  root.setProperty("--dur-layout", `calc(${LAYOUT.ms}ms * var(--motion-scale))`);
   root.setProperty("--ease-settle", SETTLE.easing);
-  root.setProperty("--dur-hover-out", `${SETTLE.ms}ms`);
+  root.setProperty("--dur-hover-out", `calc(${SETTLE.ms}ms * var(--motion-scale))`);
 }
 
-/** How long a slide along the row takes, ms. */
-export const LAYOUT_MS = hasLinear ? LAYOUT.ms : 480;
+/** How long a slide along the row takes at the current speed, ms. */
+export const layoutMs = () => scaled(hasLinear ? LAYOUT.ms : 480);
 /** The row's slide easing, for WAAPI animations matching CSS ones. */
 export const LAYOUT_EASING = hasLinear ? LAYOUT.easing : "cubic-bezier(.22, 1, .36, 1)";
 /**
@@ -53,3 +55,6 @@ export const LAYOUT_EASING = hasLinear ? LAYOUT.easing : "cubic-bezier(.22, 1, .
  * board.
  */
 export const revealMs = () => scaled(hasLinear ? REVEAL.ms : 520) + 40;
+
+/** The same under reduced motion, where the board slides plainly (motion.css): until it is at rest, ms. */
+export const restMs = () => (state.reduced ? scaled(100) : revealMs());

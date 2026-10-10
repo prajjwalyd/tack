@@ -8,12 +8,13 @@
 //   travel  ~560 ms  arcs to the slot, shrinking and turning to its angle
 //   press   ~220 ms  pressed onto the cork; the pin drives in at the touch
 //
-// Times are at normal speed; the Reveal speed setting scales every one of
-// them together (timing() below), so a faster flight keeps its shape.
+// Times are at normal speed; the Speed setting scales every one of them
+// together (timing() below), so a faster flight keeps its shape. The decode
+// wait is the one exception: it waits on the system, not on the choreography.
 
 import * as ipc from "./ipc.js";
 import { PIN_Y } from "./layout.js";
-import { motionScale } from "./motion/scale.js";
+import { fixed, scaled } from "./motion/scale.js";
 import { cancel, dom, later, rand, state } from "./state.js";
 
 const LIFT_MS = 110;
@@ -30,15 +31,19 @@ const BORDER = 4;             // --print-border
 const FRAMES = 72;            // keyframes per flight (linear between them)
 const DECODE_WAIT = 120;      // ms to wait for the picture before using the thumbnail
 const TIP_DELAY = 380;        // ms after landing
+const HAND_OVER = 60;         // ms after the stand-in's last frame until the print has taken over
 
 /** Flights in progress, by print id. */
 const flying = new Map();
 
 /** The flight's phases in ms at the current speed. */
-function timing() {
-  const k = motionScale();
-  const lift = LIFT_MS * k, travel = TRAVEL_MS * k, press = PRESS_MS * k;
-  return { lift, travel, press, total: lift + travel + press, pin: PIN_MS * k, touch: PIN_TOUCH * k, sound: PIN_SOUND * k, grow: GROW_MS * k };
+export function timing() {
+  const lift = scaled(LIFT_MS), travel = scaled(TRAVEL_MS), press = scaled(PRESS_MS);
+  return {
+    lift, travel, press, total: lift + travel + press,
+    pin: scaled(PIN_MS), touch: scaled(PIN_TOUCH), sound: scaled(PIN_SOUND), grow: scaled(GROW_MS),
+    handOver: scaled(HAND_OVER), tipDelay: scaled(TIP_DELAY),
+  };
 }
 
 /** The backend's `flight` for a new print with its picture loading, or null. */
@@ -82,7 +87,7 @@ export function restingBox(print) {
  */
 export async function launch(print, flight, rest, land) {
   // Wait briefly for the sharp picture so the first frame is not a thumbnail.
-  const decoded = await Promise.race([flight.ready, new Promise((r) => setTimeout(() => r(false), DECODE_WAIT))]);
+  const decoded = await Promise.race([flight.ready, new Promise((r) => setTimeout(() => r(false), fixed(DECODE_WAIT, "a wait on the image decoding, not choreography")))]);
   if (print.leaving || !state.revealed) { releaseImage(flight.img); land.skipped(); return; }
   if (!decoded) { flight.img.src = print.data.thumb; }
 
@@ -146,8 +151,8 @@ export async function launch(print, flight, rest, land) {
     releaseImage(flight.img);
     print.slot.classList.remove("arriving", "landing");
     land.settled();
-    if (flight.tip && !print.leaving) later(showTip, TIP_DELAY);
-  }, t.total + 60);
+    if (flight.tip && !print.leaving) later(showTip, t.tipDelay);
+  }, t.total + t.handOver);
 }
 
 const PIN_DROP = [
@@ -310,7 +315,7 @@ export function showTip() {
     w: Math.round(r.width * dpr), h: Math.round(r.height * dpr),
   });
   if (state.reduced) {
-    el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: "ease-out" });
+    el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: scaled(200), easing: "ease-out" });
     return;
   }
   el.animate([
@@ -318,7 +323,7 @@ export function showTip() {
     { offset: 0.45, opacity: 1, transform: "translateY(1px) rotate(.4deg)" },
     { offset: 0.75, transform: "translateY(0) rotate(-.9deg)" },
     { opacity: 1, transform: "rotate(-.6deg)" },
-  ], { duration: 520, easing: "cubic-bezier(.3, .7, .4, 1)" });
+  ], { duration: scaled(520), easing: "cubic-bezier(.3, .7, .4, 1)" });
 }
 
 /** The tip's close button. */
@@ -330,7 +335,7 @@ function closeTip() {
   const a = el.animate([
     { opacity: 1, transform: "rotate(-.6deg)" },
     { opacity: 0, transform: "translateY(-6px) rotate(-1.2deg) scale(.98)" },
-  ], { duration: state.reduced ? 120 : 200, easing: "ease-in", fill: "forwards" });
+  ], { duration: scaled(state.reduced ? 120 : 200), easing: "ease-in", fill: "forwards" });
   a.onfinish = () => el.remove();
 }
 

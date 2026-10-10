@@ -12,6 +12,7 @@
 import * as ipc from "./ipc.js";
 import { clearHover } from "./gestures.js";
 import { PIN_Y, PRINT_TOP, TOP_HIDDEN, onLayout, setExtraRect } from "./layout.js";
+import { scaled } from "./motion/scale.js";
 import { onScrollState, scrollPos } from "./scroll.js";
 import { dom, state } from "./state.js";
 
@@ -158,7 +159,7 @@ function unfold(print, focus) {
   if (focus) scroller.focus({ preventScroll: true });
 
   if (state.reduced) {
-    el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: "ease-out" });
+    el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: scaled(140), easing: "ease-out" });
     return;
   }
   // Grows out of the note about its pin.
@@ -167,7 +168,7 @@ function unfold(print, focus) {
     { opacity: 0.4, transform: `scale(${sx.toFixed(3)}, ${sy.toFixed(3)})` },
     { opacity: 1, offset: 0.35 },
     { opacity: 1, transform: "none" },
-  ], { duration: 260, easing: "cubic-bezier(.2, .8, .25, 1)" });
+  ], { duration: scaled(260), easing: "cubic-bezier(.2, .8, .25, 1)" });
 }
 
 /** Folds the sheet back; `instant` skips animation (tuck, a new sheet). */
@@ -182,7 +183,7 @@ export function fold(instant = false) {
   if (s.el.contains(document.activeElement)) s.print.slot.focus({ preventScroll: true });
   if (instant || !state.revealed || state.reduced || s.print.leaving) {
     if (instant || !state.revealed) { s.el.remove(); return; }
-    const a = s.el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, fill: "forwards" });
+    const a = s.el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: scaled(120), fill: "forwards" });
     a.onfinish = () => s.el.remove();
     return;
   }
@@ -192,7 +193,7 @@ export function fold(instant = false) {
     { opacity: 1, transform: "none" },
     { opacity: 1, offset: 0.6 },
     { opacity: 0, transform: `scale(${sx.toFixed(3)}, ${sy.toFixed(3)})` },
-  ], { duration: 170, easing: "cubic-bezier(.45, 0, .85, .4)", fill: "forwards" });
+  ], { duration: scaled(170), easing: "cubic-bezier(.45, 0, .85, .4)", fill: "forwards" });
   a.onfinish = () => s.el.remove();
 }
 

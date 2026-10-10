@@ -11,10 +11,11 @@
 // once the board is at rest, since nothing frosted exists mid-swing (print.css).
 
 import { announce } from "./announce.js";
-import { revealMs } from "./motion/spring.js";
+import { fixed, scaled } from "./motion/scale.js";
+import { restMs } from "./motion/spring.js";
 import { cancel, later, state } from "./state.js";
 
-const SHOW_MS = 1800;
+const SHOW_MS = 1800;    // reading time: it does not follow the speed
 const STALE_MS = 2000;   // a held notice older than this at the reveal is dropped
 
 const pill = document.createElement("div");
@@ -38,10 +39,10 @@ export function notice(text) {
 export function noticeAfterReveal(wasRevealed) {
   const h = held;
   held = null;
-  if (!h || performance.now() - h.at > STALE_MS) return;
+  if (!h || performance.now() - h.at > fixed(STALE_MS, "how old a held notice may be is staleness, not motion")) return;
   if (wasRevealed) { show(h.text); return; }
   cancel(showTimer);
-  showTimer = later(() => { showTimer = 0; show(h.text); }, state.reduced ? 100 : revealMs());
+  showTimer = later(() => { showTimer = 0; show(h.text); }, restMs());
 }
 
 /** The tuck: away at once. */
@@ -63,9 +64,9 @@ function show(text) {
     state.reduced
       ? [{ opacity: 0 }, { opacity: 1 }]
       : [{ opacity: 0, transform: "translateY(-4px) scale(.98)" }, { opacity: 1, transform: "none" }],
-    { duration: state.reduced ? 120 : 200, easing: "cubic-bezier(.2, .8, .25, 1)" });
+    { duration: scaled(state.reduced ? 120 : 200), easing: "cubic-bezier(.2, .8, .25, 1)" });
   hideTimer = later(() => {
-    anim = pill.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 240, easing: "ease-in", fill: "forwards" });
+    anim = pill.animate([{ opacity: 1 }, { opacity: 0 }], { duration: scaled(240), easing: "ease-in", fill: "forwards" });
     anim.onfinish = () => { pill.classList.remove("show"); anim?.cancel(); anim = null; };
-  }, SHOW_MS);
+  }, fixed(SHOW_MS, "reading time for the text on it"));
 }

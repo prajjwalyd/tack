@@ -306,8 +306,8 @@ const anyPrint = () => prints[Math.floor(Math.random() * prints.length)];
 const preview = {
   emit, add, remove, prints, pin, makeNote,
   // A tray reveal: no focus. The hotkey is a keyboard open (keyboard.js).
-  reveal: () => emit(EVENTS.REVEAL, { reason: "tray" }),
-  revealKeyboard: () => emit(EVENTS.REVEAL, { reason: "hotkey" }),
+  reveal: () => emit(EVENTS.REVEAL, { reason: "tray", motionScale: SCALES[settings.reveal] }),
+  revealKeyboard: () => emit(EVENTS.REVEAL, { reason: "hotkey", motionScale: SCALES[settings.reveal] }),
   addNote: () => pin(makeNote(SAMPLE_ADDS[noteCounter % SAMPLE_ADDS.length])),
   addLink: () => pin(makeNote(SAMPLE_LINKS[noteCounter % SAMPLE_LINKS.length])),
   nothingSelected: () => emit(EVENTS.NOTICE, { text: "Nothing selected" }),

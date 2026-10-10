@@ -12,7 +12,7 @@ export const EVENTS = Object.freeze({
   PRINT_COPIED: "board:print-copied",        // { id }
   PRINT_DRAGGING: "board:print-dragging",    // { id }
   PRINT_DRAG_ENDED: "board:print-drag-ended",// { id }
-  REVEAL: "board:reveal",                    // { reason: "edge" | "hotkey" | "new" | "tray" }
+  REVEAL: "board:reveal",                    // { reason: "edge" | "hotkey" | "new" | "tray", motionScale: number } the speed as it is now, applied before anything moves
   TUCK: "board:tuck",                        // none
   WARM_UP: "board:warm-up",                  // none: draw the board once, unseen (startup)
   GUST: "board:gust",                        // none
@@ -98,8 +98,9 @@ export const COMMANDS = Object.freeze({
  * `felt`: the board colour: a preset's id ("green", "navy", "charcoal",
  * "burgundy", "plum", "teal", "slate"), "accent" (the Windows accent colour:
  * the CSS `AccentColor` keyword) or a custom "#rrggbb". `feltPresets`: the
- * presets, in order. `motionScale`: multiply the reveal animation's duration
- * by it (0.6, 0.8 or 1). `frame`: the finish of the board's frame, a
+ * presets, in order. `motionScale`: what every animation's duration (and
+ * the holds after an event) is multiplied by (0.35 for Instant, 0.65 for
+ * Fast, 1 for Normal): motion/scale.js. `frame`: the finish of the board's frame, a
  * preset's id ("aluminium", "graphite", "brass", "silver"); `paper`: the
  * colour of the notes, a preset's id ("white", "cream", "butter", "blush",
  * "sky", "mint"). Each preset list is in order, the first the default (the
@@ -120,11 +121,11 @@ export const COMMANDS = Object.freeze({
  * `truncated`: the text was longer than 20 KB and was cut there.
  *
  * @typedef {{ from: { x: number, y: number, w: number, h: number }, image: string,
- *             found: boolean, tip: boolean }} Flight
+ *             found: boolean, tip: boolean, motionScale: number }} Flight
  * A new capture flying in (see flight.js): `from` is where it was taken, CSS
  * px relative to the window; `image` a sharp JPEG data URL of it; `found`
  * false if `from` is only a small rect at the pointer; `tip`: show the
- * one-time tip after it lands.
+ * one-time tip after it lands; `motionScale`: the speed, as for board:reveal (the flight is sent before the reveal).
  */
 
 // Read lazily: the preview harness installs its fake bridge before boot.

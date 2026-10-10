@@ -9,7 +9,8 @@
 // change never shifts the ones already there.
 
 import * as ipc from "./ipc.js";
-import { LAYOUT_EASING, LAYOUT_MS } from "./motion/spring.js";
+import { fixed } from "./motion/scale.js";
+import { LAYOUT_EASING, layoutMs } from "./motion/spring.js";
 import { reveal as scrollIntoView, scrollPos, scrollTo, setExtent } from "./scroll.js";
 import { dom, state } from "./state.js";
 
@@ -128,7 +129,7 @@ export function layout({ instant = false } = {}) {
     if (old && !instant && state.revealed && !state.reduced) {
       dom.cork.getAnimations().forEach((a) => a.cancel());
       dom.cork.animate([{ transform: `scaleX(${old / boardW})` }, { transform: "none" }],
-        { duration: LAYOUT_MS, easing: LAYOUT_EASING });
+        { duration: layoutMs(), easing: LAYOUT_EASING });
     }
   }
   if (dom.hint.classList.contains("show") !== (n === 0)) {
@@ -175,8 +176,10 @@ export function sendRect(instant = false) {
     if (instant) rectPrevW = state.boardW;
     pushRect(Math.max(rectPrevW, state.boardW));
     clearTimeout(rectSettle);
-    rectSettle = setTimeout(() => { rectSettle = 0; rectPrevW = state.boardW; pushRect(state.boardW); }, LAYOUT_MS + 40);
-  }, 16);
+    // Once the cork's slide is over (layoutMs() follows the speed), the rect shrinks to the new width.
+    rectSettle = setTimeout(() => { rectSettle = 0; rectPrevW = state.boardW; pushRect(state.boardW); },
+      layoutMs() + fixed(40, "a margin of frames after the slide"));
+  }, fixed(16, "coalesces a burst of layouts into one message per frame"));
 }
 
 /** Extends the click rect to something hanging below the board (an unfolded note): `r` in CSS px relative to the window, or null. */
