@@ -150,12 +150,13 @@
   --note-size: 12px;         /* a note's text on the board */
   --sheet-size: 13px;        /* an unfolded note */
 
-  /* motion */
+  /* motion. --motion-scale: the Reveal speed setting (scripts/motion/scale.js), 1 for Normal. */
+  --motion-scale: 1;
   --ease-out: cubic-bezier(.2, .8, .25, 1);
   --ease-reveal: cubic-bezier(.3, 1.25, .45, 1);  /* a swing a little past flat */
-  --dur-reveal: 520ms;
+  --dur-reveal: calc(520ms * var(--motion-scale));
   --ease-tuck: cubic-bezier(.5, 0, .85, .35);     /* folds away, gathering speed */
-  --dur-tuck: 190ms;                              /* inside reveal.js's TUCK_MS */
+  --dur-tuck: calc(190ms * var(--motion-scale));  /* inside reveal.js's TUCK_MS */
   --ease-layout: cubic-bezier(.22, 1, .36, 1);
   --dur-layout: 480ms;
   --ease-settle: cubic-bezier(.22, 1.2, .4, 1);

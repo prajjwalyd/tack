@@ -7,17 +7,22 @@
 //   lift    ~110 ms  rises in place, shadow grows
 //   travel  ~560 ms  arcs to the slot, shrinking and turning to its angle
 //   press   ~220 ms  pressed onto the cork; the pin drives in at the touch
+//
+// Times are at normal speed; the Reveal speed setting scales every one of
+// them together (timing() below), so a faster flight keeps its shape.
 
 import * as ipc from "./ipc.js";
 import { PIN_Y } from "./layout.js";
+import { motionScale } from "./motion/scale.js";
 import { cancel, dom, later, rand, state } from "./state.js";
 
 const LIFT_MS = 110;
 const TRAVEL_MS = 560;
 const PRESS_MS = 220;
-const FLIGHT_MS = LIFT_MS + TRAVEL_MS + PRESS_MS;
 const PIN_MS = 170;           // pin drop, as in print.js's pin-on
 const PIN_TOUCH = 100;        // ms into it the head meets the paper
+const PIN_SOUND = 95;         // ms into the pin drop the tock sounds
+const GROW_MS = 220;          // a capture not found on screen grows out of the pointer
 const LIFT_SWELL = 1.025;
 const HELD_Y = -6;            // print.js pin-on's held pose
 const HELD_SCALE = 1.06;
@@ -28,6 +33,13 @@ const TIP_DELAY = 380;        // ms after landing
 
 /** Flights in progress, by print id. */
 const flying = new Map();
+
+/** The flight's phases in ms at the current speed. */
+function timing() {
+  const k = motionScale();
+  const lift = LIFT_MS * k, travel = TRAVEL_MS * k, press = PRESS_MS * k;
+  return { lift, travel, press, total: lift + travel + press, pin: PIN_MS * k, touch: PIN_TOUCH * k, sound: PIN_SOUND * k, grow: GROW_MS * k };
+}
 
 /** The backend's `flight` for a new print with its picture loading, or null. */
 export function prepareFlight(flight) {
@@ -75,10 +87,11 @@ export async function launch(print, flight, rest, land) {
   if (!decoded) { flight.img.src = print.data.thumb; }
 
   const lean = Math.sign(print.tilt || 1) * rand(0.8, 1.6);
-  const frames = keyframes(flight.from, rest, print.tilt || 0, lean, flight.found);
+  const t = timing();
+  const frames = keyframes(flight.from, rest, print.tilt || 0, lean, flight.found, t);
   // Hidden on the frame the print takes over; the last frame is its resting pose.
   const last = frames[frames.length - 1];
-  frames.splice(frames.length - 1, 0, { ...last, offset: 1 - 0.5 / FLIGHT_MS, opacity: 1 });
+  frames.splice(frames.length - 1, 0, { ...last, offset: 1 - 0.5 / t.total, opacity: 1 });
   last.opacity = 0;
 
   const el = document.createElement("div");
@@ -94,28 +107,28 @@ export async function launch(print, flight, rest, land) {
   el.appendChild(pin);
   document.body.appendChild(el);
 
-  const at = (ms) => ms / FLIGHT_MS;
-  const pressAt = LIFT_MS + TRAVEL_MS;
-  const pinAt = FLIGHT_MS - PIN_TOUCH;
+  const at = (ms) => ms / t.total;
+  const pressAt = t.lift + t.travel;
+  const pinAt = t.total - t.touch;
   // Started in one task so they share a start time on the compositor.
   const anims = [
-    el.animate(frames, { duration: FLIGHT_MS, easing: "linear", fill: "forwards" }),
+    el.animate(frames, { duration: t.total, easing: "linear", fill: "forwards" }),
     el.querySelector(".flight-shade").animate([
       { opacity: 0 },
-      { offset: at(LIFT_MS), opacity: 0.75, easing: "ease-in-out" },
+      { offset: at(t.lift), opacity: 0.75, easing: "ease-in-out" },
       { offset: at(pressAt), opacity: 1, easing: "cubic-bezier(.5, 0, .3, 1)" },
       { opacity: 0 },
-    ], { duration: FLIGHT_MS, fill: "forwards" }),
+    ], { duration: t.total, fill: "forwards" }),
     el.querySelector(".flight-paper").animate([
       { opacity: 0 },
-      { offset: at(LIFT_MS + TRAVEL_MS * 0.12), opacity: 0, easing: "ease-in-out" },
-      { offset: at(LIFT_MS + TRAVEL_MS * 0.6), opacity: 1 },
+      { offset: at(t.lift + t.travel * 0.12), opacity: 0, easing: "ease-in-out" },
+      { offset: at(t.lift + t.travel * 0.6), opacity: 1 },
       { opacity: 1 },
-    ], { duration: FLIGHT_MS, fill: "forwards" }),
+    ], { duration: t.total, fill: "forwards" }),
     // The print waits unseen and takes over as the stand-in touches the cork.
-    print.drop.animate([{ opacity: 0 }, { opacity: 0 }], { duration: FLIGHT_MS }),
+    print.drop.animate([{ opacity: 0 }, { opacity: 0 }], { duration: t.total }),
     ...[pin, print.pin].map((p) => p.animate(PIN_DROP, {
-      duration: PIN_MS, delay: pinAt, easing: "cubic-bezier(.5, 0, .9, .4)", fill: "backwards",
+      duration: t.pin, delay: pinAt, easing: "cubic-bezier(.5, 0, .9, .4)", fill: "backwards",
     })),
   ];
   print.slot.classList.remove("awaiting");
@@ -126,7 +139,7 @@ export async function launch(print, flight, rest, land) {
   // These only sound or settle, so a late timer shows nothing wrong.
   const step = (fn, ms) => timers.push(later(fn, ms));
   step(() => print.slot.classList.add("arriving", "landing"), pinAt);
-  step(() => land.pin(), pinAt + 95);
+  step(() => land.pin(), pinAt + t.sound);
   step(() => {
     flying.delete(print.id);
     el.remove();
@@ -134,7 +147,7 @@ export async function launch(print, flight, rest, land) {
     print.slot.classList.remove("arriving", "landing");
     land.settled();
     if (flight.tip && !print.leaving) later(showTip, TIP_DELAY);
-  }, FLIGHT_MS + 60);
+  }, t.total + 60);
 }
 
 const PIN_DROP = [
@@ -172,9 +185,9 @@ export function abortFlights() {
  * down to the resting pose. The stand-in is laid out at `rest` and turns and
  * scales about the pin point O, so its transform is translate(t) rotate(r)
  * scale(sx, sy) with t chosen to put the photo's centre on the flight path.
- * At the start the photo (inset by the border) covers `from` exactly.
+ * At the start the photo (inset by the border) covers `from` exactly. `t`: timing().
  */
-function keyframes(from, rest, tilt, lean, found) {
+function keyframes(from, rest, tilt, lean, found, t) {
   const O = { x: rest.left + rest.w / 2, y: rest.top + PIN_Y };
   const pw = Math.max(1, rest.w - 2 * BORDER), ph = Math.max(1, rest.h - 2 * BORDER);
   const d = rest.h / 2 - PIN_Y;            // photo centre below the pin, unscaled
@@ -190,19 +203,19 @@ function keyframes(from, rest, tilt, lean, found) {
 
   const frames = [];
   for (let i = 0; i <= FRAMES; i++) {
-    const ms = (i / FRAMES) * FLIGHT_MS;
+    const ms = (i / FRAMES) * t.total;
     let c, sx, sy, r, opacity = 1;
-    if (ms > LIFT_MS + TRAVEL_MS) {
-      const k = press((ms - LIFT_MS - TRAVEL_MS) / PRESS_MS);
+    if (ms > t.lift + t.travel) {
+      const k = press((ms - t.lift - t.travel) / t.press);
       c = { x: C1.x + (C2.x - C1.x) * k, y: C1.y + (C2.y - C1.y) * k };
       sx = sy = HELD_SCALE + (1 - HELD_SCALE) * k;
       r = r1 + (tilt - r1) * k;
-    } else if (ms <= LIFT_MS) {
-      const k = easeOut(ms / LIFT_MS);
+    } else if (ms <= t.lift) {
+      const k = easeOut(ms / t.lift);
       const swell = 1 + (LIFT_SWELL - 1) * k;
       c = C0; sx = sx0 * swell; sy = sy0 * swell; r = 0;
     } else {
-      const u = travel((ms - LIFT_MS) / TRAVEL_MS);
+      const u = travel((ms - t.lift) / t.travel);
       c = bezier(C0, P1, C1, u);
       // Shrinks slightly ahead of the travel.
       const us = Math.min(1, u * 1.08);
@@ -212,7 +225,7 @@ function keyframes(from, rest, tilt, lean, found) {
     }
     if (!found) {
       // Not found on screen: grows out of the pointer instead.
-      const k = easeOut(Math.min(1, ms / 220));
+      const k = easeOut(Math.min(1, ms / t.grow));
       opacity = k;
       const grow = 0.55 + 0.45 * k;
       sx *= grow; sy *= grow;

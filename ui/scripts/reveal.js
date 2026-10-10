@@ -9,14 +9,15 @@ import { debugAck } from "./ipc.js";
 import { abortFlights, dropTip, restingBox } from "./flight.js";
 import { clearHover, endPress } from "./gestures.js";
 import { forgetRect, restScroll, sendRect, showPrint, stopRectTimers } from "./layout.js";
-import { REVEAL_MS } from "./motion/spring.js";
+import { scaled } from "./motion/scale.js";
+import { revealMs } from "./motion/spring.js";
 import { scheduleGust, stopGusts } from "./motion/swing.js";
 import { flushOrder, flyIn, pinOn } from "./print.js";
 import { halt } from "./scroll.js";
 import { sleepSound, wakeSound } from "./sound.js";
 import { dom, later, state } from "./state.js";
 
-const TUCK_MS = 200;        // --dur-tuck
+const TUCK_MS = 200;        // --dur-tuck, at normal speed
 
 let tuckTimer = 0;
 
@@ -59,7 +60,7 @@ export function reveal() {
   if (!newest) return;
   // A new capture flies in at once, alongside the board's swing.
   if (newest.flight) { flyIn(newest, rest); return; }
-  const start = wasRevealed ? 0 : (state.reduced ? 100 : REVEAL_MS);
+  const start = wasRevealed ? 0 : (state.reduced ? 100 : revealMs());
   later(() => {
     if (newest.leaving) return;
     newest.slot.classList.remove("awaiting");
@@ -138,5 +139,5 @@ export function tuck() {
     stopRectTimers();
     sleepSound();
     dom.board.classList.add("gone");
-  }, TUCK_MS + 30);
+  }, scaled(TUCK_MS) + 30);
 }

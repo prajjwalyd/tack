@@ -1,7 +1,10 @@
 // Spring easings: a damped spring's step response sampled into a CSS linear()
 // easing drives the reveal swing, the row's slides and the hover settle.
 // Importing this module publishes them as CSS custom properties (tokens.css
-// has cubic-bezier fallbacks for webviews without linear()).
+// has cubic-bezier fallbacks for webviews without linear()). The reveal's
+// duration follows the Reveal speed setting (scale.js).
+
+import { scaled } from "./scale.js";
 
 /**
  * `response`: undamped period, s. `damping`: 0..1, lower overshoots more.
@@ -32,7 +35,7 @@ const SETTLE = spring(0.3, 0.7, 0.01);
 if (hasLinear) {
   const root = document.documentElement.style;
   root.setProperty("--ease-reveal", REVEAL.easing);
-  root.setProperty("--dur-reveal", `${REVEAL.ms}ms`);
+  root.setProperty("--dur-reveal", `calc(${REVEAL.ms}ms * var(--motion-scale))`);
   root.setProperty("--ease-layout", LAYOUT.easing);
   root.setProperty("--dur-layout", `${LAYOUT.ms}ms`);
   root.setProperty("--ease-settle", SETTLE.easing);
@@ -45,7 +48,8 @@ export const LAYOUT_MS = hasLinear ? LAYOUT.ms : 480;
 export const LAYOUT_EASING = hasLinear ? LAYOUT.easing : "cubic-bezier(.22, 1, .36, 1)";
 /**
  * Ms after a reveal until the board is at rest (swing plus a couple of
- * frames). Prints pin on only then: pinning mid-swing would make the
- * compositor build the print's new layers inside a 3D-turned board.
+ * frames), at the current speed. Prints pin on only then: pinning mid-swing
+ * would make the compositor build the print's new layers inside a 3D-turned
+ * board.
  */
-export const REVEAL_MS = (hasLinear ? REVEAL.ms : 520) + 40;
+export const revealMs = () => scaled(hasLinear ? REVEAL.ms : 520) + 40;

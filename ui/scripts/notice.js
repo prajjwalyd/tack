@@ -11,7 +11,7 @@
 // once the board is at rest, since nothing frosted exists mid-swing (print.css).
 
 import { announce } from "./announce.js";
-import { REVEAL_MS } from "./motion/spring.js";
+import { revealMs } from "./motion/spring.js";
 import { cancel, later, state } from "./state.js";
 
 const SHOW_MS = 1800;
@@ -41,7 +41,7 @@ export function noticeAfterReveal(wasRevealed) {
   if (!h || performance.now() - h.at > STALE_MS) return;
   if (wasRevealed) { show(h.text); return; }
   cancel(showTimer);
-  showTimer = later(() => { showTimer = 0; show(h.text); }, state.reduced ? 100 : REVEAL_MS);
+  showTimer = later(() => { showTimer = 0; show(h.text); }, state.reduced ? 100 : revealMs());
 }
 
 /** The tuck: away at once. */
