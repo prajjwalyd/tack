@@ -18,6 +18,7 @@ Tack is small on purpose: a board, prints, pins.
 npm install
 npm run dev                  # debug build of crates/tack-app, then runs it
 cargo test --workspace       # unit tests (the board model lives in tack-core)
+npm run test:ui              # the page code's tests (Node, no dependencies): tests/ui
 ```
 
 The installer: `npm run build` writes it to `target/release/bundle/nsis/`.
@@ -55,7 +56,9 @@ screenshots, and the buttons fire the events the backend would (reveal, add,
 keep, remove, copied, breeze, drag, update, pointer left...). "Fill to 20"
 (or `?n=20` in the URL) gives a row long enough to scroll, "Shuffle" sends
 an `order-changed`, and "Theme" forces the board light or dark instead of
-following the system. The preview runs under the same
+following the system; "Felt", "Frame" and "Paper" step through the board
+colours, frame finishes and note papers (`?felt=`, `?finish=` and `?paper=`
+start on one). The preview runs under the same
 content security policy as the app, so anything the app would block fails
 there too.
 
