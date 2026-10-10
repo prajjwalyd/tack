@@ -19,6 +19,8 @@ import { addPrint, applyOrder, printById, removePrint, showCopied, updatePrint }
 import { reveal, tuck, warmUp } from "./reveal.js";
 import { dom, reducedMotion, state } from "./state.js";
 import { applyFelt } from "./theme.js";
+import { applyFrame } from "./frame.js";
+import { applyPaper } from "./paper.js";
 
 reducedMotion.addEventListener?.("change", (e) => {
   state.reduced = e.matches;
@@ -99,10 +101,12 @@ async function init() {
   restScroll();
 }
 
-/** The settings the board follows: sound, colour and speed. `s` is a SettingsView (an event may carry only some of it). */
+/** The settings the board follows: sound, colours, frame, note paper and speed. `s` is a SettingsView (an event may carry only some of it). */
 function applySettings(s) {
   if (typeof s.sound === "boolean") state.sound = s.sound;
   if (s.felt) applyFelt(dom.board, s.felt, s.feltPresets);
+  if (s.frame) applyFrame(dom.board, s.frame);
+  if (s.paper && s.paperPresets) applyPaper(dom.board, s.paper, s.paperPresets);
   if (s.motionScale) setMotionScale(s.motionScale);
 }
 

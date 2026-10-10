@@ -1,12 +1,12 @@
-/* Note paper "card" (shipped): a warm-white index card with a red header rule
-   under the pin and blue rules the text sits on (12 px type on 15 px lines
-   from 18 px down: note.css). Dimmer in the dark theme. Picked in tokens.css. */
+/* Note paper "card" (shipped): an index card with a red header rule under the
+   pin and blue rules the text sits on (12 px type on 15 px lines from 18 px
+   down: note.css). The ink, rules and shading are here; the paper's colour
+   and the link and domain colours on it are the Note paper setting's
+   (--note-paper, --note-link, --note-domain: set on #board by scripts/paper.js,
+   which dims the paper in the dark theme). Picked in tokens.css. */
 :root {
-  --note-paper: light-dark(#fffefa, #eeebe4);
   --note-ink: rgba(28, 32, 42, .86);
   --note-ink-soft: rgba(28, 32, 42, .54);
-  --note-link: #2a4d8c;
-  --note-domain: rgba(42, 77, 140, .80);
   --note-curl: rgba(40, 46, 60, .06);
   --note-scroll: rgba(40, 46, 60, .28);
   --note-rule-red: rgba(222, 72, 72, .62);

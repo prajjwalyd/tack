@@ -18,7 +18,7 @@
   --top-hidden: 24px;        /* board part above the screen edge; the hinge is at the edge */
   --board-h: 150px;          /* visible board height */
   --board-radius: 12px;      /* bottom corners, outside the frame */
-  --frame-w: 6px;            /* the aluminium frame: sides and bottom, no top rail */
+  --frame-w: 6px;            /* the metal frame: sides and bottom, no top rail */
   --cap-size: 14px;          /* the bottom-corner caps, a hair proud of the frame */
   --print-border: 4px;       /* even paper border around the photo */
   --print-radius: 3px;
@@ -40,7 +40,7 @@
   --board-perspective: 1100px;
   --print-perspective: 520px; /* a print peeling off as a drag starts */
 
-  /* colour: board. Green felt in a brushed-aluminium frame with no top rail
+  /* colour: board. Green felt in a metal frame (aluminium by default) with no top rail
      (it hangs from the screen edge). The element is still called .cork. */
   --felt: light-dark(#24503f, #1c4234);
   --felt-light: light-dark(rgba(214, 255, 232, .13), rgba(200, 255, 225, .07));
@@ -53,28 +53,9 @@
     0 1px 2px light-dark(rgba(10, 20, 16, .25), rgba(0, 0, 0, .5)),
     0 14px 34px -6px light-dark(rgba(10, 24, 18, .30), rgba(0, 0, 0, .55));
 
-  /* colour: frame. Lit from above: the bottom rail's top face is a white
-     hairline, each side rail is brightest at its inner edge. Dimmer in the
-     dark theme so it never glares. */
-  --rail-bottom: linear-gradient(180deg,
-    light-dark(#ffffff, #e8ebee) 0, light-dark(#ffffff, #e8ebee) .5px,
-    light-dark(#e4e7eb, #b9bec4) .5px, light-dark(#d2d6db, #a8aeb5) 1.5px,
-    light-dark(#bcc1c7, #92989f) 55%, light-dark(#a6acb3, #7c828a) calc(100% - 1px),
-    light-dark(#7b818a, #50555c) calc(100% - .5px));
-  --rail-side-l: linear-gradient(90deg,
-    light-dark(#7f858e, #565b62) 0, light-dark(#7f858e, #565b62) .5px,
-    light-dark(#aab0b7, #80868d) 1px, light-dark(#c3c8ce, #969ca3) 45%,
-    light-dark(#d8dce1, #aab0b6) calc(100% - 1px), light-dark(#ffffff, #e0e3e6) calc(100% - .5px));
-  --rail-side-r: linear-gradient(270deg,
-    light-dark(#7f858e, #565b62) 0, light-dark(#7f858e, #565b62) .5px,
-    light-dark(#aab0b7, #80868d) 1px, light-dark(#c3c8ce, #969ca3) 45%,
-    light-dark(#d8dce1, #aab0b6) calc(100% - 1px), light-dark(#ffffff, #e0e3e6) calc(100% - .5px));
-  --rail-sheen: linear-gradient(90deg,
-    light-dark(rgba(0, 0, 0, .08), rgba(0, 0, 0, .14)),
-    light-dark(rgba(255, 255, 255, .18), rgba(255, 255, 255, .14)) 18%, rgba(255, 255, 255, 0) 34%,
-    light-dark(rgba(255, 255, 255, .30), rgba(255, 255, 255, .18)) 52%, rgba(255, 255, 255, 0) 70%,
-    light-dark(rgba(255, 255, 255, .12), rgba(255, 255, 255, .06)) 86%,
-    light-dark(rgba(0, 0, 0, .08), rgba(0, 0, 0, .14)));
+  /* colour: frame. The rails' gradients (--rail-*) and the corner caps
+     (--cap-*-light, --cap-*-dark) are the Frame setting's finish: set on
+     #board by scripts/frame.js, which defines the finishes. */
 
   /* colour: prints */
   --paper: light-dark(#fbfaf7, #ebe8e2);
