@@ -3,7 +3,7 @@
 // updates:status, so every state can be tried in a browser. URL parameters:
 //   ?updates=idle|checking|upToDate|available|downloading|installing|error
 //                       the update state to start in (default upToDate)
-//   ?felt=navy|accent|%23aabbcc   ?speed=instant|fast|normal   the starting settings
+//   ?felt=navy|accent|%23aabbcc   ?finish=graphite   ?paper=blush   ?speed=instant|fast|normal   the starting settings
 //   ?theme=light|dark   force the theme
 //   ?frame=520x640      lay the page out at that size (the window's) whatever the browser's
 // The panel at the right (wide browser windows only) switches the update
@@ -12,7 +12,7 @@
 // the board preview (preview.html) shows what the page would do.
 // Must load before ../scripts/settings/main.js.
 
-import { PRESETS, SCALES, validFelt } from "./felt-presets.js";
+import { DEFAULT_APPEARANCE, FRAME_PRESETS, PAPER_PRESETS, PRESETS, SCALES, validFelt, validFrame, validPaper } from "./appearance-presets.js";
 
 const params = new URLSearchParams(location.search);
 const theme = params.get("theme");
@@ -23,10 +23,21 @@ if (frame) Object.assign(document.documentElement.style, { width: `${frame[1]}px
 const settings = {
   sound: true, edgeReveal: true, autostart: false, updatesCheck: true, version: "0.2.0",
   reveal: params.get("speed") in SCALES ? params.get("speed") : "normal",
-  felt: validFelt(params.get("felt")) ? params.get("felt") : "green",
+  felt: validFelt(params.get("felt")) ? params.get("felt") : DEFAULT_APPEARANCE.felt,
   feltPresets: PRESETS,
+  frame: validFrame(params.get("finish")) ? params.get("finish") : DEFAULT_APPEARANCE.frame,
+  framePresets: FRAME_PRESETS,
+  paper: validPaper(params.get("paper")) ? params.get("paper") : DEFAULT_APPEARANCE.paper,
+  paperPresets: PAPER_PRESETS,
 };
-const view = () => ({ ...settings, feltPresets: settings.feltPresets.map((p) => ({ ...p })), motionScale: SCALES[settings.reveal] });
+const copies = (list) => list.map((p) => ({ ...p }));
+const view = () => ({
+  ...settings,
+  feltPresets: copies(settings.feltPresets),
+  framePresets: copies(settings.framePresets),
+  paperPresets: copies(settings.paperPresets),
+  motionScale: SCALES[settings.reveal],
+});
 
 // The release notes are the update server's text: this one has markup in it, which must stay text.
 const NOTES = [
@@ -85,6 +96,9 @@ const commands = {
   set_autostart: ({ on }) => set({ autostart: on }),
   set_reveal: ({ speed }) => (speed in SCALES ? set({ reveal: speed }) : view()),
   set_felt: ({ value }) => (validFelt(value) ? set({ felt: value.toLowerCase() }) : view()),
+  set_frame: ({ value }) => (validFrame(value) ? set({ frame: value }) : view()),
+  set_paper: ({ value }) => (validPaper(value) ? set({ paper: value }) : view()),
+  reset_appearance: () => set(DEFAULT_APPEARANCE),
   set_updates_check: ({ on }) => set({ updatesCheck: on }),
   open_shortcuts: () => null,
   open_phone_link: () => null,

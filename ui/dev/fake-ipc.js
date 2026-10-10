@@ -6,7 +6,7 @@
 // event names (../scripts/ipc.js).
 
 import { COMMANDS, EVENTS } from "../scripts/ipc.js";
-import { PRESETS, SCALES, validFelt } from "./felt-presets.js";
+import { DEFAULT_APPEARANCE, FRAME_PRESETS, PAPER_PRESETS, PRESETS, SCALES, validFelt, validFrame, validPaper } from "./appearance-presets.js";
 
 const handlers = new Map();
 const log = (msg) => {
@@ -196,9 +196,12 @@ const arrange = () => prints.sort((a, b) =>
 const emitOrder = () => emit(EVENTS.ORDER_CHANGED, { ids: prints.map((x) => x.id) });
 arrange();
 let sound = true;
-// ?felt=navy|accent|%23aabbcc and ?speed=instant|fast|normal start with that board colour and speed.
+// ?felt=navy|accent|%23aabbcc, ?finish=graphite, ?paper=blush and ?speed=instant|fast|normal start with that
+// board colour, frame finish, note paper and speed.
 const settings = {
-  sound, felt: validFelt(params.get("felt")) ? params.get("felt") : "green", feltPresets: PRESETS,
+  sound, felt: validFelt(params.get("felt")) ? params.get("felt") : DEFAULT_APPEARANCE.felt, feltPresets: PRESETS,
+  frame: validFrame(params.get("finish")) ? params.get("finish") : DEFAULT_APPEARANCE.frame, framePresets: FRAME_PRESETS,
+  paper: validPaper(params.get("paper")) ? params.get("paper") : DEFAULT_APPEARANCE.paper, paperPresets: PAPER_PRESETS,
   reveal: params.get("speed") in SCALES ? params.get("speed") : "normal",
 };
 const view = () => ({ ...settings, sound, motionScale: SCALES[settings.reveal] });
@@ -344,6 +347,8 @@ const preview = {
   sound: () => { sound = !sound; emit(EVENTS.SETTINGS, { sound }); return sound; },
   // The Settings window's changes, as the board hears them (settings:changed carries it all).
   felt: (value) => { settings.felt = value; emit(EVENTS.SETTINGS, view()); },
+  frame: (value) => { settings.frame = value; emit(EVENTS.SETTINGS, view()); },
+  paper: (value) => { settings.paper = value; emit(EVENTS.SETTINGS, view()); },
   speed: (name) => { settings.reveal = name; emit(EVENTS.SETTINGS, view()); },
 };
 window.preview = preview;
@@ -366,6 +371,21 @@ const toggles = {
     preview.felt(next);
     button.textContent = `Felt: ${next}`;
     return next !== "green";
+  },
+  // Frame finish and note paper: each in turn.
+  frame: (button) => {
+    const all = FRAME_PRESETS.map((p) => p.id);
+    const next = all[(all.indexOf(settings.frame) + 1) % all.length];
+    preview.frame(next);
+    button.textContent = `Frame: ${next}`;
+    return next !== DEFAULT_APPEARANCE.frame;
+  },
+  paper: (button) => {
+    const all = PAPER_PRESETS.map((p) => p.id);
+    const next = all[(all.indexOf(settings.paper) + 1) % all.length];
+    preview.paper(next);
+    button.textContent = `Paper: ${next}`;
+    return next !== DEFAULT_APPEARANCE.paper;
   },
   speed: (button) => {
     const all = Object.keys(SCALES);

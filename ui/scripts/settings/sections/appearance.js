@@ -1,115 +1,37 @@
-// Appearance: the board's colour. A swatch for each preset the backend lists
-// (the hexes are Rust's alone), one that follows the Windows accent colour,
-// and a custom one that opens the system colour picker. The swatches are
-// drawn with the board's own theme code (theme.js), so each shows what the
-// board will be, in this window's light or dark theme. The board is a
-// different window: it repaints from settings:changed.
+// Appearance: how the board looks. Three cards, each a module in appearance/
+// (the board colour, the frame finish, the note paper) with the same shape as
+// a section, and a button that puts all three back. The board is a different
+// window: it repaints from settings:changed.
 
 import * as ipc from "../../ipc.js";
-import { esc } from "../../dialog.js";
-import { feltProperties } from "../../theme.js";
 import { group } from "../markup.js";
-import { handleRadioKeys, showRadio } from "../radio.js";
+import { defaults, isDefault } from "./appearance/defaults.js";
+import * as felt from "./appearance/felt.js";
+import * as frame from "./appearance/frame.js";
+import * as paper from "./appearance/paper.js";
 
-const CHECK_SVG = `<svg class="check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.4l3 3 6-6.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-const ACCENT = { value: "accent", name: "Accent", label: "Windows accent colour" };
-const CUSTOM = { value: "custom", name: "Custom", label: "Custom colour" };
-const HEX = /^#[0-9a-f]{6}$/i;
-const DRAG_MS = 120;   // while a colour is dragged in the picker, how often it is sent
-
-const choicesOf = (presets) => [...presets.map((p) => ({ value: p.id, name: p.name, label: p.name })), ACCENT, CUSTOM];
-
-/** Which swatch a felt is: a preset, "accent", or "custom" for any #rrggbb. */
-const choiceOf = (felt) => (HEX.test(felt) ? "custom" : felt);
-
-function swatch(c) {
-  const picker = c.value === "custom" ? `<input type="color" class="picker" tabindex="-1" aria-hidden="true">` : "";
-  return `
-    <div class="swatch-cell" role="none">
-      <button type="button" class="swatch" role="radio" aria-checked="false" tabindex="-1" data-value="${esc(c.value)}" aria-label="${esc(c.label)}"${c.value === "custom" ? " data-manual" : ""}>
-        <span class="dot">${CHECK_SVG}</span>
-        <span class="name" aria-hidden="true">${esc(c.name)}</span>
-      </button>${picker}
-    </div>`;
-}
+const CARDS = [felt, frame, paper];
 
 export function mount(host, api) {
   group(host, "appearance", "Appearance", `
-    <div class="card block">
-      <div class="block-head">
-        <p class="row-title" id="felt-label">Board colour</p>
-        <span class="row-value" id="felt-name"></span>
-      </div>
-      <div class="swatches" role="radiogroup" aria-labelledby="felt-label"></div>
+    ${CARDS.map((_, i) => `<div class="card block" data-card="${i}"></div>`).join("")}
+    <div class="reset">
+      <button type="button" class="text" id="appearance-reset" aria-disabled="true">Reset appearance</button>
     </div>`);
-  const swatches = host.querySelector(".swatches");
-  const nameOut = host.querySelector("#felt-name");
-  let built = "";
-  let lastCustom = null;         // the custom colour last chosen: where the picker starts again
-  let dragTimer = 0;
-  let dragging = null;
+  const cards = CARDS.map((card, i) => card.mount(host.querySelector(`[data-card="${i}"]`), api));
+  const reset = host.querySelector("#appearance-reset");
 
-  const picker = () => swatches.querySelector(".picker");
-  const pick = (felt) => api.change({ felt }, () => ipc.setFelt(felt));
-
-  /** The picker starts on the last custom colour, or on the colour the board has now. */
-  function startColour() {
-    const view = api.settings.get();
-    return lastCustom ?? view.feltPresets.find((p) => p.id === view.felt)?.hex ?? view.feltPresets[0]?.hex ?? "#000000";
-  }
-
-  function openPicker() {
-    const input = picker();
-    input.value = startColour();
-    try { input.showPicker(); } catch { input.click(); }
-  }
-
-  /** Sends the colour being dragged, at most once per DRAG_MS. */
-  function drag(value) {
-    dragging = value;
-    if (!dragTimer) dragTimer = setTimeout(settle, DRAG_MS);
-  }
-  function settle() {
-    dragTimer = 0;
-    if (dragging) pick(dragging);
-    dragging = null;
-  }
-
-  handleRadioKeys(swatches);
-  swatches.addEventListener("click", (e) => {
-    const radio = e.target.closest('[role="radio"]');
-    if (!radio) return;
-    if (radio.dataset.value === "custom") openPicker();
-    else if (api.settings.get().felt !== radio.dataset.value) pick(radio.dataset.value);
-  });
-  swatches.addEventListener("input", (e) => { if (e.target.matches(".picker")) drag(e.target.value); });
-  // The picker is closed on this colour: the last one is sent now.
-  swatches.addEventListener("change", (e) => {
-    if (!e.target.matches(".picker")) return;
-    clearTimeout(dragTimer);
-    dragTimer = 0;
-    dragging = null;
-    pick(e.target.value);
+  // aria-disabled, not disabled, so the button keeps the keyboard focus once it has done its job.
+  reset.addEventListener("click", async () => {
+    if (reset.getAttribute("aria-disabled") === "true") return;
+    await api.change(defaults(api.settings.get()), ipc.resetAppearance);
+    api.announce("Appearance reset");
   });
 
-  function render(view) {
-    const key = JSON.stringify(view.feltPresets);
-    if (key !== built) {
-      built = key;
-      swatches.innerHTML = choicesOf(view.feltPresets).map(swatch).join("");
-    }
-    const chosen = choiceOf(view.felt);
-    showRadio(swatches, chosen);
-    if (chosen === "custom") lastCustom = view.felt.toLowerCase();
-    for (const radio of swatches.querySelectorAll('[role="radio"]')) {
-      const dot = radio.querySelector(".dot");
-      const value = radio.dataset.value;
-      // A custom swatch shows no colour until it is chosen (CSS draws the colour wheel).
-      const props = value === "custom" ? (chosen === "custom" && feltProperties(view.felt)) : feltProperties(value, view.feltPresets);
-      if (props) dot.style.setProperty("--swatch", props["--felt"]); else dot.style.removeProperty("--swatch");
-    }
-    const choice = choicesOf(view.feltPresets).find((c) => c.value === chosen);
-    nameOut.textContent = chosen === "custom" ? `Custom ${view.felt.toLowerCase()}` : (choice?.name ?? "");
-  }
-  return { render };
+  return {
+    render(view) {
+      for (const card of cards) card.render(view);
+      reset.setAttribute("aria-disabled", String(isDefault(view)));
+    },
+  };
 }

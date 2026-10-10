@@ -50,6 +50,9 @@ export const COMMANDS = Object.freeze({
   SET_AUTOSTART: "set_autostart",
   SET_REVEAL: "set_reveal",
   SET_FELT: "set_felt",
+  SET_FRAME: "set_frame",
+  SET_PAPER: "set_paper",
+  RESET_APPEARANCE: "reset_appearance",
   SET_UPDATES_CHECK: "set_updates_check",
   UPDATE_STATUS: "update_status",
   CHECK_FOR_UPDATES: "check_for_updates",
@@ -83,15 +86,27 @@ export const COMMANDS = Object.freeze({
  * @typedef {{ id: string, name: string, hex: string }} FeltPreset
  * `hex`: the felt in a light theme, "#rrggbb"; darken it for a dark one.
  *
+ * @typedef {{ id: string, name: string }} FramePreset
+ *
+ * @typedef {{ id: string, name: string, hex: string }} PaperPreset
+ * `hex`: the paper in a light theme, "#rrggbb"; dim it for a dark one.
+ *
  * @typedef {{ sound: boolean, edgeReveal: boolean, autostart: boolean,
  *             reveal: "instant" | "fast" | "normal",
- *             felt: string, feltPresets: FeltPreset[], motionScale: number,
+ *             felt: string, feltPresets: FeltPreset[],
+ *             frame: string, framePresets: FramePreset[],
+ *             paper: string, paperPresets: PaperPreset[], motionScale: number,
  *             updatesCheck: boolean, version: string }} SettingsView
  * `felt`: the board colour: a preset's id ("green", "navy", "charcoal",
  * "burgundy", "plum", "teal", "slate"), "accent" (the Windows accent colour:
  * the CSS `AccentColor` keyword) or a custom "#rrggbb". `feltPresets`: the
  * presets, in order. `motionScale`: multiply the reveal animation's duration
- * by it (0.6, 0.8 or 1). `version`: this Tack, "0.2.0".
+ * by it (0.6, 0.8 or 1). `frame`: the finish of the board's frame, a
+ * preset's id ("aluminium", "graphite", "brass", "silver"); `paper`: the
+ * colour of the notes, a preset's id ("white", "cream", "butter", "blush",
+ * "sky", "mint"). Each preset list is in order, the first the default (the
+ * finishes' gradients are the UI's: scripts/frame.js). `version`: this Tack,
+ * "0.2.0".
  *
  * @typedef {{ state: "idle" | "checking" | "upToDate" | "available" | "downloading" | "installing" | "error",
  *             version: string | null, notes: string | null, progress: number | null,
@@ -165,8 +180,8 @@ export const releaseFocus = () => invoke(COMMANDS.RELEASE_FOCUS);
 export const hideBoard = () => invoke(COMMANDS.HIDE_BOARD);
 
 // The settings window. Each setter answers with the new SettingsView, and
-// every window gets EVENTS.SETTINGS. A speed or colour that is not valid
-// changes nothing.
+// every window gets EVENTS.SETTINGS. A speed, colour, finish or paper that is
+// not valid changes nothing.
 /** @returns {Promise<SettingsView | null>} */
 export const settingsState = () => invoke(COMMANDS.SETTINGS_STATE);
 export const setSound = (on) => invoke(COMMANDS.SET_SOUND, { on });
@@ -176,6 +191,12 @@ export const setAutostart = (on) => invoke(COMMANDS.SET_AUTOSTART, { on });
 export const setReveal = (speed) => invoke(COMMANDS.SET_REVEAL, { speed });
 /** @param {string} value a preset id, "accent" or "#rrggbb" */
 export const setFelt = (value) => invoke(COMMANDS.SET_FELT, { value });
+/** @param {string} value a frame preset's id */
+export const setFrame = (value) => invoke(COMMANDS.SET_FRAME, { value });
+/** @param {string} value a paper preset's id */
+export const setPaper = (value) => invoke(COMMANDS.SET_PAPER, { value });
+/** The board colour, frame and note paper back to their defaults; the other settings stay. */
+export const resetAppearance = () => invoke(COMMANDS.RESET_APPEARANCE);
 export const setUpdatesCheck = (on) => invoke(COMMANDS.SET_UPDATES_CHECK, { on });
 // Updates. Each answers with the new UpdateStatus, and the progress comes as EVENTS.UPDATES_STATUS.
 /** @returns {Promise<UpdateStatus | null>} */
