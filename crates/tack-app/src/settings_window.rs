@@ -6,7 +6,7 @@
 use tauri::{AppHandle, Manager, WindowEvent};
 
 use crate::ipc::events;
-use crate::{dialogs, shortcuts};
+use crate::{dialogs, reveal, shortcuts};
 
 pub const LABEL: &str = "settings";
 const PAGE: &str = "settings.html";
@@ -39,16 +39,23 @@ pub fn open(app: &AppHandle, section: Option<&str>) {
         if let Some(section) = section.filter(|s| SECTIONS.contains(s)) {
             events::settings_section(app, section);
         }
+        reveal::hold_for_settings(app, true);
         return;
     }
     match dialogs::open(app, LABEL, &page_for(section), TITLE, SIZE) {
         Ok(window) => {
-            window.on_window_event(|event| {
+            let handle = app.clone();
+            window.on_window_event(move |event| {
                 if let WindowEvent::Destroyed = event {
                     // Closed while a shortcut was listening: the hotkeys come back.
                     shortcuts::pause(false);
+                    // However it closed (X, Esc, the page's own close): the
+                    // board it held down goes back up.
+                    reveal::hold_for_settings(&handle, false);
                 }
             });
+            // While it is open the board stays down, so changes show live.
+            reveal::hold_for_settings(app, true);
         }
         Err(e) => eprintln!("tack: cannot open the Settings window: {e}"),
     }
