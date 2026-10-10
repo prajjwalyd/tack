@@ -1,8 +1,11 @@
-//! The user's settings, toggled from the tray and saved in board.json.
+//! The user's settings, changed in the Settings window or from the tray, and
+//! saved in board.json.
 
 use serde::{Deserialize, Serialize};
 
+use crate::felt::Felt;
 use crate::phone::PhoneSettings;
+use crate::reveal_speed::RevealSpeed;
 use crate::shortcut::{Chord, DEFAULT_PIN, DEFAULT_TOGGLE};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -12,6 +15,13 @@ pub struct Settings {
     pub sound: bool,
     /// Resting the pointer against the top edge reveals the board.
     pub edge_reveal: bool,
+    /// How soon resting at the top edge reveals the board, and how fast it
+    /// moves.
+    pub reveal: RevealSpeed,
+    /// How the board looks.
+    pub appearance: Appearance,
+    /// Whether Tack looks for new versions.
+    pub updates: UpdateSettings,
     /// The one-time tip about Snipping Tool's own notification (redundant
     /// once Tack shows each snip) has been shown.
     pub snip_tip_shown: bool,
@@ -29,11 +39,36 @@ impl Default for Settings {
         Settings {
             sound: true,
             edge_reveal: true,
+            reveal: RevealSpeed::default(),
+            appearance: Appearance::default(),
+            updates: UpdateSettings::default(),
             snip_tip_shown: false,
             toggle_shortcut: DEFAULT_TOGGLE.into(),
             pin_shortcut: DEFAULT_PIN.into(),
             phone: PhoneSettings::default(),
         }
+    }
+}
+
+/// How the board looks.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Appearance {
+    /// The board's colour.
+    pub felt: Felt,
+}
+
+/// Looking for new versions.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct UpdateSettings {
+    /// Look for a new version now and then (and say so when there is one).
+    pub check: bool,
+}
+
+impl Default for UpdateSettings {
+    fn default() -> Self {
+        UpdateSettings { check: true }
     }
 }
 
@@ -86,6 +121,61 @@ mod tests {
             settings.retire_old_defaults();
             assert_eq!(settings.toggle_shortcut, chosen, "a shortcut the user chose stays");
         }
+    }
+
+    #[test]
+    fn the_new_settings_default_to_the_way_it_always_was() {
+        let settings = Settings::default();
+        assert_eq!(settings.reveal, RevealSpeed::Normal);
+        assert_eq!(settings.appearance.felt, Felt::default());
+        assert!(settings.updates.check);
+    }
+
+    #[test]
+    fn they_are_saved_as_camel_case_json() {
+        let json = serde_json::to_value(Settings::default()).unwrap();
+        assert_eq!(json["reveal"], "normal");
+        assert_eq!(json["appearance"], serde_json::json!({ "felt": "green" }));
+        assert_eq!(json["updates"], serde_json::json!({ "check": true }));
+    }
+
+    #[test]
+    fn they_survive_a_round_trip() {
+        let settings = Settings {
+            reveal: RevealSpeed::Instant,
+            appearance: Appearance { felt: Felt::parse("#A1B2C3") },
+            updates: UpdateSettings { check: false },
+            ..Settings::default()
+        };
+        let json = serde_json::to_string(&settings).unwrap();
+        assert!(json.contains(r##""appearance":{"felt":"#a1b2c3"}"##), "{json}");
+        assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), settings);
+    }
+
+    #[test]
+    fn a_file_from_before_them_still_loads_with_the_defaults() {
+        let old = r#"{ "sound": false, "edgeReveal": false, "toggleShortcut": "Win+Alt+Q" }"#;
+        let settings: Settings = serde_json::from_str(old).unwrap();
+        assert!(!settings.sound && !settings.edge_reveal);
+        assert_eq!(settings.toggle_shortcut, "Win+Alt+Q");
+        assert_eq!(settings.reveal, RevealSpeed::Normal);
+        assert_eq!(settings.appearance, Appearance::default());
+        assert!(settings.updates.check);
+        // Or with only part of a group.
+        let partial: Settings = serde_json::from_str(r#"{ "appearance": {}, "updates": {} }"#).unwrap();
+        assert_eq!(partial, Settings::default());
+    }
+
+    #[test]
+    fn bad_values_fall_back_and_never_stop_the_file_loading() {
+        let bad = r##"{ "sound": false, "reveal": "turbo", "appearance": { "felt": "#12" }, "updates": { "check": false } }"##;
+        let settings: Settings = serde_json::from_str(bad).unwrap();
+        assert_eq!(settings.reveal, RevealSpeed::Normal);
+        assert_eq!(settings.appearance.felt, Felt::default());
+        assert!(!settings.sound && !settings.updates.check, "the good values stay");
+        let wrong_types = r#"{ "reveal": 3, "appearance": { "felt": null } }"#;
+        let settings: Settings = serde_json::from_str(wrong_types).unwrap();
+        assert_eq!((settings.reveal, settings.appearance.felt), (RevealSpeed::Normal, Felt::default()));
     }
 
     #[test]
