@@ -21,7 +21,7 @@ import { colorFor, layout, measure, showPrint } from "./layout.js";
 import { fixed, scaled, scaledMin } from "./motion/scale.js";
 import { layoutMs } from "./motion/spring.js";
 import { swing } from "./motion/swing.js";
-import { fillNote, fold, isNote, isUnfolded } from "./note.js";
+import { fillNote, isNote } from "./note.js";
 import { playPop, playTock } from "./sound.js";
 import { cancel, dom, later, rand, state } from "./state.js";
 
@@ -153,7 +153,6 @@ export function removePrint(id, how) {
   abortFlight(print);
   forgetPendingClick(id);
   if (state.draggingId === id) state.draggingId = null;
-  if (isUnfolded(print)) fold(true);
   itemRemoved(print, index);
   detach(print, how);
   // Let the print start to go before the row closes the gap.
@@ -170,7 +169,6 @@ export function updatePrint(data) {
   if (isNote(print.data)) {
     // Text edited externally (e.g. in Notepad).
     if (data.note && JSON.stringify(data.note) !== JSON.stringify(before.note)) {
-      if (isUnfolded(print)) fold(true);
       fillNote(print);
       if (state.revealed && !state.reduced) {
         print.paper.animate([{ opacity: 0.4 }, { opacity: 1 }], { duration: scaled(360), easing: "ease-out" });

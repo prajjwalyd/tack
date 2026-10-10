@@ -118,7 +118,7 @@ export const COMMANDS = Object.freeze({
  *             truncated: boolean }} Note
  * `text`: at most 20 KB (UTF-8), line breaks "\n". `link`: the URL when the
  * whole note is one http(s) link; `domain`: its host without "www.".
- * `truncated`: the text was longer than 20 KB and was cut there.
+ * `truncated`: the text was longer than 20 KB and was cut there (the board does not show it).
  *
  * @typedef {{ from: { x: number, y: number, w: number, h: number }, image: string,
  *             found: boolean, tip: boolean, motionScale: number }} Flight

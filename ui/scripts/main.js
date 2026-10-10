@@ -13,7 +13,6 @@ import { forgetRect, layout, restScroll } from "./layout.js";
 import { fixed, setMotionScale } from "./motion/scale.js";
 import { restMs } from "./motion/spring.js";
 import { gust, scheduleGust, stopGusts } from "./motion/swing.js";
-import { fold } from "./note.js";
 import { hideNotice, notice, noticeAfterReveal } from "./notice.js";
 import { addPrint, applyOrder, printById, removePrint, showCopied, updatePrint } from "./print.js";
 import { reveal, tuck, warmUp } from "./reveal.js";
@@ -129,7 +128,6 @@ function onReveal(reason, motionScale) {
 /** board:tuck: everything transient goes with the board. */
 function onTuck() {
   keyboardTuck();
-  fold(true);
   hideNotice();
   clearDrop();
   hush();
