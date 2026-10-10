@@ -207,13 +207,14 @@ kbd {
 /* ---- appearance: board colour, frame and note paper swatches ---- */
 /* The cards of one group sit a little apart. */
 .group > .card + .card { margin-top: 8px; }
-/* Wider than the block's text, so the longest name (Burgundy) fits under its swatch. */
+/* One grid for every row of swatches: nine columns, the most the board colours
+   need, so a swatch of the frame or the paper sits exactly under the colour
+   of the same place. Wider than the block's text, so the longest names
+   (Burgundy, Aluminium) fit under their swatch. */
 .swatches {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
-  gap: 2px;
-  margin: 0 -10px;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  margin: 0 -14px;
 }
 .swatch-cell { position: relative; min-width: 0; }
 .swatch {
@@ -228,6 +229,8 @@ kbd {
   background: transparent;
   color: var(--ink-2);
   font: 400 11px/14px var(--font-small);
+  letter-spacing: -.1px;
+  white-space: nowrap;
   cursor: default;
   outline: none;
   transition: background-color 80ms ease;
@@ -250,25 +253,23 @@ kbd {
   box-shadow: 0 0 0 1px var(--swatch-edge);
   color: #ffffff;
 }
-/* The frame's picture: the corner of a board in the finish's rails, round the felt colour it has now. */
-.chip {
-  --w: 5px;
+/* The frame's picture: a round piece of the finish's metal (finish.js draws it
+   into --swatch), lit from above: a bright hairline along the top edge, a
+   darker one along the bottom. */
+.metal {
   display: grid;
   place-items: center;
-  width: 44px;
+  width: 32px;
   height: 32px;
-  border: var(--w) solid transparent;
-  border-top: 0;
-  border-radius: 2px 2px 7px 7px;
-  background:
-    linear-gradient(var(--felt, light-dark(#24503f, #1c4234)), var(--felt, light-dark(#24503f, #1c4234))) padding-box,
-    var(--rail-side-l) left top / var(--w) 100% no-repeat border-box,
-    var(--rail-side-r) right top / var(--w) 100% no-repeat border-box,
-    var(--rail-sheen) left bottom / 100% var(--w) no-repeat border-box,
-    var(--rail-bottom) left bottom / 100% var(--w) no-repeat border-box;
-  box-shadow: 0 0 0 1px var(--swatch-edge);
-  color: #ffffff;
+  border-radius: 50%;
+  background: var(--swatch, transparent);
+  box-shadow:
+    0 0 0 1px var(--swatch-edge),
+    inset 0 1px 0 light-dark(rgba(255, 255, 255, .7), rgba(255, 255, 255, .4)),
+    inset 0 -1px 0 rgba(0, 0, 0, .22);
+  color: var(--swatch-ink, #ffffff);
 }
+.metal .check { filter: drop-shadow(0 0 1px var(--swatch-glow, rgba(0, 0, 0, .5))); }
 /* The note paper's picture: a little note, ruled like the board's. */
 .note-chip {
   display: grid;
@@ -286,7 +287,7 @@ kbd {
   color: rgba(28, 32, 42, .86);
 }
 .note-chip .check { filter: drop-shadow(0 0 1px rgba(255, 255, 255, .7)); }
-.swatch[aria-checked="true"] :is(.dot, .chip, .note-chip) { outline: 2px solid var(--ink); outline-offset: 2px; }
+.swatch[aria-checked="true"] :is(.dot, .metal, .note-chip) { outline: 2px solid var(--ink); outline-offset: 2px; }
 /* Custom, until it is chosen: a colour wheel. */
 .swatch[data-value="custom"][aria-checked="false"] .dot {
   background: conic-gradient(#f2493a, #f7b731, #7ed321, #2bc4d8, #4a6cf7, #b34ae0, #f2493a);
@@ -398,8 +399,8 @@ kbd {
   .seg-item:focus-visible, .swatch:focus-visible, .card > .switch:focus-visible,
   .notes summary:focus-visible, .notes-body:focus-visible { outline: 2px solid Highlight; box-shadow: none; }
   :is(.dot, .note-chip) { forced-color-adjust: none; border: 1px solid CanvasText; box-shadow: none; }
-  .chip { forced-color-adjust: none; box-shadow: none; outline: 1px solid CanvasText; }
-  .swatch[aria-checked="true"] :is(.dot, .chip, .note-chip) { outline: 2px solid Highlight; }
+  .metal { forced-color-adjust: none; box-shadow: none; border: 1px solid CanvasText; }
+  .swatch[aria-checked="true"] :is(.dot, .metal, .note-chip) { outline: 2px solid Highlight; }
   .notes summary { color: LinkText; }
   .tile { background: Canvas; color: CanvasText; border: 1px solid CanvasText; }
   .hero-text .row-desc::before { forced-color-adjust: none; background: CanvasText; }

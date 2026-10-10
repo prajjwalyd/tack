@@ -20,7 +20,7 @@ export const choiceBlock = (id, title) => `
 /**
  * One swatch. `c`: { value (what is chosen), name (under it), label (what a
  * screen reader says) }, plus `manual` for one that opens a picker; `shape`
- * is the CSS class of its picture ("dot" or "chip"); `extra` is markup beside
+ * is the CSS class of its picture ("dot", "metal" or "note-chip"); `extra` is markup beside
  * the button.
  */
 export function swatch(c, shape = "dot", extra = "") {
