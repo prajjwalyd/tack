@@ -196,7 +196,7 @@ const arrange = () => prints.sort((a, b) =>
 const emitOrder = () => emit(EVENTS.ORDER_CHANGED, { ids: prints.map((x) => x.id) });
 arrange();
 let sound = true;
-// ?felt=navy|accent|%23aabbcc, ?finish=graphite, ?paper=blush and ?speed=instant|fast|normal start with that
+// ?felt=navy|accent|%23aabbcc, ?finish=graphite, ?paper=blush and ?speed=instant|normal|slow start with that
 // board colour, frame finish, note paper and speed.
 const settings = {
   sound, felt: validFelt(params.get("felt")) ? params.get("felt") : DEFAULT_APPEARANCE.felt, feltPresets: PRESETS,

@@ -288,14 +288,14 @@ function scriptProblems(file, src) {
     }
   }
 
-  // A *_MS / *_TAU / *_DELAY constant is the normal-speed value: only ever read inside scaled(), scaledMin() or fixed().
+  // A *_MS / *_TAU / *_DELAY constant is the Slow (scale 1) value: only ever read inside scaled(), scaledMin() or fixed().
   const speed = calls(code, SPEED_CALLS);
   for (const m of code.matchAll(/^(?:export\s+)?const\s+([A-Z][A-Z0-9_]*_(?:MS|TAU|DELAY|WAIT|DUR))\s*=/gm)) {
     const name = m[1];
     for (const use of code.matchAll(new RegExp(`(?<![\\w$.])${name}(?![\\w$])`, "g"))) {
       if (use.index === m.index + m[0].indexOf(name)) continue;       // its definition
       if (speed.some((c) => use.index > c.open && use.index < c.end)) continue;
-      flag(use.index, `${name} is a normal-speed value: read it as scaled(${name}), scaledMin(${name}, floor) or fixed(${name}, "why")`);
+      flag(use.index, `${name} is a Slow (scale 1) value: read it as scaled(${name}), scaledMin(${name}, floor) or fixed(${name}, "why")`);
     }
   }
 
@@ -353,7 +353,7 @@ async function loadScale() {
   return { ...scale, props };
 }
 
-test("Normal plays everything as written, and the others scale it", async () => {
+test("Slow plays everything as written, and the others scale it", async () => {
   const s = await loadScale();
   assert.equal(s.scaled(330), 330);
   assert.equal(s.scaledMin(1000, 600), 1000);
@@ -362,14 +362,14 @@ test("Normal plays everything as written, and the others scale it", async () => 
   assert.equal(s.scaled(330), 165);
   assert.equal(s.scaledMin(1000, 600), 600, "a hold keeps its floor");
   assert.equal(s.scaledMin(1000, 300), 500);
-  assert.equal(s.scaledMin(100, 600), 100, "a floor never makes it longer than Normal");
+  assert.equal(s.scaledMin(100, 600), 100, "a floor never makes it longer than Slow");
   assert.equal(s.fixed(520, "a physical gesture time"), 520);
 });
 
 test("a bad scale is ignored", async () => {
   const s = await loadScale();
   s.setMotionScale(0.65);
-  for (const bad of [0, -1, 1.5, NaN, "fast", null, undefined]) s.setMotionScale(bad);
+  for (const bad of [0, -1, 1.5, NaN, "normal", null, undefined]) s.setMotionScale(bad);
   assert.equal(s.motionScale(), 0.65);
 });
 
@@ -382,12 +382,12 @@ function rustScales() {
   return scales;
 }
 
-test("the preview's speeds are the Rust ones, clearly apart, Normal exactly 1", async () => {
+test("the preview's speeds are the Rust ones, clearly apart, Slow exactly 1", async () => {
   const { SCALES } = await import("../../ui/dev/appearance-presets.js");
   const rust = rustScales();
   assert.deepEqual(SCALES, rust);
-  assert.equal(rust.normal, 1);
-  assert.ok(rust.fast / rust.instant >= 1.5 && rust.normal / rust.fast >= 1.4, "each step must be plainly felt");
+  assert.equal(rust.slow, 1);
+  assert.ok(rust.normal / rust.instant >= 1.5 && rust.slow / rust.normal >= 1.4, "each step must be plainly felt");
 });
 
 test("the tuck is one length in the styles, the page and the backend", () => {

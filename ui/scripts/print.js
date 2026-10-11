@@ -29,7 +29,7 @@ const MAX_TILT = 1.5;          // degrees, either way
 const COPIED_MS = 1000;        // the check stays this long (a hold: it keeps COPIED_FLOOR_MS however fast the speed)
 const COPIED_FLOOR_MS = 600;
 const KEEP_PRESS_MS = 360;     // the pin's press when kept; the row waits for it
-// Everything below is at normal speed; scaled() plays it at the current one (motion/scale.js).
+// Everything below is at Slow (scale 1); scaled() plays it at the current one (motion/scale.js).
 
 const X_SVG = `<svg viewBox="0 0 18 18" aria-hidden="true"><path d="M6.4 6.4l5.2 5.2M11.6 6.4l-5.2 5.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>`;
 const KEEP_SVG = `<svg viewBox="0 0 18 18" aria-hidden="true"><path class="fill" d="M6.6 5.1h4.8a.8.8 0 0 1 .8.8v7.2L9 11l-3.2 2.1V5.9a.8.8 0 0 1 .8-.8z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>`;

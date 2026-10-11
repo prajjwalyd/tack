@@ -1,5 +1,5 @@
 // How fast the board moves: SettingsView.motionScale from the Speed setting
-// (Instant, Fast, Normal), 1 for Normal. The backend's timers use the same
+// (Instant, Normal, Slow), 1 for Slow. The backend's timers use the same
 // number (tack-core's RevealSpeed), so the board's motion and its holds
 // shorten together. The board is sent the scale with every reveal, so it is
 // right before the first thing animates, even if the page slept through the
@@ -33,13 +33,13 @@
 
 let scale = 1;
 
-/** The current scale, 1 for Normal. */
+/** The current scale, 1 for Slow. */
 export const motionScale = () => scale;
 
 /** Class A: `ms` as the current speed plays it. */
 export const scaled = (ms) => ms * scale;
 
-/** Class B: `ms` as the current speed plays it, but never below `floor` (nor above `ms`: Normal is exactly `ms`). */
+/** Class B: `ms` as the current speed plays it, but never below `floor` (nor above `ms`: Slow is exactly `ms`). */
 export const scaledMin = (ms, floor) => Math.min(ms, Math.max(ms * scale, floor));
 
 /** Classes C and D: `ms` as it is. `why` says in a few words why it must not follow the speed. */

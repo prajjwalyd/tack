@@ -8,7 +8,7 @@
 //   travel  ~560 ms  arcs to the slot, shrinking and turning to its angle
 //   press   ~220 ms  pressed onto the cork; the pin drives in at the touch
 //
-// Times are at normal speed; the Speed setting scales every one of them
+// Times are at Slow (scale 1); the Speed setting scales every one of them
 // together (timing() below), so a faster flight keeps its shape. The decode
 // wait is the one exception: it waits on the system, not on the choreography.
 

@@ -110,7 +110,7 @@ function fly(found) {
       preview.reveal();
       // Back up after the backend's peek and leave grace (tack-core's
       // RevealSpeed::flight_peek and leave_delay: 1750 ms and 250 ms at
-      // Normal, floors 800 and 120), unless the pointer is on the board or
+      // Slow, floors 800 and 120), unless the pointer is on the board or
       // the tip is up.
       const k = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--motion-scale")) || 1;
       const hold = Math.min(1750, Math.max(1750 * k, 800)) + Math.min(250, Math.max(250 * k, 120)) + 150;

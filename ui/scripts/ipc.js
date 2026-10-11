@@ -88,7 +88,7 @@ export const COMMANDS = Object.freeze({
  * `hex`: the paper in a light theme, "#rrggbb"; dim it for a dark one.
  *
  * @typedef {{ sound: boolean, edgeReveal: boolean, autostart: boolean,
- *             reveal: "instant" | "fast" | "normal",
+ *             reveal: "instant" | "normal" | "slow",
  *             felt: string, feltPresets: FeltPreset[],
  *             frame: string, framePresets: FramePreset[],
  *             paper: string, paperPresets: PaperPreset[], motionScale: number,
@@ -98,7 +98,7 @@ export const COMMANDS = Object.freeze({
  * the CSS `AccentColor` keyword) or a custom "#rrggbb". `feltPresets`: the
  * presets, in order. `motionScale`: what every animation's duration (and
  * the holds after an event) is multiplied by (0.35 for Instant, 0.65 for
- * Fast, 1 for Normal): motion/scale.js. `frame`: the finish of the board's frame, a
+ * Normal, 1 for Slow): motion/scale.js. `frame`: the finish of the board's frame, a
  * preset's id ("aluminium", "graphite", "brass", "silver"); `paper`: the
  * colour of the notes, a preset's id ("white", "cream", "butter", "blush",
  * "sky", "mint"). Each preset list is in order, the first the default (the
@@ -184,7 +184,7 @@ export const settingsState = () => invoke(COMMANDS.SETTINGS_STATE);
 export const setSound = (on) => invoke(COMMANDS.SET_SOUND, { on });
 export const setEdgeReveal = (on) => invoke(COMMANDS.SET_EDGE_REVEAL, { on });
 export const setAutostart = (on) => invoke(COMMANDS.SET_AUTOSTART, { on });
-/** @param {"instant" | "fast" | "normal"} speed */
+/** @param {"instant" | "normal" | "slow"} speed */
 export const setReveal = (speed) => invoke(COMMANDS.SET_REVEAL, { speed });
 /** @param {string} value a preset id, "accent" or "#rrggbb" */
 export const setFelt = (value) => invoke(COMMANDS.SET_FELT, { value });

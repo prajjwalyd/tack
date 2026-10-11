@@ -3,7 +3,7 @@
 // updates:status, so every state can be tried in a browser. URL parameters:
 //   ?updates=idle|checking|upToDate|available|downloading|installing|error
 //                       the update state to start in (default upToDate)
-//   ?felt=navy|accent|%23aabbcc   ?finish=graphite   ?paper=blush   ?speed=instant|fast|normal   the starting settings
+//   ?felt=navy|accent|%23aabbcc   ?finish=graphite   ?paper=blush   ?speed=instant|normal|slow   the starting settings
 //   ?phone=off|on|noDevices|missing|disconnected|asking|combo|error   the phone card's and page's state (default off)
 //   ?inuse=1            start with the pin shortcut reported in use by another app
 //                       ("Win+Alt+X" is always held by one: try it in a field)

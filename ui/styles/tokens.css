@@ -132,8 +132,8 @@
   --note-size: 12px;         /* a note's text on the board */
 
   /* motion. --motion-scale: the Speed setting (scripts/motion/scale.js), 1 for
-     Normal. Every duration and delay here (and in the other board stylesheets)
-     is its Normal value times it: the policy, with the classes of what scales
+     Slow. Every duration and delay here (and in the other board stylesheets)
+     is its Slow value times it: the policy, with the classes of what scales
      and what does not, is the header of scripts/motion/scale.js, and
      tests/ui/motion.test.js fails on a raw one. */
   --motion-scale: 1;

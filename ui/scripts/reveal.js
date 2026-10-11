@@ -17,7 +17,7 @@ import { halt } from "./scroll.js";
 import { sleepSound, wakeSound } from "./sound.js";
 import { dom, later, state } from "./state.js";
 
-const TUCK_MS = 190;        // --dur-tuck at normal speed; the backend hides the window TUCK_MS (tack-core) scaled, plus a margin, after board:tuck
+const TUCK_MS = 190;        // --dur-tuck at Slow; the backend hides the window TUCK_MS (tack-core) scaled, plus a margin, after board:tuck
 
 let tuckTimer = 0;
 

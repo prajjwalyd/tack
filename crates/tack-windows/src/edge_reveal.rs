@@ -527,7 +527,7 @@ mod tests {
         Duration::from_millis(n)
     }
 
-    const SPEEDS: [RevealSpeed; 3] = [RevealSpeed::Instant, RevealSpeed::Fast, RevealSpeed::Normal];
+    const SPEEDS: [RevealSpeed; 3] = [RevealSpeed::Instant, RevealSpeed::Normal, RevealSpeed::Slow];
     const AT_EDGE: POINT = POINT { x: 800, y: 0 };
 
     fn listening() -> (EdgeWatch, Instant) {
@@ -562,7 +562,7 @@ mod tests {
     #[test]
     fn a_pointer_that_leaves_before_the_dwell_reveals_nothing() {
         let (mut watch, t0) = listening();
-        let dwell = RevealSpeed::Normal.dwell();
+        let dwell = RevealSpeed::Slow.dwell();
         watch.hear(EdgeEvent::Arrived, t0);
         assert_eq!(watch.rested(t0, AT_EDGE, true, dwell), Rest::No);
         watch.hear(EdgeEvent::Left, t0 + dwell - ms(1));
@@ -577,7 +577,7 @@ mod tests {
     #[test]
     fn jitter_keeps_the_count_and_a_move_starts_it_again() {
         let (mut watch, t0) = listening();
-        let dwell = RevealSpeed::Fast.dwell();
+        let dwell = RevealSpeed::Normal.dwell();
         let nudged = POINT { x: AT_EDGE.x + EDGE_JITTER - 1, y: 1 };
         let moved = POINT { x: AT_EDGE.x + EDGE_JITTER, y: 0 };
         assert_eq!(watch.rested(t0, AT_EDGE, true, dwell), Rest::No);
@@ -618,13 +618,13 @@ mod tests {
             assert_eq!(watch.rested(t0 + wait - ms(1), AT_EDGE, false, dwell), Rest::No, "{speed:?}");
             assert_eq!(watch.rested(t0 + wait, AT_EDGE, false, dwell), Rest::Drag, "{speed:?}");
         }
-        assert!(DRAG_DWELL < RevealSpeed::Normal.dwell() && RevealSpeed::Instant.dwell() < DRAG_DWELL);
+        assert!(DRAG_DWELL < RevealSpeed::Slow.dwell() && RevealSpeed::Instant.dwell() < DRAG_DWELL);
     }
 
     #[test]
     fn a_drag_that_leaves_the_edge_is_forgotten() {
         let (mut watch, t0) = listening();
-        let dwell = RevealSpeed::Normal.dwell();
+        let dwell = RevealSpeed::Slow.dwell();
         watch.hear(EdgeEvent::DragEntered, t0);
         watch.hear(EdgeEvent::DragLeft, t0 + ms(100));
         assert_eq!(watch.rested(t0 + DRAG_DWELL, AT_EDGE, false, dwell), Rest::No);
@@ -639,7 +639,7 @@ mod tests {
     #[test]
     fn a_drag_is_looked_for_at_the_end_of_its_dwell() {
         let (mut watch, t0) = listening();
-        let dwell = RevealSpeed::Normal.dwell();
+        let dwell = RevealSpeed::Slow.dwell();
         watch.hear(EdgeEvent::DragEntered, t0);
         assert_eq!(watch.next_look(t0, dwell, true, false), Some(DRAG_DWELL));
         assert_eq!(watch.next_look(t0 + ms(200), dwell, true, false), Some(ms(20)));
@@ -648,7 +648,7 @@ mod tests {
     #[test]
     fn nothing_is_looked_at_until_the_strips_say_so() {
         let (mut watch, t0) = listening();
-        let dwell = RevealSpeed::Normal.dwell();
+        let dwell = RevealSpeed::Slow.dwell();
         assert_eq!(watch.next_look(t0, dwell, true, false), None);
         watch.hear(EdgeEvent::Arrived, t0);
         assert_eq!(watch.next_look(t0, dwell, true, false), Some(POLL));
@@ -670,13 +670,13 @@ mod tests {
         watch.listen(false);
         watch.hear(EdgeEvent::Arrived, t0);
         watch.hear(EdgeEvent::DragEntered, t0);
-        assert_eq!(watch.next_look(t0, RevealSpeed::Normal.dwell(), true, false), None);
+        assert_eq!(watch.next_look(t0, RevealSpeed::Slow.dwell(), true, false), None);
         assert!(!watch.arrived && watch.drag.is_none());
         // Up again: heard again, from nothing.
         watch.listen(true);
-        assert_eq!(watch.next_look(t0, RevealSpeed::Normal.dwell(), true, false), None);
+        assert_eq!(watch.next_look(t0, RevealSpeed::Slow.dwell(), true, false), None);
         watch.hear(EdgeEvent::Arrived, t0);
-        assert_eq!(watch.next_look(t0, RevealSpeed::Normal.dwell(), true, false), Some(POLL));
+        assert_eq!(watch.next_look(t0, RevealSpeed::Slow.dwell(), true, false), Some(POLL));
     }
 
     #[test]
@@ -690,7 +690,7 @@ mod tests {
     #[test]
     fn at_the_edge_a_look_is_never_oftener_than_needed_nor_later_than_the_dwell_end() {
         let (mut watch, t0) = listening();
-        let dwell = RevealSpeed::Normal.dwell();
+        let dwell = RevealSpeed::Slow.dwell();
         watch.hear(EdgeEvent::Arrived, t0);
         assert_eq!(watch.rested(t0, AT_EDGE, true, dwell), Rest::No);
         assert_eq!(watch.next_look(t0, dwell, true, false), Some(POLL));

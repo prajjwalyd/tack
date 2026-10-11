@@ -222,7 +222,7 @@ pub fn set_autostart(app: AppHandle, on: bool) -> SettingsView {
     settings_apply::set_autostart(&app, on)
 }
 
-/// "instant", "fast" or "normal"; anything else changes nothing.
+/// "instant", "normal" or "slow"; anything else changes nothing.
 #[tauri::command]
 pub fn set_reveal(app: AppHandle, speed: String) -> SettingsView {
     settings_apply::set_reveal(&app, &speed)

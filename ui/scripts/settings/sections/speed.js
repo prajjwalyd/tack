@@ -8,8 +8,8 @@ import { handleRadioKeys, showRadio } from "../radio.js";
 
 const SPEEDS = [
   { value: "instant", label: "Instant" },
-  { value: "fast", label: "Fast" },
   { value: "normal", label: "Normal" },
+  { value: "slow", label: "Slow" },
 ];
 
 export function mount(host, api) {

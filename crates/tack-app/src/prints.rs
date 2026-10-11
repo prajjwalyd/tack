@@ -19,7 +19,7 @@ use crate::captures;
 use crate::ipc::events::{self, Flight, Removal};
 use crate::state::{lock, AppState};
 
-/// The beat between pins popping out in Clear's ripple, at Normal.
+/// The beat between pins popping out in Clear's ripple, at Slow.
 const RIPPLE_GAP: Duration = Duration::from_millis(45);
 /// How often the history is checked for prints that have grown too old.
 const AGEING_INTERVAL: Duration = Duration::from_secs(60 * 60);

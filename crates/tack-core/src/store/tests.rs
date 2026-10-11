@@ -200,7 +200,7 @@ fn save_then_load_round_trips_without_leaving_a_temp_file() {
     let settings = Settings {
         sound: false,
         edge_reveal: false,
-        reveal: crate::RevealSpeed::Fast,
+        reveal: crate::RevealSpeed::Normal,
         appearance: crate::settings::Appearance {
             felt: crate::Felt::parse("#a1b2c3"),
             frame: crate::Frame::parse("graphite"),

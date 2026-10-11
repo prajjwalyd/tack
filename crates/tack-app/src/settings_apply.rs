@@ -30,7 +30,7 @@ pub struct SettingsView {
     edge_reveal: bool,
     /// Tack starts with Windows (read from the Run key, not from board.json).
     autostart: bool,
-    /// "instant", "fast" or "normal".
+    /// "instant", "normal" or "slow".
     reveal: RevealSpeed,
     /// The board colour: a preset's id, "accent" or "#rrggbb".
     felt: Felt,
@@ -112,7 +112,7 @@ pub fn set_autostart(app: &AppHandle, on: bool) -> SettingsView {
     announce(app)
 }
 
-/// "instant", "fast" or "normal"; anything else changes nothing.
+/// "instant", "normal" or "slow"; anything else changes nothing.
 pub fn set_reveal(app: &AppHandle, speed: &str) -> SettingsView {
     match RevealSpeed::parse(speed) {
         Some(speed) => change(app, |s| s.reveal = speed),

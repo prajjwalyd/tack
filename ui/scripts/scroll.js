@@ -7,7 +7,7 @@
 import { fixed, scaled } from "./motion/scale.js";
 import { state, dom } from "./state.js";
 
-// How quickly a glide catches up with its target, ms at normal speed. The
+// How quickly a glide catches up with its target, ms at Slow. The
 // glides scale (class A, motion/scale.js), so Instant is nearly direct; a
 // touchpad's smoothing is a filter on its own momentum, not an animation.
 const WHEEL_TAU = 95;      // a wheel's coarse steps

@@ -31,7 +31,7 @@ export const PAPER_PRESETS = [
 ];
 
 /** Reveal speed -> the board's motion scale. */
-export const SCALES = { instant: 0.35, fast: 0.65, normal: 1 };
+export const SCALES = { instant: 0.35, normal: 0.65, slow: 1 };
 
 /** The appearance a fresh install has: each list's first (what reset_appearance restores). */
 export const DEFAULT_APPEARANCE = { felt: PRESETS[0].id, frame: FRAME_PRESETS[0].id, paper: PAPER_PRESETS[0].id };
