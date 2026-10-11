@@ -150,8 +150,8 @@ pub(crate) struct Snapshot {
 
 /// Takes a snapshot of the clipboard, or `None` if it could not be opened
 /// or holds more than can sensibly be kept.
-pub(crate) fn snapshot(owner: HWND) -> Option<Snapshot> {
-    let _open = Open::new(Some(owner))?;
+pub(crate) fn snapshot(owner: Option<HWND>) -> Option<Snapshot> {
+    let _open = Open::new(owner)?;
     let mut formats = Vec::new();
     let mut unread = 0;
     let mut total = 0usize;
@@ -221,8 +221,8 @@ pub(crate) enum Restored {
 /// unless the snapshot carries its own markers for that. A copy that was
 /// marked private goes back with every marker, whether or not their data
 /// could be read, so it stays private.
-pub(crate) fn restore(owner: HWND, snapshot: &Snapshot, since: u32) -> Result<Restored, String> {
-    let _open = Open::new(Some(owner)).ok_or("the clipboard is busy")?;
+pub(crate) fn restore(owner: Option<HWND>, snapshot: &Snapshot, since: u32) -> Result<Restored, String> {
+    let _open = Open::new(owner).ok_or("the clipboard is busy")?;
     // Checked while it is open, so nobody can write in between.
     if sequence() != since {
         return Ok(Restored::Superseded);
@@ -322,13 +322,13 @@ pub(crate) fn has_picture() -> bool {
 /// Reads what is on the clipboard now: files, else text, else a picture.
 /// Text that is only whitespace or control characters counts as none, so a
 /// copied picture that also offers a placeholder character is a picture.
-pub(crate) fn read(owner: HWND) -> Content {
+pub(crate) fn read(owner: Option<HWND>) -> Content {
     for attempt in 0..PICTURE_TRIES {
         if attempt > 0 {
             std::thread::sleep(PICTURE_GAP);
         }
         let picture = {
-            let Some(_open) = Open::new(Some(owner)) else { return Content::Empty };
+            let Some(_open) = Open::new(owner) else { return Content::Empty };
             if is_private() {
                 return Content::Private;
             }
@@ -448,19 +448,36 @@ pub(crate) fn take_picture(window: Option<HWND>, since: u32, tries: u32, gap: Du
     Err(why)
 }
 
-/// Puts a picture on the clipboard as PNG and as a bitmap, both encoded
-/// before it is opened.
-pub(crate) fn put_picture(rgba: &RgbaImage) -> Result<(), String> {
-    let mut png = Vec::new();
-    PngEncoder::new(&mut png)
-        .write_image(rgba.as_raw(), rgba.width(), rgba.height(), ExtendedColorType::Rgba8)
-        .map_err(|e| e.to_string())?;
+/// Puts text on the clipboard, as Unicode text.
+pub(crate) fn put_text(text: &str) -> Result<(), String> {
+    let wide: Vec<u8> = text.encode_utf16().chain([0]).flat_map(u16::to_le_bytes).collect();
+    let _open = Open::new(None).ok_or("the clipboard is busy")?;
+    unsafe { EmptyClipboard() }.map_err(|e| e.to_string())?;
+    set_bytes(CF_UNICODETEXT.0 as u32, &wide)
+}
+
+/// Puts a picture on the clipboard as PNG and as a bitmap, both made before
+/// it is opened. `png` is the picture's own PNG file, when it came from one:
+/// it goes on as it is instead of being encoded again.
+pub(crate) fn put_picture(rgba: &RgbaImage, png: Option<&[u8]>) -> Result<(), String> {
+    let encoded;
+    let png = match png {
+        Some(png) => png,
+        None => {
+            let mut out = Vec::new();
+            PngEncoder::new(&mut out)
+                .write_image(rgba.as_raw(), rgba.width(), rgba.height(), ExtendedColorType::Rgba8)
+                .map_err(|e| e.to_string())?;
+            encoded = out;
+            &encoded
+        }
+    };
     let dib = dibv5(rgba);
     let _open = Open::new(None).ok_or("the clipboard is busy")?;
     unsafe { EmptyClipboard() }.map_err(|e| e.to_string())?;
     // PNG first: apps that take the first picture format they know get the
     // one that keeps transparency exactly.
-    set_bytes(registered(w!("PNG")), &png)?;
+    set_bytes(registered(w!("PNG")), png)?;
     set_bytes(CF_DIBV5.0 as u32, &dib)
 }
 
@@ -479,11 +496,12 @@ fn dibv5(rgba: &RgbaImage) -> Vec<u8> {
     // Endpoints and gamma: unused with sRGB.
     out.resize(108, 0);
     out.extend([4u32 /* LCS_GM_IMAGES */, 0, 0, 0].iter().flat_map(|v| v.to_le_bytes()));
-    for row in rgba.rows().rev() {
-        for p in row {
-            out.extend_from_slice(&[p[2], p[1], p[0], p[3]]);
-        }
+    let start = out.len();
+    for row in rgba.as_raw().chunks_exact(width as usize * 4).rev() {
+        out.extend_from_slice(row);
     }
+    // The rows went in as RGBA; the bitmap wants BGRA.
+    out[start..].as_chunks_mut::<4>().0.iter_mut().for_each(|px| px.swap(0, 2));
     out
 }
 
