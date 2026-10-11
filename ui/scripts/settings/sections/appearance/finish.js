@@ -8,9 +8,10 @@
 // at the top left and a few bands across it for the brushed grain. Each tone
 // has a light and a dark-theme colour, joined with light-dark() as frame.js
 // does. The check mark is whichever of white and near-black reads better on
-// the face of the metal. Pure (it only imports frame.js's data), so the tests
-// can check it.
+// the face of the metal. Pure (it only imports frame.js's data and colour
+// arithmetic), so the tests can check it.
 
+import { contrast, rgb } from "../../../color.js";
 import { FINISHES } from "../../../frame.js";
 
 /** The bottom rail's tones, in order: the lit hairline, two bevel steps, the face, and two to the shaded edge. */
@@ -27,23 +28,10 @@ const pair = (light, dark) => `light-dark(${light}, ${dark})`;
 const white = (a) => `rgba(255, 255, 255, ${a})`;
 const WHITE0 = white(0);
 
-/** The relative luminance of "#rrggbb" (WCAG). */
-export function luminance(hex) {
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
-    .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-/** The contrast ratio of two "#rrggbb" colours (1 to 21). */
-export function contrast(a, b) {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (hi + 0.05) / (lo + 0.05);
-}
-
 /** The check mark's colour on the face of `id`'s metal in `theme`: white or near-black, whichever has the more contrast. */
 export function inkOn(id, theme) {
-  const face = FINISHES[id][theme].bottom[FACE];
-  return contrast(INK.light, face) >= contrast(INK.dark, face) ? INK.light : INK.dark;
+  const face = rgb(FINISHES[id][theme].bottom[FACE]);
+  return contrast(rgb(INK.light), face) >= contrast(rgb(INK.dark), face) ? INK.light : INK.dark;
 }
 
 /**

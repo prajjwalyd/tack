@@ -50,23 +50,13 @@ export function clearHover() {
   resetTilt(p);
 }
 
-let tiltPrint = null, tiltX = 0, tiltY = 0, tiltRaf = 0;
-
-/** The pointer moved over `print` (client px): lean it next frame. */
+/** The pointer moved over `print` (client px): lean it toward the pointer. */
 function trackTilt(print, x, y) {
   if (state.reduced || state.hovered !== print || state.press || print.leaving) return;
   // The lean is on the card, so the slot's box is a steady frame; read once per hover.
-  print.tiltRect ||= print.slot.getBoundingClientRect();
-  tiltPrint = print; tiltX = x; tiltY = y;
-  if (!tiltRaf) tiltRaf = requestAnimationFrame(applyTilt);
-}
-
-function applyTilt() {
-  tiltRaf = 0;
-  const print = tiltPrint, r = print?.tiltRect;
-  if (!print || !r || state.hovered !== print || state.press) return;
-  const nx = clamp(((tiltX - r.left) / r.width) * 2 - 1);
-  const ny = clamp(((tiltY - r.top) / r.height) * 2 - 1);
+  const r = (print.tiltRect ||= print.slot.getBoundingClientRect());
+  const nx = clamp(((x - r.left) / r.width) * 2 - 1);
+  const ny = clamp(((y - r.top) / r.height) * 2 - 1);
   // The free end swings toward the pointer, more the lower it is.
   const lean = -nx * LEAN_DEG * (0.35 + 0.65 * (ny + 1) / 2);
   const style = print.el.style;
@@ -77,7 +67,6 @@ function applyTilt() {
 
 function resetTilt(print) {
   print.tiltRect = null;
-  if (tiltPrint === print) { tiltPrint = null; cancelAnimationFrame(tiltRaf); tiltRaf = 0; }
   const style = print.el.style;
   style.removeProperty("--lean");
   style.removeProperty("--sheen-x");

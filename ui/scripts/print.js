@@ -13,6 +13,7 @@
 // (announce.js); its layers are hidden from screen readers.
 
 import * as ipc from "./ipc.js";
+import { ago } from "./age.js";
 import { announce, labelFor } from "./announce.js";
 import { abortFlight, launch, prepareFlight, restingBox, showTip } from "./flight.js";
 import { clearHover, endPress, forgetPendingClick, rehover, wireGestures } from "./gestures.js";
@@ -277,8 +278,7 @@ export function toggleKeep(print) {
   if (print.leaving) return;
   const kept = !print.data.kept;
   setKept(print, kept, true);
-  ipc.setKept(print.id, kept);
-  applyOrder(localOrder());   // the backend confirms with board:order-changed
+  ipc.setKept(print.id, kept);   // the backend answers with board:order-changed
 }
 
 let orderHoldUntil = 0;
@@ -295,23 +295,7 @@ export function flushOrder() {
   if (pendingOrder) { const o = pendingOrder; pendingOrder = null; applyOrder(o); }
 }
 
-/** The display order the backend would give: kept by keptAt, then newest first. */
-function localOrder() {
-  const idx = new Map(state.order.map((id, i) => [id, i]));
-  return state.order.map((id) => state.prints.get(id)).filter(Boolean).sort((a, b) => {
-    const ka = a.data.kept ? 0 : 1, kb = b.data.kept ? 0 : 1;
-    if (ka !== kb) return ka - kb;
-    if (!ka) {
-      const d = (a.data.keptAt ?? 0) - (b.data.keptAt ?? 0);
-      if (d) return d;
-    } else if (a.data.pinnedAt != null && b.data.pinnedAt != null && a.data.pinnedAt !== b.data.pinnedAt) {
-      return b.data.pinnedAt - a.data.pinnedAt;
-    }
-    return idx.get(a.id) - idx.get(b.id);
-  }).map((p) => p.id);
-}
-
-/** A new row order (board:order-changed, or a local keep). Prints that travel further than a step lift on the way. */
+/** A new row order (board:order-changed). Prints that travel further than a step lift on the way. */
 export function applyOrder(ids) {
   const wait = orderHoldUntil - performance.now();
   if (wait > 0 && state.revealed) {
@@ -406,23 +390,8 @@ export function showCopied(print) {
   swing(print, Math.sign(print.tilt || 1) * 1.2);
 }
 
-const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: "long" });
-const dateFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
-const yearFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
-
-/** "Just now", "2 min ago", "3 hours ago", "Yesterday", "Tuesday", "12 Sep". */
-export function ageText(t, now = Date.now()) {
-  const s = Math.max(0, (now - t) / 1000);
-  if (s < 45) return "Just now";
-  const min = Math.max(1, Math.round(s / 60));
-  if (min < 60) return `${min} min ago`;
-  const a = new Date(t), b = new Date(now);
-  const days = Math.round((new Date(b.getFullYear(), b.getMonth(), b.getDate()) - new Date(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
-  if (days <= 0) { const h = Math.floor(min / 60); return h === 1 ? "1 hour ago" : `${h} hours ago`; }
-  if (days === 1) return "Yesterday";
-  if (days < 7) return dayFmt.format(a);
-  return (a.getFullYear() === b.getFullYear() ? dateFmt : yearFmt).format(a);
-}
+/** "Just now", "2 minutes ago", "3 hours ago", "Yesterday", "Tuesday", "12 Sep". */
+const ageText = (t) => { const s = ago(t); return s[0].toUpperCase() + s.slice(1); };
 
 /** Fills the hovered print's caption and keeps it current while it shows. */
 export function showCaption(print) {

@@ -3,7 +3,8 @@ import { test } from "node:test";
 
 import { FINISHES, FINISH_IDS } from "../../ui/scripts/frame.js";
 import { FRAME_PRESETS } from "../../ui/dev/appearance-presets.js";
-import { contrast, finishSwatch, inkOn } from "../../ui/scripts/settings/sections/appearance/finish.js";
+import { contrast, rgb } from "../../ui/scripts/color.js";
+import { finishSwatch, inkOn } from "../../ui/scripts/settings/sections/appearance/finish.js";
 
 test("every finish the backend lists has a swatch, and nothing else does", () => {
   for (const { id } of FRAME_PRESETS) assert.ok(finishSwatch(id), id);
@@ -30,12 +31,7 @@ test("the check mark is readable on the face of every finish, in both themes", (
   for (const id of FINISH_IDS) {
     for (const theme of ["light", "dark"]) {
       const face = FINISHES[id][theme].bottom[3];
-      assert.ok(contrast(inkOn(id, theme), face) >= 3, `${id} ${theme}`);
+      assert.ok(contrast(rgb(inkOn(id, theme)), rgb(face)) >= 3, `${id} ${theme}`);
     }
   }
-});
-
-test("contrast is the WCAG ratio", () => {
-  assert.equal(Math.round(contrast("#000000", "#ffffff")), 21);
-  assert.equal(contrast("#777777", "#777777"), 1);
 });

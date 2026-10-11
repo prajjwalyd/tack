@@ -1,7 +1,6 @@
 // Spring easings: a damped spring's step response sampled into a CSS linear()
 // easing drives the reveal swing, the row's slides and the hover settle.
-// Importing this module publishes them as CSS custom properties (tokens.css
-// has cubic-bezier fallbacks for webviews without linear()). Their durations
+// Importing this module publishes them as CSS custom properties. Their durations
 // follow the Speed setting (scale.js): the CSS ones through --motion-scale,
 // the script ones through layoutMs() and revealMs().
 
@@ -25,7 +24,6 @@ export function spring(response, damping, settle = 0.003, v0 = 0) {
   return { easing: `linear(${pts.join(", ")})`, ms: Math.round(dur * 1000) };
 }
 
-const hasLinear = typeof CSS !== "undefined" && CSS.supports("transition-timing-function", "linear(0, 1)");
 // Reveal: the board's swing down on its hinge (board.css), overshooting flat
 // by a few degrees; the faint second swing is cut off.
 const REVEAL = spring(0.42, 0.62, 0.012, 1.5);
@@ -34,27 +32,25 @@ const LAYOUT = spring(0.44, 0.9);
 // A print settling after hover: a whisper of bounce.
 const SETTLE = spring(0.3, 0.7, 0.01);
 
-if (hasLinear) {
-  const root = document.documentElement.style;
-  root.setProperty("--ease-reveal", REVEAL.easing);
-  root.setProperty("--dur-reveal", `calc(${REVEAL.ms}ms * var(--motion-scale))`);
-  root.setProperty("--ease-layout", LAYOUT.easing);
-  root.setProperty("--dur-layout", `calc(${LAYOUT.ms}ms * var(--motion-scale))`);
-  root.setProperty("--ease-settle", SETTLE.easing);
-  root.setProperty("--dur-hover-out", `calc(${SETTLE.ms}ms * var(--motion-scale))`);
-}
+const root = document.documentElement.style;
+root.setProperty("--ease-reveal", REVEAL.easing);
+root.setProperty("--dur-reveal", `calc(${REVEAL.ms}ms * var(--motion-scale))`);
+root.setProperty("--ease-layout", LAYOUT.easing);
+root.setProperty("--dur-layout", `calc(${LAYOUT.ms}ms * var(--motion-scale))`);
+root.setProperty("--ease-settle", SETTLE.easing);
+root.setProperty("--dur-hover-out", `calc(${SETTLE.ms}ms * var(--motion-scale))`);
 
 /** How long a slide along the row takes at the current speed, ms. */
-export const layoutMs = () => scaled(hasLinear ? LAYOUT.ms : 480);
+export const layoutMs = () => scaled(LAYOUT.ms);
 /** The row's slide easing, for WAAPI animations matching CSS ones. */
-export const LAYOUT_EASING = hasLinear ? LAYOUT.easing : "cubic-bezier(.22, 1, .36, 1)";
+export const LAYOUT_EASING = LAYOUT.easing;
 /**
  * Ms after a reveal until the board is at rest (swing plus a couple of
  * frames), at the current speed. Prints pin on only then: pinning mid-swing
  * would make the compositor build the print's new layers inside a 3D-turned
  * board.
  */
-export const revealMs = () => scaled(hasLinear ? REVEAL.ms : 520) + 40;
+const revealMs = () => scaled(REVEAL.ms) + 40;
 
 /** The same under reduced motion, where the board slides plainly (motion.css): until it is at rest, ms. */
 export const restMs = () => (state.reduced ? scaled(100) : revealMs());

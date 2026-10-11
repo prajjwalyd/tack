@@ -3,7 +3,7 @@
 // is set here: the paper itself and the link and domain colours printed on it
 // (a blue that is darkened where the paper would make it too faint). The ink,
 // the rules and the curl, which sit on any paper, are in
-// styles/notes/card.css. The empty board's card and the one-time tip are not
+// tokens.css. The empty board's card and the one-time tip are not
 // notes but hints, cut from the same paper: a shade off it, with their own
 // ink (--hint-*).
 //
