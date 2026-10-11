@@ -5,9 +5,9 @@
    set on #board, not the root, so the transparent window never gets a dark
    canvas.
 
-   Geometry mirrors scripts/layout.js. motion/spring.js overrides the
-   --ease-reveal / --ease-layout / --ease-settle curves and durations with
-   sampled springs; the values here are the fallbacks. */
+   Geometry mirrors scripts/layout.js. motion/spring.js sets the
+   --ease-reveal / --ease-layout / --ease-settle curves and durations
+   (sampled springs). */
 
 :root {
   /* geometry */
@@ -149,15 +149,10 @@
      tests/ui/motion.test.js fails on a raw one. */
   --motion-scale: 1;
   --ease-out: cubic-bezier(.2, .8, .25, 1);
-  --ease-reveal: cubic-bezier(.3, 1.25, .45, 1);  /* a swing a little past flat */
-  --dur-reveal: calc(520ms * var(--motion-scale));
+  /* --ease-reveal, --ease-layout, --ease-settle, --dur-reveal, --dur-layout and --dur-hover-out come from motion/spring.js */
   --ease-tuck: cubic-bezier(.5, 0, .85, .35);     /* folds away, gathering speed */
   --dur-tuck: calc(190ms * var(--motion-scale));  /* TUCK_MS in reveal.js and in tack-core's reveal_speed.rs */
-  --ease-layout: cubic-bezier(.22, 1, .36, 1);
-  --dur-layout: calc(480ms * var(--motion-scale));
-  --ease-settle: cubic-bezier(.22, 1.2, .4, 1);
   --dur-hover: calc(190ms * var(--motion-scale));
-  --dur-hover-out: calc(260ms * var(--motion-scale));
   --dur-buttons: calc(140ms * var(--motion-scale));
   --delay-buttons: calc(120ms * var(--motion-scale));
   --dur-caption: calc(170ms * var(--motion-scale));
