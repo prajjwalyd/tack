@@ -49,6 +49,7 @@ pub struct Device {
 }
 
 impl PhoneSettings {
+    /// Whether `key` may use the board, without asking anybody.
     pub fn allows(&self, key: &str) -> bool {
         self.devices.iter().any(|d| d.key == key)
     }
@@ -141,12 +142,6 @@ impl Gate {
     /// The devices waiting, oldest first.
     pub fn pending(&self) -> &[Asking] {
         &self.pending
-    }
-
-    /// Whether `key` may use the board, without asking anybody: for
-    /// requests that must not raise the question (see the server).
-    pub fn allowed(settings: &PhoneSettings, key: &str) -> bool {
-        settings.allows(key)
     }
 
     /// A request from `who`: whether it gets in, and whether it needs asking
@@ -248,7 +243,7 @@ mod tests {
         assert_eq!(gate.answer(PIXEL, true, 5).as_deref(), Some("pixel"));
         settings.allow(PIXEL, "pixel", 5);
         assert_eq!(gate.check(&settings, &who(PIXEL, "renamed"), "0000", 10), Verdict::Allowed);
-        assert!(Gate::allowed(&settings, PIXEL));
+        assert!(settings.allows(PIXEL));
         assert_eq!(
             gate.check(&settings, &who(LAPTOP, "pixel"), "5678", 10),
             waiting(true, "5678"),
@@ -310,7 +305,7 @@ mod tests {
         let (mut gate, mut settings) = (Gate::new(), PhoneSettings::default());
         settings.allow(PIXEL, "pixel", 0);
         assert!(settings.forget(PIXEL));
-        assert!(!Gate::allowed(&settings, PIXEL));
+        assert!(!settings.allows(PIXEL));
         assert_eq!(gate.check(&settings, &who(PIXEL, "pixel"), "1", 1), waiting(true, "1"));
     }
 
