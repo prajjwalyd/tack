@@ -55,9 +55,6 @@ window.addEventListener("resize", () => {
   }, fixed(60, "debounces the window's resize events"));
 });
 
-dom.board.addEventListener("pointerenter", () => ipc.setHovering(true));
-dom.board.addEventListener("pointerleave", () => ipc.setHovering(false));
-
 async function init() {
   if (!ipc.available()) {
     console.error("[tack] window.__TAURI__ is not available");

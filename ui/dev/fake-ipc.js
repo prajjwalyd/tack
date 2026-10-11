@@ -250,7 +250,6 @@ const commands = {
   [COMMANDS.CONTEXT_MENU]: ({ id, at }) => {
     if (at) console.info(`[fake-ipc] context_menu ${id} at ${at.x},${at.y} physical px`);
   },
-  [COMMANDS.SET_HOVERING]: () => {},
   [COMMANDS.SET_KEPT]: ({ id, kept }) => {
     const it = prints.find((x) => x.id === id);
     if (!it) return;

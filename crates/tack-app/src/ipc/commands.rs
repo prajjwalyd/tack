@@ -133,12 +133,6 @@ pub fn set_tip(app: AppHandle, rect: Option<UiRect>) {
     reveal::set_tip(&app, rect);
 }
 
-/// Only a hint; the pointer poller is the authority on hovering.
-#[tauri::command]
-pub fn set_hovering(hovering: bool) {
-    let _ = hovering;
-}
-
 /// Text dropped on the board: pinned as a note (a link if it is one). Async:
 /// it saves a file and may wait to reveal.
 #[tauri::command]

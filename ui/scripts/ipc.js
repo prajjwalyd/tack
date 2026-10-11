@@ -35,7 +35,6 @@ export const COMMANDS = Object.freeze({
   START_DRAG: "start_drag",
   DISCARD_PRINT: "discard_print",
   CONTEXT_MENU: "context_menu",
-  SET_HOVERING: "set_hovering",
   SET_KEPT: "set_kept",
   SET_TIP: "set_tip",
   PIN_TEXT: "pin_text",
@@ -161,7 +160,6 @@ export const discardPrint = (id) => invoke(COMMANDS.DISCARD_PRINT, { id });
  * to the window (a keyboard request); null: at the pointer.
  */
 export const contextMenu = (id, at = null) => invoke(COMMANDS.CONTEXT_MENU, { id, at });
-export const setHovering = (hovering) => invoke(COMMANDS.SET_HOVERING, { hovering });
 export const setKept = (id, kept) => invoke(COMMANDS.SET_KEPT, { id, kept });
 /** The one-time tip shows at `rect` (physical px relative to the window), or `null`: closed. */
 export const setTip = (rect) => invoke(COMMANDS.SET_TIP, { rect });

@@ -79,7 +79,6 @@ fn main() {
                 commands::start_drag,
                 commands::discard_print,
                 commands::context_menu,
-                commands::set_hovering,
                 commands::set_kept,
                 commands::set_tip,
                 commands::pin_text,
