@@ -29,8 +29,9 @@
 
 use std::time::Duration;
 
-use serde::de::IgnoredAny;
 use serde::{Deserialize, Deserializer, Serialize};
+
+use crate::lenient;
 
 /// The UI's tuck slide at Slow, ms. Mirrors `--dur-tuck` in
 /// ui/styles/tokens.css and `TUCK_MS` in ui/scripts/reveal.js, which are kept
@@ -152,16 +153,7 @@ impl RevealSpeed {
 /// reads as the default: board.json must still load.
 impl<'de> Deserialize<'de> for RevealSpeed {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Saved {
-            Text(String),
-            Other(IgnoredAny),
-        }
-        Ok(match Saved::deserialize(deserializer)? {
-            Saved::Text(text) => RevealSpeed::parse(&text).unwrap_or_default(),
-            Saved::Other(_) => RevealSpeed::default(),
-        })
+        lenient::string_or_default(deserializer, RevealSpeed::parse)
     }
 }
 

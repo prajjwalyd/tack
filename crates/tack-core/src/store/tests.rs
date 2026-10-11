@@ -23,6 +23,11 @@ fn scratch(name: &str) -> PathBuf {
     dir
 }
 
+/// Writes board.json as the app's saver does.
+fn save(file: &Path, prints: &[Print], settings: &Settings) {
+    write(file, &Snapshot::new(prints, &[], settings)).unwrap();
+}
+
 fn print(dir: &Path, id: &str, name: &str, origin: Origin, pinned_at: u64, kept_at: Option<u64>) -> Print {
     let note = name.ends_with(".txt").then(|| crate::note::body(&format!("the words of {name}")).unwrap());
     Print {
@@ -159,7 +164,6 @@ fn damaged_contents_are_an_empty_board_that_cannot_be_trusted() {
         assert!(saved_board.prints.is_empty());
         assert_eq!(saved_board.settings, Settings::default());
         assert!(matches!(loaded, Loaded::Unreadable { .. }));
-        assert!(!loaded.may_sweep());
     }
 }
 
@@ -170,7 +174,6 @@ fn a_newer_schema_is_read_but_not_trusted() {
     let (saved_board, loaded) = parse(json, NOW, no_files);
     assert_eq!(saved_board.prints, vec![saved(r"C:\Cap\a.png", Origin::Capture, 5, None)]);
     assert!(matches!(loaded, Loaded::Unreadable { .. }));
-    assert!(!loaded.may_sweep());
 }
 
 #[test]
@@ -275,7 +278,6 @@ fn no_board_json_is_missing() {
     let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(loaded, Loaded::Missing);
     assert!(saved_board.prints.is_empty());
-    assert!(!loaded.may_sweep());
     assert!(!loaded.must_not_save());
 }
 
@@ -329,7 +331,7 @@ fn only_an_understood_board_json_lets_the_sweep_run() {
         let (saved_board, loaded) = load(&file, NOW);
         let pinned: Vec<PathBuf> = saved_board.prints.iter().map(|p| p.path.clone()).collect();
         let bin = NotingBin::default();
-        if loaded.may_sweep() {
+        if loaded == Loaded::Ok {
             capture::sweep(&captures, &pinned, later, &bin);
         }
         let taken = bin.taken.borrow().clone();
@@ -349,7 +351,6 @@ fn a_board_json_without_a_print_list_is_not_trusted() {
         let (saved_board, loaded) = parse(json, NOW, no_files);
         assert!(saved_board.prints.is_empty());
         assert!(matches!(loaded, Loaded::Unreadable { .. }), "{}", String::from_utf8_lossy(json));
-        assert!(!loaded.may_sweep());
     }
     // An empty list is a list: this build's own file with nothing pinned.
     for json in [&br#"{ "version": 3, "prints": [] }"#[..], br#"{ "paths": [] }"#] {

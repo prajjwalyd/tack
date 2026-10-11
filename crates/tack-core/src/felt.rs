@@ -8,8 +8,9 @@
 
 use std::fmt;
 
-use serde::de::IgnoredAny;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use crate::lenient;
 
 /// A colour the user can pick from the list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -106,16 +107,7 @@ impl Serialize for Felt {
 /// reads as the default: board.json must still load.
 impl<'de> Deserialize<'de> for Felt {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Saved {
-            Text(String),
-            Other(IgnoredAny),
-        }
-        Ok(match Saved::deserialize(deserializer)? {
-            Saved::Text(text) => Felt::parse(&text),
-            Saved::Other(_) => Felt::default(),
-        })
+        lenient::string_or_default(deserializer, Felt::try_parse)
     }
 }
 

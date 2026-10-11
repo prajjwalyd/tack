@@ -109,11 +109,6 @@ pub enum Loaded {
 }
 
 impl Loaded {
-    /// Whether leftover captures may be swept.
-    pub fn may_sweep(&self) -> bool {
-        matches!(self, Loaded::Ok)
-    }
-
     /// Whether saving would overwrite a board.json that was never backed up.
     pub fn must_not_save(&self) -> bool {
         matches!(self, Loaded::Unreadable { backup: None, .. })
@@ -304,15 +299,6 @@ pub fn write(file: &Path, snapshot: &Snapshot) -> std::io::Result<()> {
     };
     let bytes = serde_json::to_vec_pretty(&stored).map_err(std::io::Error::other)?;
     replace(file, &bytes)
-}
-
-/// Writes board.json, the prints in the order given (row order), at once.
-/// Failures are logged, never fatal: the board still works, it just will
-/// not remember.
-pub fn save(file: &Path, prints: &[Print], settings: &Settings) {
-    if let Err(e) = write(file, &Snapshot::new(prints, &[], settings)) {
-        eprintln!("tack: cannot save {}: {e}", file.display());
-    }
 }
 
 /// Every path that board.json and its `board.json.bad-*` backups mention,

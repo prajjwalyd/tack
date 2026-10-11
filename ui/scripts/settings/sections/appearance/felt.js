@@ -29,7 +29,7 @@ export function mount(card, api) {
   let dragging = null;
 
   const picker = () => swatches.querySelector(".picker");
-  const pick = (felt) => api.change({ felt }, () => ipc.setFelt(felt));
+  const pick = (felt) => api.change({ felt }, () => ipc.setSetting("felt", felt));
 
   /** The picker starts on the last custom colour, or on the colour the board has now. */
   function startColour() {

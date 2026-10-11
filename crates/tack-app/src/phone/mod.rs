@@ -244,7 +244,7 @@ pub fn forget(app: &AppHandle, key: &str) -> PhoneState {
 
 /// Whether the device with `key` is allowed, without asking anybody.
 pub(crate) fn allowed(app: &AppHandle, key: &str) -> bool {
-    Gate::allowed(&lock(app).settings.phone, key)
+    lock(app).settings.phone.allows(key)
 }
 
 /// Whether `peer` may use the board; a device asking for the first time

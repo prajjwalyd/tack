@@ -5,6 +5,7 @@
 // extras (felt.js) and uses the pieces.
 
 import { esc } from "../../../dialog.js";
+import * as ipc from "../../../ipc.js";
 import { handleRadioKeys, showRadio } from "../../radio.js";
 
 const CHECK_SVG = `<svg class="check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.4l3 3 6-6.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -41,10 +42,9 @@ export function swatch(c, shape = "dot", extra = "") {
  *   shape     the swatch picture's CSS class
  *   key       the SettingsView property holding the id that is chosen
  *   presets   the SettingsView property holding the list: [{ id, name }]
- *   set       sends a choice to the backend: (id) => Promise<SettingsView | null>
  *   paint     draws a swatch's picture: (picture element, preset, view)
  */
-export function mountChoice(card, api, { id, title, shape, key, presets, set, paint }) {
+export function mountChoice(card, api, { id, title, shape, key, presets, paint }) {
   card.innerHTML = choiceBlock(id, title);
   const swatches = card.querySelector(".swatches");
   const nameOut = card.querySelector(`#${id}-name`);
@@ -54,7 +54,7 @@ export function mountChoice(card, api, { id, title, shape, key, presets, set, pa
   swatches.addEventListener("click", (e) => {
     const radio = e.target.closest('[role="radio"]');
     if (radio && api.settings.get()[key] !== radio.dataset.value) {
-      api.change({ [key]: radio.dataset.value }, () => set(radio.dataset.value));
+      api.change({ [key]: radio.dataset.value }, () => ipc.setSetting(key, radio.dataset.value));
     }
   });
 

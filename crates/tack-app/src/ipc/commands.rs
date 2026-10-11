@@ -7,6 +7,7 @@
 //! the board keeps animating meanwhile.
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tack_core::{Print, Rect};
 use tauri::AppHandle;
 
@@ -133,12 +134,6 @@ pub fn set_tip(app: AppHandle, rect: Option<UiRect>) {
     reveal::set_tip(&app, rect);
 }
 
-/// Only a hint; the pointer poller is the authority on hovering.
-#[tauri::command]
-pub fn set_hovering(hovering: bool) {
-    let _ = hovering;
-}
-
 /// Text dropped on the board: pinned as a note (a link if it is one). Async:
 /// it saves a file and may wait to reveal.
 #[tauri::command]
@@ -204,59 +199,31 @@ pub fn settings_state(app: AppHandle) -> SettingsView {
     settings_apply::view(&app)
 }
 
-/// The settings below each save, update the tray and send `settings:changed`
-/// to every window; each answers with the new settings. They are quick, so
-/// plain commands.
+/// One setting by its `SettingsView` name: "sound", "edgeReveal", "autostart"
+/// or "updatesCheck" (a boolean), "reveal", "felt", "frame" or "paper" (an id).
+/// It is saved, the tray is updated and `settings:changed` goes to every
+/// window; the answer is the new settings. An unknown name or a value of the
+/// wrong type is an error that changes nothing; an id that is not valid just
+/// changes nothing. A plain command: it is quick.
 #[tauri::command]
-pub fn set_sound(app: AppHandle, on: bool) -> SettingsView {
-    settings_apply::set_sound(&app, on)
-}
-
-#[tauri::command]
-pub fn set_edge_reveal(app: AppHandle, on: bool) -> SettingsView {
-    settings_apply::set_edge_reveal(&app, on)
-}
-
-#[tauri::command]
-pub fn set_autostart(app: AppHandle, on: bool) -> SettingsView {
-    settings_apply::set_autostart(&app, on)
-}
-
-/// "instant", "normal" or "slow"; anything else changes nothing.
-#[tauri::command]
-pub fn set_reveal(app: AppHandle, speed: String) -> SettingsView {
-    settings_apply::set_reveal(&app, &speed)
-}
-
-/// A preset's id, "accent" or "#rrggbb"; anything else changes nothing.
-#[tauri::command]
-pub fn set_felt(app: AppHandle, value: String) -> SettingsView {
-    settings_apply::set_felt(&app, &value)
-}
-
-/// A frame finish's id ("aluminium", "graphite", "brass", "silver"); anything
-/// else changes nothing.
-#[tauri::command]
-pub fn set_frame(app: AppHandle, value: String) -> SettingsView {
-    settings_apply::set_frame(&app, &value)
-}
-
-/// A note paper's id ("white", "cream", "butter", "blush", "sky", "mint");
-/// anything else changes nothing.
-#[tauri::command]
-pub fn set_paper(app: AppHandle, value: String) -> SettingsView {
-    settings_apply::set_paper(&app, &value)
+pub fn set_setting(app: AppHandle, key: String, value: Value) -> Result<SettingsView, String> {
+    Ok(match (key.as_str(), &value) {
+        ("sound", Value::Bool(on)) => settings_apply::set_sound(&app, *on),
+        ("edgeReveal", Value::Bool(on)) => settings_apply::set_edge_reveal(&app, *on),
+        ("autostart", Value::Bool(on)) => settings_apply::set_autostart(&app, *on),
+        ("updatesCheck", Value::Bool(on)) => settings_apply::set_updates_check(&app, *on),
+        ("reveal", Value::String(id)) => settings_apply::set_reveal(&app, id),
+        ("felt", Value::String(id)) => settings_apply::set_felt(&app, id),
+        ("frame", Value::String(id)) => settings_apply::set_frame(&app, id),
+        ("paper", Value::String(id)) => settings_apply::set_paper(&app, id),
+        _ => return Err(format!("no setting {key:?} takes {value}")),
+    })
 }
 
 /// The board colour, frame and note paper back to their defaults.
 #[tauri::command]
 pub fn reset_appearance(app: AppHandle) -> SettingsView {
     settings_apply::reset_appearance(&app)
-}
-
-#[tauri::command]
-pub fn set_updates_check(app: AppHandle, on: bool) -> SettingsView {
-    settings_apply::set_updates_check(&app, on)
 }
 
 /// Where updates stand. The window also hears `updates:status` on every change.

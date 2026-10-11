@@ -25,51 +25,6 @@ export const EVENTS = Object.freeze({
   SETTINGS_SECTION: "settings:section",      // string: an open Settings window is asked to show that page or section ("phone", "appearance", "shortcuts", "updates")
 });
 
-/** Command names, UI -> backend. Mirrors crates/tack-app/src/ipc/commands.rs. */
-export const COMMANDS = Object.freeze({
-  BOARD_READY: "board_ready",
-  SET_BOARD_RECT: "set_board_rect",
-  COPY_PRINT: "copy_print",
-  OPEN_PRINT: "open_print",
-  EDIT_PRINT: "edit_print",
-  START_DRAG: "start_drag",
-  DISCARD_PRINT: "discard_print",
-  CONTEXT_MENU: "context_menu",
-  SET_HOVERING: "set_hovering",
-  SET_KEPT: "set_kept",
-  SET_TIP: "set_tip",
-  PIN_TEXT: "pin_text",
-  PIN_IMAGE: "pin_image",
-  TAKE_FOCUS: "take_focus",
-  RELEASE_FOCUS: "release_focus",
-  HIDE_BOARD: "hide_board",
-  // The settings window (its own window). Each setter answers with the new SettingsView.
-  SETTINGS_STATE: "settings_state",
-  SET_SOUND: "set_sound",
-  SET_EDGE_REVEAL: "set_edge_reveal",
-  SET_AUTOSTART: "set_autostart",
-  SET_REVEAL: "set_reveal",
-  SET_FELT: "set_felt",
-  SET_FRAME: "set_frame",
-  SET_PAPER: "set_paper",
-  RESET_APPEARANCE: "reset_appearance",
-  SET_UPDATES_CHECK: "set_updates_check",
-  UPDATE_STATUS: "update_status",
-  CHECK_FOR_UPDATES: "check_for_updates",
-  INSTALL_UPDATE: "install_update",
-  CLOSE_SETTINGS: "close_settings",
-  // The Shortcuts section of the Settings page.
-  SHORTCUTS_STATE: "shortcuts_state",
-  SET_SHORTCUTS: "set_shortcuts",
-  PAUSE_SHORTCUTS: "pause_shortcuts",
-  // The phone page of the Settings window.
-  PHONE_STATE: "phone_state",
-  SET_PHONE: "set_phone",
-  ANSWER_DEVICE: "answer_device",
-  FORGET_DEVICE: "forget_device",
-  OPEN_NETBIRD_DOWNLOAD: "open_netbird_download",
-});
-
 /**
  * @typedef {{ id: string, name: string, thumb: string, width: number, height: number,
  *             kept: boolean, keptAt: number | null, pinnedAt: number,
@@ -148,61 +103,57 @@ export function on(name, fn) {
 }
 
 /** @returns {Promise<{ prints: Print[], sound: boolean, settings: SettingsView } | null>} */
-export const boardReady = () => invoke(COMMANDS.BOARD_READY);
+export const boardReady = () => invoke("board_ready");
 /** The board rect in physical px relative to the window. */
-export const setBoardRect = (rect) => invoke(COMMANDS.SET_BOARD_RECT, rect);
-export const copyPrint = (id) => invoke(COMMANDS.COPY_PRINT, { id });
-export const openPrint = (id) => invoke(COMMANDS.OPEN_PRINT, { id });
-export const editPrint = (id) => invoke(COMMANDS.EDIT_PRINT, { id });
-export const startDrag = (id) => invoke(COMMANDS.START_DRAG, { id });
-export const discardPrint = (id) => invoke(COMMANDS.DISCARD_PRINT, { id });
+export const setBoardRect = (rect) => invoke("set_board_rect", rect);
+export const copyPrint = (id) => invoke("copy_print", { id });
+export const openPrint = (id) => invoke("open_print", { id });
+export const editPrint = (id) => invoke("edit_print", { id });
+export const startDrag = (id) => invoke("start_drag", { id });
+export const discardPrint = (id) => invoke("discard_print", { id });
 /**
  * The native menu for a print. `at`: where to show it, physical px relative
  * to the window (a keyboard request); null: at the pointer.
  */
-export const contextMenu = (id, at = null) => invoke(COMMANDS.CONTEXT_MENU, { id, at });
-export const setHovering = (hovering) => invoke(COMMANDS.SET_HOVERING, { hovering });
-export const setKept = (id, kept) => invoke(COMMANDS.SET_KEPT, { id, kept });
+export const contextMenu = (id, at = null) => invoke("context_menu", { id, at });
+export const setKept = (id, kept) => invoke("set_kept", { id, kept });
 /** The one-time tip shows at `rect` (physical px relative to the window), or `null`: closed. */
-export const setTip = (rect) => invoke(COMMANDS.SET_TIP, { rect });
+export const setTip = (rect) => invoke("set_tip", { rect });
 /** Pins text dropped on the board (a lone http(s) URL becomes a link note). */
-export const pinText = (text) => invoke(COMMANDS.PIN_TEXT, { text });
+export const pinText = (text) => invoke("pin_text", { text });
 /** Pins a PNG or JPEG dropped on the board: `data` is base64, no data: prefix. */
-export const pinImage = (name, data) => invoke(COMMANDS.PIN_IMAGE, { name, data });
+export const pinImage = (name, data) => invoke("pin_image", { name, data });
 /** A keyboard open: the window takes the keyboard focus (it is never activated otherwise). */
-export const takeFocus = () => invoke(COMMANDS.TAKE_FOCUS);
+export const takeFocus = () => invoke("take_focus");
 /** Gives the focus back to the app that had it. */
-export const releaseFocus = () => invoke(COMMANDS.RELEASE_FOCUS);
+export const releaseFocus = () => invoke("release_focus");
 /** Esc: tuck the board (the backend sends board:tuck). */
-export const hideBoard = () => invoke(COMMANDS.HIDE_BOARD);
+export const hideBoard = () => invoke("hide_board");
 
 // The settings window. Each setter answers with the new SettingsView, and
 // every window gets EVENTS.SETTINGS. A speed, colour, finish or paper that is
-// not valid changes nothing.
+// not valid changes nothing; an unknown setting or a value of the wrong type
+// is refused (a logged failure).
 /** @returns {Promise<SettingsView | null>} */
-export const settingsState = () => invoke(COMMANDS.SETTINGS_STATE);
-export const setSound = (on) => invoke(COMMANDS.SET_SOUND, { on });
-export const setEdgeReveal = (on) => invoke(COMMANDS.SET_EDGE_REVEAL, { on });
-export const setAutostart = (on) => invoke(COMMANDS.SET_AUTOSTART, { on });
-/** @param {"instant" | "normal" | "slow"} speed */
-export const setReveal = (speed) => invoke(COMMANDS.SET_REVEAL, { speed });
-/** @param {string} value a preset id, "accent" or "#rrggbb" */
-export const setFelt = (value) => invoke(COMMANDS.SET_FELT, { value });
-/** @param {string} value a frame preset's id */
-export const setFrame = (value) => invoke(COMMANDS.SET_FRAME, { value });
-/** @param {string} value a paper preset's id */
-export const setPaper = (value) => invoke(COMMANDS.SET_PAPER, { value });
+export const settingsState = () => invoke("settings_state");
+/**
+ * Changes one setting: a boolean for "sound", "edgeReveal", "autostart" or
+ * "updatesCheck"; an id for "reveal" ("instant", "normal" or "slow"), "felt"
+ * (a preset id, "accent" or "#rrggbb"), "frame" or "paper" (a preset's id).
+ * @param {string} key a SettingsView property
+ * @param {boolean | string} value
+ */
+export const setSetting = (key, value) => invoke("set_setting", { key, value });
 /** The board colour, frame and note paper back to their defaults; the other settings stay. */
-export const resetAppearance = () => invoke(COMMANDS.RESET_APPEARANCE);
-export const setUpdatesCheck = (on) => invoke(COMMANDS.SET_UPDATES_CHECK, { on });
+export const resetAppearance = () => invoke("reset_appearance");
 // Updates. Each answers with the new UpdateStatus, and the progress comes as EVENTS.UPDATES_STATUS.
 /** @returns {Promise<UpdateStatus | null>} */
-export const updateStatus = () => invoke(COMMANDS.UPDATE_STATUS);
+export const updateStatus = () => invoke("update_status");
 /** Looks for a new version now. @returns {Promise<UpdateStatus | null>} */
-export const checkForUpdates = () => invoke(COMMANDS.CHECK_FOR_UPDATES);
+export const checkForUpdates = () => invoke("check_for_updates");
 /** Downloads and installs the version found. @returns {Promise<UpdateStatus | null>} */
-export const installUpdate = () => invoke(COMMANDS.INSTALL_UPDATE);
-export const closeSettings = () => invoke(COMMANDS.CLOSE_SETTINGS);
+export const installUpdate = () => invoke("install_update");
+export const closeSettings = () => invoke("close_settings");
 
 /**
  * @typedef {{ chord: string, status: "ok" | "in-use" | "off" | "invalid" }} Shortcut
@@ -210,21 +161,21 @@ export const closeSettings = () => invoke(COMMANDS.CLOSE_SETTINGS);
  * with "+", e.g. "Win+Alt+S"; "" is off.
  */
 /** @returns {Promise<{ toggle: Shortcut, pin: Shortcut, defaults: { toggle: string, pin: string } } | null>} */
-export const shortcutsState = () => invoke(COMMANDS.SHORTCUTS_STATE);
+export const shortcutsState = () => invoke("shortcuts_state");
 /**
  * Applies and saves both shortcuts, only if every one is free ("ok") or off.
  * @returns {Promise<{ toggle: Shortcut, pin: Shortcut } | null>} the statuses of the requested chords
  */
-export const setShortcuts = (toggle, pin) => invoke(COMMANDS.SET_SHORTCUTS, { toggle, pin });
+export const setShortcuts = (toggle, pin) => invoke("set_shortcuts", { toggle, pin });
 /** While a chord is being captured, Tack's own hotkeys must not fire. */
-export const pauseShortcuts = (paused) => invoke(COMMANDS.PAUSE_SHORTCUTS, { paused });
+export const pauseShortcuts = (paused) => invoke("pause_shortcuts", { paused });
 
 // The phone page. Each answers with the new PhoneState (settings/pages/phone.js).
-export const phoneState = () => invoke(COMMANDS.PHONE_STATE);
-export const setPhone = (on) => invoke(COMMANDS.SET_PHONE, { on });
-export const answerDevice = (key, allow) => invoke(COMMANDS.ANSWER_DEVICE, { key, allow });
-export const forgetDevice = (key) => invoke(COMMANDS.FORGET_DEVICE, { key });
-export const openNetbirdDownload = () => invoke(COMMANDS.OPEN_NETBIRD_DOWNLOAD);
+export const phoneState = () => invoke("phone_state");
+export const setPhone = (on) => invoke("set_phone", { on });
+export const answerDevice = (key, allow) => invoke("answer_device", { key, allow });
+export const forgetDevice = (key) => invoke("forget_device", { key });
+export const openNetbirdDownload = () => invoke("open_netbird_download");
 
 /** Debug builds only: tells the backend's stress test what the page just did ("reveal", "pin-on", "tock"). No-op unless `window.__tackDebug` is set. */
 export function debugAck(what, { id = null, queued = null } = {}) {

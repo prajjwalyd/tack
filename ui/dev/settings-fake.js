@@ -96,6 +96,10 @@ const stop = () => { timers.forEach(clearTimeout); timers = []; };
 // A setter: changes the fake settings, tells the page (as every window is told) and answers.
 const set = (patch) => { Object.assign(settings, patch); emit("settings:changed", view()); return view(); };
 
+// What set_setting takes, as commands.rs checks it: a key's type (else an error), then, for an id, that it is a valid one (else nothing changes).
+const SETTING_TYPES = { sound: "boolean", edgeReveal: "boolean", autostart: "boolean", updatesCheck: "boolean", reveal: "string", felt: "string", frame: "string", paper: "string" };
+const SETTING_VALID = { reveal: (v) => v in SCALES, felt: validFelt, frame: validFrame, paper: validPaper };
+
 function check() {
   stop();
   later(() => setStatus({ ...BASE, checkedAt: Date.now(), ...STATES[nextCheck] }), 1200);
@@ -116,15 +120,12 @@ function install() {
 
 const commands = {
   settings_state: () => view(),
-  set_sound: ({ on }) => set({ sound: on }),
-  set_edge_reveal: ({ on }) => set({ edgeReveal: on }),
-  set_autostart: ({ on }) => set({ autostart: on }),
-  set_reveal: ({ speed }) => (speed in SCALES ? set({ reveal: speed }) : view()),
-  set_felt: ({ value }) => (validFelt(value) ? set({ felt: value.toLowerCase() }) : view()),
-  set_frame: ({ value }) => (validFrame(value) ? set({ frame: value }) : view()),
-  set_paper: ({ value }) => (validPaper(value) ? set({ paper: value }) : view()),
+  set_setting: ({ key, value }) => {
+    if (typeof value !== SETTING_TYPES[key]) throw new Error(`no setting ${key} takes ${value}`);
+    if (SETTING_VALID[key] && !SETTING_VALID[key](value)) return view();
+    return set({ [key]: key === "felt" ? value.toLowerCase() : value });
+  },
   reset_appearance: () => set(DEFAULT_APPEARANCE),
-  set_updates_check: ({ on }) => set({ updatesCheck: on }),
   shortcuts_state: () => ({ toggle: shortcut(chords.toggle), pin: shortcut(chords.pin), defaults: { ...DEFAULT_CHORDS } }),
   set_shortcuts: ({ toggle, pin }) => {
     const result = { toggle: shortcut(toggle), pin: shortcut(pin) };
