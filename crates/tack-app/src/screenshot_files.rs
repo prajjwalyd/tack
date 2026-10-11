@@ -19,7 +19,7 @@ use tauri::AppHandle;
 
 use crate::ipc::events::Removal;
 use crate::prints::{self, Pin};
-use crate::reveal;
+use crate::reveal::{self, after};
 use crate::state::lock;
 
 /// How long a fresh file may stay undecodable while it is still being written.
@@ -56,12 +56,10 @@ fn arrived(app: &AppHandle, path: PathBuf) {
     if !lock(app).decoding.insert(key.clone()) {
         return;
     }
-    let handle = app.clone();
-    let done = key.clone();
-    let started = spawn("tack-decode", move || {
-        let app = handle;
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
         let result = thumbnail::make_patiently(&path, WRITE_PATIENCE);
-        lock(&app).decoding.remove(&done);
+        lock(&app).decoding.remove(&key);
         match result {
             Ok(t) => {
                 if let Pin::New(aged) = prints::pin(&app, path, t, Origin::Folder, prints::live(), None) {
@@ -75,9 +73,6 @@ fn arrived(app: &AppHandle, path: PathBuf) {
             Err(e) => eprintln!("tack: cannot read {}: {e}", path.display()),
         }
     });
-    if !started {
-        lock(app).decoding.remove(&key);
-    }
 }
 
 /// A pinned file disappeared: unpin it, unless it is back after the grace
@@ -87,8 +82,7 @@ fn gone(app: &AppHandle, path: PathBuf) {
         return;
     }
     let app = app.clone();
-    spawn("tack-gone", move || {
-        std::thread::sleep(REMOVE_GRACE);
+    after(REMOVE_GRACE, move || {
         if path.exists() {
             refresh(&app, &path);
         } else {
@@ -107,28 +101,10 @@ fn changed(app: &AppHandle, path: PathBuf) {
         }
     }
     let handle = app.clone();
-    let done = key.clone();
-    let started = spawn("tack-refresh", move || {
-        std::thread::sleep(UPDATE_SETTLE);
-        lock(&handle).decoding.remove(&done);
+    after(UPDATE_SETTLE, move || {
+        lock(&handle).decoding.remove(&key);
         refresh(&handle, &path);
     });
-    if !started {
-        lock(app).decoding.remove(&key);
-    }
-}
-
-/// Runs `job` on a short-lived thread of its own. If no thread can be
-/// started (the process is out of them), the event is logged and skipped
-/// rather than taking the watcher down. Returns whether it started.
-fn spawn(name: &str, job: impl FnOnce() + Send + 'static) -> bool {
-    match std::thread::Builder::new().name(name.into()).spawn(job) {
-        Ok(_) => true,
-        Err(e) => {
-            eprintln!("tack: cannot start {name}, skipping this file event: {e}");
-            false
-        }
-    }
 }
 
 fn refresh(app: &AppHandle, path: &Path) {
@@ -161,7 +137,7 @@ fn refresh(app: &AppHandle, path: &Path) {
 /// the next start. Then checks the history once, for anything that grew
 /// too old meanwhile.
 pub fn restore(app: AppHandle) {
-    let started = spawn("tack-restore", move || {
+    tauri::async_runtime::spawn_blocking(move || {
         let saved = lock(&app).to_restore();
         if saved.is_empty() {
             prints::age_out(&app);
@@ -216,9 +192,6 @@ pub fn restore(app: AppHandle) {
         }
         prints::age_out(&app);
     });
-    if !started {
-        eprintln!("tack: last session's prints stay in board.json for the next start");
-    }
 }
 
 /// An entry Tack itself could have written: a picture for a print, a text

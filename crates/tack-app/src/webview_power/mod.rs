@@ -22,7 +22,7 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
 use webview2_com::TrySuspendCompletedHandler;
 use windows::core::{Interface, BOOL};
 
-use crate::reveal::WINDOW_LABEL;
+use crate::reveal::{after, WINDOW_LABEL};
 
 /// The longest a reveal waits for a pending suspend to complete before it
 /// resumes the page and goes ahead regardless.
@@ -190,8 +190,7 @@ pub fn wake(app: &AppHandle, then: impl FnOnce() + 'static) {
     INTERRUPTED.set(true);
     ON_AWAKE.with(|q| q.borrow_mut().push(Box::new(then)));
     let app = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(SUSPEND_PATIENCE);
+    after(SUSPEND_PATIENCE, move || {
         let _ = app.run_on_main_thread(|| {
             if ON_AWAKE.with(|q| q.borrow().is_empty()) {
                 return;

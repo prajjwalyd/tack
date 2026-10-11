@@ -72,11 +72,7 @@ pub fn start(app: &AppHandle) {
 
     let app = app.clone();
     let started = history::now_ms();
-    let spawned =
-        std::thread::Builder::new().name("tack-updates".into()).spawn(move || check_when_due(app, handle, started));
-    if let Err(e) = spawned {
-        eprintln!("tack: cannot start the update checker: {e}");
-    }
+    let _ = std::thread::Builder::new().name("tack-updates".into()).spawn(move || check_when_due(app, handle, started));
 }
 
 /// The checker's loop: ask the schedule, then check or sleep.

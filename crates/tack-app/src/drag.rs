@@ -12,7 +12,7 @@ use tauri::AppHandle;
 use crate::captures;
 use crate::ipc::events::{self, Removal};
 use crate::prints;
-use crate::reveal::board_hwnd;
+use crate::reveal::{after, board_hwnd};
 use crate::state::lock;
 
 /// Delays (ms) at which to test whether the dropped file still exists;
@@ -57,16 +57,12 @@ pub fn start(app: &AppHandle, id: String) {
 fn finish(app: &AppHandle, id: String, path: PathBuf) {
     lock(app).view.dragging = None;
     events::print_drag_ended(app, &id);
-    let app = app.clone();
-    std::thread::spawn(move || {
-        let mut waited = 0;
-        for at in RECHECKS {
-            std::thread::sleep(Duration::from_millis(at - waited));
-            waited = at;
+    for at in RECHECKS {
+        let (app, path) = (app.clone(), path.clone());
+        after(Duration::from_millis(at), move || {
             if !path.exists() {
                 prints::remove_path(&app, &path, Removal::Quiet);
-                return;
             }
-        }
-    });
+        });
+    }
 }

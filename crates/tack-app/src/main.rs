@@ -147,7 +147,6 @@ fn main() {
                 autostart::set(true);
             }
             screenshot_files::restore(handle.clone());
-            prints::age_out_hourly(handle.clone());
             screenshot_files::watch(handle.clone(), screenshots::folder());
             screenshot_files::watch(handle.clone(), capture::captures_folder());
             screenshot_files::watch(handle.clone(), note::notes_folder());
