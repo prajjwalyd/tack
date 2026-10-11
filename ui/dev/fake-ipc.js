@@ -5,7 +5,7 @@
 // buttons in preview.html (also window.preview). Uses the app's own command and
 // event names (../scripts/ipc.js).
 
-import { COMMANDS, EVENTS } from "../scripts/ipc.js";
+import { EVENTS } from "../scripts/ipc.js";
 import { DEFAULT_APPEARANCE, FRAME_PRESETS, PAPER_PRESETS, PRESETS, SCALES, validFelt, validFrame, validPaper } from "./appearance-presets.js";
 
 const handlers = new Map();
@@ -207,22 +207,22 @@ const settings = {
 const view = () => ({ ...settings, sound, motionScale: SCALES[settings.reveal] });
 
 const commands = {
-  [COMMANDS.BOARD_READY]: () => {
+  board_ready: () => {
     // Reveal shortly after the page is listening, like the backend would.
     setTimeout(() => preview.reveal(), 350);
     return { prints: prints.slice(), sound, settings: view() };
   },
-  [COMMANDS.SET_BOARD_RECT]: ({ x, y, w, h }) => {
+  set_board_rect: ({ x, y, w, h }) => {
     const dpr = window.devicePixelRatio || 1;
     const r = document.getElementById("rect");
     if (r) Object.assign(r.style, { left: x / dpr + "px", top: y / dpr + "px", width: w / dpr + "px", height: h / dpr + "px" });
     if (r) r.querySelector("span").textContent = `board rect ${x},${y} ${w}×${h} phys px`;
   },
-  [COMMANDS.COPY_PRINT]: ({ id }) => setTimeout(() => emit(EVENTS.PRINT_COPIED, { id }), 40),
-  [COMMANDS.OPEN_PRINT]: ({ id }) => log(`(would open ${prints.find((x) => x.id === id)?.note?.link || id})`),
-  [COMMANDS.EDIT_PRINT]: ({ id }) => log(`(would edit ${prints.find((x) => x.id === id)?.name || id})`),
-  [COMMANDS.PIN_TEXT]: ({ text }) => { if (String(text || "").trim()) pin(makeNote(text)); },
-  [COMMANDS.PIN_IMAGE]: async ({ name, data }) => {
+  copy_print: ({ id }) => setTimeout(() => emit(EVENTS.PRINT_COPIED, { id }), 40),
+  open_print: ({ id }) => log(`(would open ${prints.find((x) => x.id === id)?.note?.link || id})`),
+  edit_print: ({ id }) => log(`(would edit ${prints.find((x) => x.id === id)?.name || id})`),
+  pin_text: ({ text }) => { if (String(text || "").trim()) pin(makeNote(text)); },
+  pin_image: async ({ name, data }) => {
     const type = /\.jpe?g$/i.test(name || "") ? "image/jpeg" : "image/png";
     const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
     let bmp;
@@ -239,18 +239,18 @@ const commands = {
     });
     return null;
   },
-  [COMMANDS.TAKE_FOCUS]: () => {},
-  [COMMANDS.RELEASE_FOCUS]: () => {},
-  [COMMANDS.HIDE_BOARD]: () => { setTimeout(() => emit(EVENTS.TUCK), 10); },
-  [COMMANDS.START_DRAG]: ({ id }) => {
+  take_focus: () => {},
+  release_focus: () => {},
+  hide_board: () => { setTimeout(() => emit(EVENTS.TUCK), 10); },
+  start_drag: ({ id }) => {
     setTimeout(() => emit(EVENTS.PRINT_DRAGGING, { id }), 30);
     setTimeout(() => emit(EVENTS.PRINT_DRAG_ENDED, { id }), 1600);
   },
-  [COMMANDS.DISCARD_PRINT]: ({ id }) => remove(id, "fall"),
-  [COMMANDS.CONTEXT_MENU]: ({ id, at }) => {
+  discard_print: ({ id }) => remove(id, "fall"),
+  context_menu: ({ id, at }) => {
     if (at) console.info(`[fake-ipc] context_menu ${id} at ${at.x},${at.y} physical px`);
   },
-  [COMMANDS.SET_KEPT]: ({ id, kept }) => {
+  set_kept: ({ id, kept }) => {
     const it = prints.find((x) => x.id === id);
     if (!it) return;
     const before = prints.map((x) => x.id).join();
@@ -285,7 +285,7 @@ function pin(print, animate = true) {
 window.__TAURI__ = {
   core: {
     invoke: (cmd, args = {}) => {
-      if (cmd !== COMMANDS.SET_BOARD_RECT) log(`invoke ${cmd} ${JSON.stringify(args).slice(0, 120)}`);
+      if (cmd !== "set_board_rect") log(`invoke ${cmd} ${JSON.stringify(args).slice(0, 120)}`);
       const fn = commands[cmd];
       if (!fn) return Promise.reject(new Error(`unknown command ${cmd}`));
       return Promise.resolve(fn(args) ?? null);
@@ -312,12 +312,12 @@ const preview = {
   nothingSelected: () => emit(EVENTS.NOTICE, { text: "Nothing selected" }),
   tuck: () => emit(EVENTS.TUCK),
   addQuiet: () => add(false),
-  fall: () => prints.length && commands[COMMANDS.DISCARD_PRINT]({ id: anyPrint().id }),
-  keep: () => { if (!prints.length) return; const it = anyPrint(); commands[COMMANDS.SET_KEPT]({ id: it.id, kept: !it.kept }); },
+  fall: () => prints.length && commands.discard_print({ id: anyPrint().id }),
+  keep: () => { if (!prints.length) return; const it = anyPrint(); commands.set_kept({ id: it.id, kept: !it.kept }); },
   quiet: () => prints.length && remove(anyPrint().id, "quiet"),
   copied: () => prints.length && emit(EVENTS.PRINT_COPIED, { id: anyPrint().id }),
   gust: () => emit(EVENTS.GUST),
-  drag: () => prints.length && commands[COMMANDS.START_DRAG]({ id: prints[prints.length - 1].id }),
+  drag: () => prints.length && commands.start_drag({ id: prints[prints.length - 1].id }),
   update: () => {
     if (!prints.length) return;
     const it = anyPrint();
