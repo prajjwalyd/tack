@@ -19,7 +19,7 @@ use windows::Win32::Foundation::POINT;
 
 use crate::ipc::events;
 use crate::state::lock;
-use crate::{webview_power, webview_privacy};
+use crate::{keyboard, webview_power, webview_privacy};
 
 /// The board window's label in tauri.conf.json.
 pub const WINDOW_LABEL: &str = "board";
@@ -426,6 +426,9 @@ pub fn tuck(app: &AppHandle) {
         (generation, hide_after)
     };
     events::tuck(app);
+    // The keyboard goes back to the window that had it, if the board had it.
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || keyboard::release(&handle));
     trace!("tuck gen={generation}: board:tuck sent, the window hides in {hide_after:?}");
     let handle = app.clone();
     std::thread::spawn(move || {
