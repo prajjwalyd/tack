@@ -2,7 +2,6 @@
 //! for the clipboard, the little bitmap that follows the pointer in a drag,
 //! and the pixel hash that tells one picture from another of the same size.
 
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{BufRead, Cursor, Seek};
 use std::path::Path;
 use std::sync::{Condvar, Mutex};
@@ -122,29 +121,26 @@ pub fn for_flight(img: &DynamicImage, hash: u64) -> Result<(String, Thumb), Stri
 
 /// A hash of the picture's size and its pixels' colours, alpha left out, so
 /// the same picture hashes alike off the clipboard (often RGBA) and out of
-/// a PNG (often RGB). Fed row by row the same way for every layout, since
-/// a hasher need not give the same result for differently split input.
+/// a PNG (often RGB). A pixel at a time, FxHash-style: it only has to tell
+/// pictures apart, and is far quicker than a keyed hash.
 pub fn pixel_hash(img: &DynamicImage) -> u64 {
-    let mut hasher = DefaultHasher::new();
     let (width, height) = img.dimensions();
-    (width, height).hash(&mut hasher);
-    if width == 0 || height == 0 {
-        return hasher.finish();
-    }
-    let row_len = width as usize * 3;
+    let hash = mix(mix(0, width), height);
     match img {
-        DynamicImage::ImageRgb8(rgb) => rgb.as_raw().chunks_exact(row_len).for_each(|row| hasher.write(row)),
-        DynamicImage::ImageRgba8(rgba) => {
-            let mut row = Vec::with_capacity(row_len);
-            for src in rgba.as_raw().chunks_exact(width as usize * 4) {
-                row.clear();
-                src.as_chunks::<4>().0.iter().for_each(|px| row.extend_from_slice(&px[..3]));
-                hasher.write(&row);
-            }
-        }
-        other => other.to_rgb8().as_raw().chunks_exact(row_len).for_each(|row| hasher.write(row)),
+        DynamicImage::ImageRgb8(rgb) => hash_pixels::<3>(hash, rgb.as_raw()),
+        DynamicImage::ImageRgba8(rgba) => hash_pixels::<4>(hash, rgba.as_raw()),
+        other => hash_pixels::<3>(hash, other.to_rgb8().as_raw()),
     }
-    hasher.finish()
+}
+
+/// Folds in each pixel's first three bytes; `N` is the bytes per pixel.
+fn hash_pixels<const N: usize>(hash: u64, raw: &[u8]) -> u64 {
+    raw.as_chunks::<N>().0.iter().fold(hash, |hash, px| mix(hash, u32::from_le_bytes([px[0], px[1], px[2], 0])))
+}
+
+/// One FxHash step.
+fn mix(hash: u64, word: u32) -> u64 {
+    (hash.rotate_left(5) ^ u64::from(word)).wrapping_mul(0x517c_c1b7_2722_0a95)
 }
 
 fn jpeg_data_url(img: &DynamicImage, quality: u8) -> Result<String, String> {
