@@ -2,8 +2,8 @@
 //!
 //! board.json is hand-editable and may come from a newer Tack, so a setting
 //! that is not a value Tack knows must read as its default and never stop the
-//! file loading. The choices that are a plain string (a frame finish, a note
-//! paper) share this.
+//! file loading. The choices that are a plain string (a board colour, a frame
+//! finish, a note paper, a speed) share this.
 
 use serde::de::IgnoredAny;
 use serde::{Deserialize, Deserializer};
