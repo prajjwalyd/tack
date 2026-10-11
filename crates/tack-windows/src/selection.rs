@@ -13,20 +13,17 @@ use std::time::{Duration, Instant};
 
 use image::DynamicImage;
 use windows::core::{w, PCWSTR};
-use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
-use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     MapVirtualKeyW, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_EXTENDEDKEY,
     KEYEVENTF_KEYUP, MAPVK_VK_TO_VSC, VIRTUAL_KEY, VK_C, VK_CONTROL, VK_INSERT, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
 };
-use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, FindWindowExW, GetForegroundWindow, RegisterClassW, HWND_MESSAGE,
-    WINDOW_EX_STYLE, WINDOW_STYLE, WNDCLASSW,
-};
+use windows::Win32::UI::WindowsAndMessaging::{FindWindowExW, GetForegroundWindow};
 
 use crate::clipboard::{self, Content, Restored};
 use crate::focus::{class_name, window_process};
 use crate::pointer;
+use crate::snipping_tool;
 
 /// How long the app in front gets to copy after Ctrl+C.
 const COPY_PATIENCE: Duration = Duration::from_millis(400);
@@ -206,12 +203,11 @@ pub fn grab(target: Option<Target>) -> Grab {
         log("no window was in front");
         return Grab::nothing();
     };
-    let Some(owner) = Owner::new() else { return Grab::nothing() };
     let _grabbing = Grabbing::start();
-    copy_and_read(owner.0, target)
+    copy_and_read(snipping_tool::listener(), target)
 }
 
-fn copy_and_read(owner: HWND, target: Target) -> Grab {
+fn copy_and_read(owner: Option<HWND>, target: Target) -> Grab {
     let before = clipboard::snapshot(owner);
     let mut sequence = clipboard::sequence();
     if !target.still_in_front() {
@@ -313,55 +309,6 @@ fn extended(vk: u16, up: bool) -> INPUT {
 fn send(inputs: &[INPUT]) -> bool {
     let sent = unsafe { SendInput(inputs, std::mem::size_of::<INPUT>() as i32) };
     sent as usize == inputs.len()
-}
-
-/// A hidden message-only window to own the clipboard while the user's
-/// contents are put back: `SetClipboardData` needs an owner.
-struct Owner(HWND);
-
-impl Owner {
-    fn new() -> Option<Owner> {
-        let class = w!("TackSelection");
-        unsafe {
-            let instance: HINSTANCE = GetModuleHandleW(PCWSTR::null()).ok()?.into();
-            let wc = WNDCLASSW {
-                lpfnWndProc: Some(wndproc),
-                hInstance: instance,
-                lpszClassName: class,
-                ..Default::default()
-            };
-            // Fails harmlessly once the class exists.
-            RegisterClassW(&wc);
-            let hwnd = CreateWindowExW(
-                WINDOW_EX_STYLE::default(),
-                class,
-                w!("Tack selection"),
-                WINDOW_STYLE::default(),
-                0,
-                0,
-                0,
-                0,
-                Some(HWND_MESSAGE),
-                None,
-                Some(instance),
-                None,
-            )
-            .ok()?;
-            Some(Owner(hwnd))
-        }
-    }
-}
-
-unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
-    DefWindowProcW(hwnd, msg, wparam, lparam)
-}
-
-impl Drop for Owner {
-    fn drop(&mut self) {
-        unsafe {
-            let _ = DestroyWindow(self.0);
-        }
-    }
 }
 
 /// Where waiting for the shortcut's keys to be let go stands.

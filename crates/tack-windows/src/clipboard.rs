@@ -150,8 +150,8 @@ pub(crate) struct Snapshot {
 
 /// Takes a snapshot of the clipboard, or `None` if it could not be opened
 /// or holds more than can sensibly be kept.
-pub(crate) fn snapshot(owner: HWND) -> Option<Snapshot> {
-    let _open = Open::new(Some(owner))?;
+pub(crate) fn snapshot(owner: Option<HWND>) -> Option<Snapshot> {
+    let _open = Open::new(owner)?;
     let mut formats = Vec::new();
     let mut unread = 0;
     let mut total = 0usize;
@@ -221,8 +221,8 @@ pub(crate) enum Restored {
 /// unless the snapshot carries its own markers for that. A copy that was
 /// marked private goes back with every marker, whether or not their data
 /// could be read, so it stays private.
-pub(crate) fn restore(owner: HWND, snapshot: &Snapshot, since: u32) -> Result<Restored, String> {
-    let _open = Open::new(Some(owner)).ok_or("the clipboard is busy")?;
+pub(crate) fn restore(owner: Option<HWND>, snapshot: &Snapshot, since: u32) -> Result<Restored, String> {
+    let _open = Open::new(owner).ok_or("the clipboard is busy")?;
     // Checked while it is open, so nobody can write in between.
     if sequence() != since {
         return Ok(Restored::Superseded);
@@ -322,13 +322,13 @@ pub(crate) fn has_picture() -> bool {
 /// Reads what is on the clipboard now: files, else text, else a picture.
 /// Text that is only whitespace or control characters counts as none, so a
 /// copied picture that also offers a placeholder character is a picture.
-pub(crate) fn read(owner: HWND) -> Content {
+pub(crate) fn read(owner: Option<HWND>) -> Content {
     for attempt in 0..PICTURE_TRIES {
         if attempt > 0 {
             std::thread::sleep(PICTURE_GAP);
         }
         let picture = {
-            let Some(_open) = Open::new(Some(owner)) else { return Content::Empty };
+            let Some(_open) = Open::new(owner) else { return Content::Empty };
             if is_private() {
                 return Content::Private;
             }
