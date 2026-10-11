@@ -58,12 +58,12 @@ h1:focus, .group-title:focus, .hero-title:focus { outline: none; }
 /* ---- the phone card: the one thing at the top ---- */
 .hero-card {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 1fr auto;
   align-items: center;
-  column-gap: 14px;
+  column-gap: 12px;
   padding: 14px 16px;
 }
-/* The phone icon's tile, on the card and the phone page. */
+/* The phone icon's tile, on the phone page. */
 .tile {
   display: grid;
   place-items: center;
@@ -228,26 +228,29 @@ kbd {
 .group > .card + .card { margin-top: 8px; }
 /* One grid for every row of swatches: nine columns, the most the board colours
    need, so a swatch of the frame or the paper sits exactly under the colour
-   of the same place. Wider than the block's text, so the longest names
-   (Burgundy, Aluminium) fit under their swatch. */
+   of the same place. A column is the swatch with the room for its selection
+   ring (32 + 2 x 4), spread over the block's text width: the first ring starts
+   where the title starts, the last ends where the name of the choice ends. */
 .swatches {
   display: grid;
-  grid-template-columns: repeat(9, minmax(0, 1fr));
-  margin: 0 -14px;
+  grid-template-columns: repeat(9, 40px);
+  justify-content: space-between;
 }
-.swatch-cell { position: relative; min-width: 0; }
+.swatch-cell { position: relative; }
+/* The button is wider than its column, so the names (Burgundy, Aluminium) fit and the hover reaches past the ring. */
 .swatch {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  padding: 10px 0 8px;
+  width: calc(100% + 10px);
+  margin-inline: -5px;
+  padding: 6px 0 4px;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--ink-2);
-  font: 400 11px/14px var(--font-small);
+  font: 400 10.5px/14px var(--font-small);
   letter-spacing: -.1px;
   white-space: nowrap;
   cursor: default;
@@ -293,9 +296,9 @@ kbd {
 .note-chip {
   display: grid;
   place-items: center;
-  width: 40px;
+  width: 32px;
   height: 32px;
-  border-radius: 3px;
+  border-radius: 4px;
   background:
     linear-gradient(180deg,
       transparent 7px, rgba(222, 72, 72, .62) 7px, rgba(222, 72, 72, .62) 8px, transparent 8px,
@@ -316,7 +319,7 @@ kbd {
 /* The system colour picker anchors to this, over the custom swatch's colour. */
 .picker {
   position: absolute;
-  top: 10px;
+  top: 6px;
   left: 50%;
   width: 32px;
   height: 32px;

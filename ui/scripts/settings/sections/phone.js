@@ -2,8 +2,6 @@
 // link stands (the PhoneState in `api.phone`) and holds one button that opens
 // the phone page, where the switch, the QR code and the allowed devices are.
 
-import { PHONE_SVG } from "../../phone-icon.js";
-
 /** What the card says until the backend has answered (or if it cannot). */
 const TAGLINE = "See your board on your phone, over NetBird.";
 
@@ -37,7 +35,6 @@ export function mount(host, api) {
   host.setAttribute("aria-labelledby", "phone-title");
   host.innerHTML = `
     <div class="card hero-card">
-      <span class="tile" aria-hidden="true">${PHONE_SVG}</span>
       <div class="hero-text">
         <h2 class="hero-title" id="phone-title" tabindex="-1">Use on your phone</h2>
         <p class="row-desc" id="phone-status"></p>
