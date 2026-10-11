@@ -13,6 +13,7 @@
 // (announce.js); its layers are hidden from screen readers.
 
 import * as ipc from "./ipc.js";
+import { ago } from "./age.js";
 import { announce, labelFor } from "./announce.js";
 import { abortFlight, launch, prepareFlight, restingBox, showTip } from "./flight.js";
 import { clearHover, endPress, forgetPendingClick, rehover, wireGestures } from "./gestures.js";
@@ -406,23 +407,8 @@ export function showCopied(print) {
   swing(print, Math.sign(print.tilt || 1) * 1.2);
 }
 
-const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: "long" });
-const dateFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
-const yearFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
-
-/** "Just now", "2 min ago", "3 hours ago", "Yesterday", "Tuesday", "12 Sep". */
-export function ageText(t, now = Date.now()) {
-  const s = Math.max(0, (now - t) / 1000);
-  if (s < 45) return "Just now";
-  const min = Math.max(1, Math.round(s / 60));
-  if (min < 60) return `${min} min ago`;
-  const a = new Date(t), b = new Date(now);
-  const days = Math.round((new Date(b.getFullYear(), b.getMonth(), b.getDate()) - new Date(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
-  if (days <= 0) { const h = Math.floor(min / 60); return h === 1 ? "1 hour ago" : `${h} hours ago`; }
-  if (days === 1) return "Yesterday";
-  if (days < 7) return dayFmt.format(a);
-  return (a.getFullYear() === b.getFullYear() ? dateFmt : yearFmt).format(a);
-}
+/** "Just now", "2 minutes ago", "3 hours ago", "Yesterday", "Tuesday", "12 Sep". */
+const ageText = (t) => { const s = ago(t); return s[0].toUpperCase() + s.slice(1); };
 
 /** Fills the hovered print's caption and keeps it current while it shows. */
 export function showCaption(print) {
