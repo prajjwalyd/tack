@@ -237,7 +237,7 @@ kbd {
   justify-content: space-between;
 }
 .swatch-cell { position: relative; }
-/* The button is wider than its column, so the names (Burgundy, Aluminium) fit and the hover reaches past the ring. */
+/* The button is wider than its column, so the names (Burgundy, Graphite) fit and the hover reaches past the ring. */
 .swatch {
   display: flex;
   flex-direction: column;

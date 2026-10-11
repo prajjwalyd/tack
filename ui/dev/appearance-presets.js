@@ -15,7 +15,7 @@ export const PRESETS = [
 ];
 
 export const FRAME_PRESETS = [
-  { id: "aluminium", name: "Aluminium" },
+  { id: "aluminium", name: "Alloy" },
   { id: "graphite", name: "Graphite" },
   { id: "brass", name: "Brass" },
   { id: "silver", name: "Silver" },

@@ -25,7 +25,7 @@ pub struct FramePreset {
 /// Every finish, in the order the list shows them. The first is the default
 /// (the brushed aluminium the board has always had).
 pub const PRESETS: [FramePreset; 4] = [
-    FramePreset { id: "aluminium", name: "Aluminium" },
+    FramePreset { id: "aluminium", name: "Alloy" },
     FramePreset { id: "graphite", name: "Graphite" },
     FramePreset { id: "brass", name: "Brass" },
     FramePreset { id: "silver", name: "Silver" },
@@ -143,7 +143,7 @@ mod tests {
         let json = serde_json::to_value(&PRESETS[..2]).unwrap();
         assert_eq!(
             json,
-            serde_json::json!([{ "id": "aluminium", "name": "Aluminium" }, { "id": "graphite", "name": "Graphite" }])
+            serde_json::json!([{ "id": "aluminium", "name": "Alloy" }, { "id": "graphite", "name": "Graphite" }])
         );
     }
 }
