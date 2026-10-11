@@ -44,15 +44,8 @@ export const COMMANDS = Object.freeze({
   HIDE_BOARD: "hide_board",
   // The settings window (its own window). Each setter answers with the new SettingsView.
   SETTINGS_STATE: "settings_state",
-  SET_SOUND: "set_sound",
-  SET_EDGE_REVEAL: "set_edge_reveal",
-  SET_AUTOSTART: "set_autostart",
-  SET_REVEAL: "set_reveal",
-  SET_FELT: "set_felt",
-  SET_FRAME: "set_frame",
-  SET_PAPER: "set_paper",
+  SET_SETTING: "set_setting",
   RESET_APPEARANCE: "reset_appearance",
-  SET_UPDATES_CHECK: "set_updates_check",
   UPDATE_STATUS: "update_status",
   CHECK_FOR_UPDATES: "check_for_updates",
   INSTALL_UPDATE: "install_update",
@@ -176,23 +169,20 @@ export const hideBoard = () => invoke(COMMANDS.HIDE_BOARD);
 
 // The settings window. Each setter answers with the new SettingsView, and
 // every window gets EVENTS.SETTINGS. A speed, colour, finish or paper that is
-// not valid changes nothing.
+// not valid changes nothing; an unknown setting or a value of the wrong type
+// is refused (a logged failure).
 /** @returns {Promise<SettingsView | null>} */
 export const settingsState = () => invoke(COMMANDS.SETTINGS_STATE);
-export const setSound = (on) => invoke(COMMANDS.SET_SOUND, { on });
-export const setEdgeReveal = (on) => invoke(COMMANDS.SET_EDGE_REVEAL, { on });
-export const setAutostart = (on) => invoke(COMMANDS.SET_AUTOSTART, { on });
-/** @param {"instant" | "normal" | "slow"} speed */
-export const setReveal = (speed) => invoke(COMMANDS.SET_REVEAL, { speed });
-/** @param {string} value a preset id, "accent" or "#rrggbb" */
-export const setFelt = (value) => invoke(COMMANDS.SET_FELT, { value });
-/** @param {string} value a frame preset's id */
-export const setFrame = (value) => invoke(COMMANDS.SET_FRAME, { value });
-/** @param {string} value a paper preset's id */
-export const setPaper = (value) => invoke(COMMANDS.SET_PAPER, { value });
+/**
+ * Changes one setting: a boolean for "sound", "edgeReveal", "autostart" or
+ * "updatesCheck"; an id for "reveal" ("instant", "normal" or "slow"), "felt"
+ * (a preset id, "accent" or "#rrggbb"), "frame" or "paper" (a preset's id).
+ * @param {string} key a SettingsView property
+ * @param {boolean | string} value
+ */
+export const setSetting = (key, value) => invoke(COMMANDS.SET_SETTING, { key, value });
 /** The board colour, frame and note paper back to their defaults; the other settings stay. */
 export const resetAppearance = () => invoke(COMMANDS.RESET_APPEARANCE);
-export const setUpdatesCheck = (on) => invoke(COMMANDS.SET_UPDATES_CHECK, { on });
 // Updates. Each answers with the new UpdateStatus, and the progress comes as EVENTS.UPDATES_STATUS.
 /** @returns {Promise<UpdateStatus | null>} */
 export const updateStatus = () => invoke(COMMANDS.UPDATE_STATUS);

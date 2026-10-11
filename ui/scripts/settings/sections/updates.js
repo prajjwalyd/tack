@@ -119,7 +119,7 @@ export function mount(host, api) {
   });
   autoSwitch.addEventListener("click", () => {
     const on = autoSwitch.getAttribute("aria-checked") !== "true";
-    api.change({ updatesCheck: on }, () => ipc.setUpdatesCheck(on));
+    api.change({ updatesCheck: on }, () => ipc.setSetting("updatesCheck", on));
   });
 
   api.updates.subscribe(render);

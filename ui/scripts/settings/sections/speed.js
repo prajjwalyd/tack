@@ -24,7 +24,7 @@ export function mount(host, api) {
   handleRadioKeys(seg);
   seg.addEventListener("click", (e) => {
     const radio = e.target.closest('[role="radio"]');
-    if (radio && radio.getAttribute("aria-checked") !== "true") api.change({ reveal: radio.dataset.value }, () => ipc.setReveal(radio.dataset.value));
+    if (radio && radio.getAttribute("aria-checked") !== "true") api.change({ reveal: radio.dataset.value }, () => ipc.setSetting("reveal", radio.dataset.value));
   });
   return { render: (view) => showRadio(seg, view.reveal) };
 }
