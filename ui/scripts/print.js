@@ -278,8 +278,7 @@ export function toggleKeep(print) {
   if (print.leaving) return;
   const kept = !print.data.kept;
   setKept(print, kept, true);
-  ipc.setKept(print.id, kept);
-  applyOrder(localOrder());   // the backend confirms with board:order-changed
+  ipc.setKept(print.id, kept);   // the backend answers with board:order-changed
 }
 
 let orderHoldUntil = 0;
@@ -296,23 +295,7 @@ export function flushOrder() {
   if (pendingOrder) { const o = pendingOrder; pendingOrder = null; applyOrder(o); }
 }
 
-/** The display order the backend would give: kept by keptAt, then newest first. */
-function localOrder() {
-  const idx = new Map(state.order.map((id, i) => [id, i]));
-  return state.order.map((id) => state.prints.get(id)).filter(Boolean).sort((a, b) => {
-    const ka = a.data.kept ? 0 : 1, kb = b.data.kept ? 0 : 1;
-    if (ka !== kb) return ka - kb;
-    if (!ka) {
-      const d = (a.data.keptAt ?? 0) - (b.data.keptAt ?? 0);
-      if (d) return d;
-    } else if (a.data.pinnedAt != null && b.data.pinnedAt != null && a.data.pinnedAt !== b.data.pinnedAt) {
-      return b.data.pinnedAt - a.data.pinnedAt;
-    }
-    return idx.get(a.id) - idx.get(b.id);
-  }).map((p) => p.id);
-}
-
-/** A new row order (board:order-changed, or a local keep). Prints that travel further than a step lift on the way. */
+/** A new row order (board:order-changed). Prints that travel further than a step lift on the way. */
 export function applyOrder(ids) {
   const wait = orderHoldUntil - performance.now();
   if (wait > 0 && state.revealed) {
