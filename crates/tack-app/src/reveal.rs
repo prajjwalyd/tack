@@ -19,7 +19,7 @@ use windows::Win32::Foundation::POINT;
 
 use crate::ipc::events;
 use crate::state::lock;
-use crate::{webview_power, webview_privacy};
+use crate::{keyboard, prints, screenshot_files, webview_power, webview_privacy};
 
 /// The board window's label in tauri.conf.json.
 pub const WINDOW_LABEL: &str = "board";
@@ -115,8 +115,7 @@ pub fn board_hwnd(app: &AppHandle) -> Option<HWND> {
 }
 
 /// Once at startup, on the main thread: creates the board window, makes sure
-/// it never takes focus and never shows up in Alt+Tab or the taskbar, and
-/// puts its web view to sleep once the UI is ready.
+/// it never takes focus and never shows up in Alt+Tab or the taskbar.
 pub fn init_window(app: &AppHandle) {
     if app.get_webview_window(WINDOW_LABEL).is_none() {
         if let Err(e) = create_window(app) {
@@ -131,7 +130,6 @@ pub fn init_window(app: &AppHandle) {
     }
     webview_privacy::apply(app);
     webview_power::attach(app);
-    sleep_once_ready(app);
     #[cfg(debug_assertions)]
     webview_power::debug::start_control(app);
 }
@@ -158,25 +156,30 @@ pub fn webview_data_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
     app.path().local_data_dir().ok().map(|local| local.join("Tack").join("WebView2"))
 }
 
-/// The window starts hidden, so its web view can sleep as soon as the UI has
-/// loaded the board. Polls only until then.
+/// Runs `job` once `delay` has passed, on the runtime's blocking pool, whose
+/// threads are reused rather than started for each delay.
+pub fn after(delay: Duration, job: impl FnOnce() + Send + 'static) {
+    tauri::async_runtime::spawn_blocking(move || {
+        std::thread::sleep(delay);
+        job();
+    });
+}
+
+/// Puts the hidden board's web view to sleep, once the UI has loaded the
+/// board (`board_ready`); later calls do nothing.
 ///
 /// Before it sleeps, the window is shown once, click-through, and the page
 /// draws the board unseen (`board:warm-up`): the first show of a WebView2
 /// window sets up its GPU surfaces and the first drawing of the board is
 /// slow, with no frame reaching the screen meanwhile. Paid here, the first
 /// reveal (or flight) is seen from its first frame.
-fn sleep_once_ready(app: &AppHandle) {
+pub fn sleep_once_ready(app: &AppHandle) {
+    static STARTED: AtomicBool = AtomicBool::new(false);
+    if STARTED.swap(true, Ordering::AcqRel) {
+        return;
+    }
     let app = app.clone();
-    std::thread::spawn(move || {
-        let give_up = Instant::now() + Duration::from_secs(60);
-        while !lock(&app).ui_ready {
-            if Instant::now() > give_up {
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(250));
-        }
-        std::thread::sleep(FIRST_SLEEP_DELAY);
+    after(FIRST_SLEEP_DELAY, move || {
         let generation = lock(&app).view.generation;
         // Still tucked, and not revealed and tucked again meanwhile.
         let untouched = move |app: &AppHandle| {
@@ -193,16 +196,18 @@ fn sleep_once_ready(app: &AppHandle) {
             overlay::show_at(hwnd, place.pos, place.size);
             events::warm_up(&handle);
         });
-        std::thread::sleep(WARM_UP);
         let handle = app.clone();
-        let _ = app.run_on_main_thread(move || {
-            if !untouched(&handle) {
-                return;
-            }
-            if let Some(hwnd) = board_hwnd(&handle) {
-                overlay::hide(hwnd);
-            }
-            webview_power::sleep();
+        after(WARM_UP, move || {
+            let inner = handle.clone();
+            let _ = handle.run_on_main_thread(move || {
+                if !untouched(&inner) {
+                    return;
+                }
+                if let Some(hwnd) = board_hwnd(&inner) {
+                    overlay::hide(hwnd);
+                }
+                webview_power::sleep();
+            });
         });
     });
 }
@@ -333,6 +338,7 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
     };
     // It may be asleep (tucked); the board needs it from now on.
     edge_reveal::wake();
+    catch_up(app);
 
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
@@ -361,6 +367,17 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
             #[cfg(debug_assertions)]
             webview_power::debug::probe_reveal(&app, started);
         });
+    });
+}
+
+/// What may have changed while the board was tucked, looked at as it comes
+/// down (so nothing runs while it is away): prints that grew too old, and
+/// Tack's own files edited or deleted elsewhere.
+fn catch_up(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        prints::age_out(&app);
+        screenshot_files::check_owned(&app);
     });
 }
 
@@ -426,10 +443,12 @@ pub fn tuck(app: &AppHandle) {
         (generation, hide_after)
     };
     events::tuck(app);
+    // The keyboard goes back to the window that had it, if the board had it.
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || keyboard::release(&handle));
     trace!("tuck gen={generation}: board:tuck sent, the window hides in {hide_after:?}");
     let handle = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(hide_after);
+    after(hide_after, move || {
         let inner = handle.clone();
         let _ = handle.run_on_main_thread(move || {
             {

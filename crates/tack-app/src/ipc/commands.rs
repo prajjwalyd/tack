@@ -48,6 +48,7 @@ pub fn board_ready(app: AppHandle) -> Ready {
         s.ui_ready = true;
         (s.board.prints().to_vec(), s.settings.sound)
     };
+    reveal::sleep_once_ready(&app);
     Ready { prints, sound, settings: settings_apply::view(&app) }
 }
 

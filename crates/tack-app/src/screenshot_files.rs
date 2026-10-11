@@ -3,23 +3,24 @@
 //! pinned file refreshes its thumbnail; if a pinned file is deleted or moved
 //! elsewhere, its print is unpinned with a short fade.
 //!
-//! The captures and notes folders are watched too, but only for edits and
-//! removals of pinned files: new files there are Tack's own. An edited note
-//! (Notepad saving it) shows its new text. Also puts last session's prints
-//! and notes back at startup.
+//! Tack's own files (captures, notes) have no watcher: each reveal looks them
+//! over instead ([`check_owned`]), so an edited note (Notepad saving it)
+//! shows its new text and a deleted one goes. Also puts last session's
+//! prints and notes back at startup.
 
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use tack_core::store::SavedPrint;
-use tack_core::{capture, files, note, thumbnail, Arrival, Kind, Origin, RevealReason};
+use tack_core::{files, note, thumbnail, Arrival, Kind, Origin, RevealReason};
 use tack_windows::screenshots::{self, FolderEvent};
 use tauri::AppHandle;
 
+use crate::captures;
 use crate::ipc::events::Removal;
 use crate::prints::{self, Pin};
-use crate::reveal;
+use crate::reveal::{self, after};
 use crate::state::lock;
 
 /// How long a fresh file may stay undecodable while it is still being written.
@@ -49,19 +50,14 @@ fn arrived(app: &AppHandle, path: PathBuf) {
     if !files::is_image(&path) {
         return;
     }
-    if capture::in_captures(&path) {
-        return;
-    }
     let key = files::path_key(&path);
     if !lock(app).decoding.insert(key.clone()) {
         return;
     }
-    let handle = app.clone();
-    let done = key.clone();
-    let started = spawn("tack-decode", move || {
-        let app = handle;
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
         let result = thumbnail::make_patiently(&path, WRITE_PATIENCE);
-        lock(&app).decoding.remove(&done);
+        lock(&app).decoding.remove(&key);
         match result {
             Ok(t) => {
                 if let Pin::New(aged) = prints::pin(&app, path, t, Origin::Folder, prints::live(), None) {
@@ -75,9 +71,6 @@ fn arrived(app: &AppHandle, path: PathBuf) {
             Err(e) => eprintln!("tack: cannot read {}: {e}", path.display()),
         }
     });
-    if !started {
-        lock(app).decoding.remove(&key);
-    }
 }
 
 /// A pinned file disappeared: unpin it, unless it is back after the grace
@@ -87,8 +80,7 @@ fn gone(app: &AppHandle, path: PathBuf) {
         return;
     }
     let app = app.clone();
-    spawn("tack-gone", move || {
-        std::thread::sleep(REMOVE_GRACE);
+    after(REMOVE_GRACE, move || {
         if path.exists() {
             refresh(&app, &path);
         } else {
@@ -107,26 +99,26 @@ fn changed(app: &AppHandle, path: PathBuf) {
         }
     }
     let handle = app.clone();
-    let done = key.clone();
-    let started = spawn("tack-refresh", move || {
-        std::thread::sleep(UPDATE_SETTLE);
-        lock(&handle).decoding.remove(&done);
+    after(UPDATE_SETTLE, move || {
+        lock(&handle).decoding.remove(&key);
         refresh(&handle, &path);
     });
-    if !started {
-        lock(app).decoding.remove(&key);
-    }
 }
 
-/// Runs `job` on a short-lived thread of its own. If no thread can be
-/// started (the process is out of them), the event is logged and skipped
-/// rather than taking the watcher down. Returns whether it started.
-fn spawn(name: &str, job: impl FnOnce() + Send + 'static) -> bool {
-    match std::thread::Builder::new().name(name.into()).spawn(job) {
-        Ok(_) => true,
-        Err(e) => {
-            eprintln!("tack: cannot start {name}, skipping this file event: {e}");
-            false
+/// Looks Tack's own files over, on the calling (worker) thread: a pinned
+/// capture or note that was edited or deleted elsewhere is treated as the
+/// watcher would have. A capture still being written is left alone.
+pub fn check_owned(app: &AppHandle) {
+    let owned: Vec<_> =
+        lock(app).board.prints().iter().filter(|p| p.owned()).map(|p| (p.path.clone(), p.stamp)).collect();
+    for (path, old) in owned {
+        if captures::is_saving(&path) {
+            continue;
+        }
+        match files::file_stamp(&path) {
+            None if old.is_some() => gone(app, path),
+            now if now != old => changed(app, path),
+            _ => {}
         }
     }
 }
@@ -161,7 +153,7 @@ fn refresh(app: &AppHandle, path: &Path) {
 /// the next start. Then checks the history once, for anything that grew
 /// too old meanwhile.
 pub fn restore(app: AppHandle) {
-    let started = spawn("tack-restore", move || {
+    tauri::async_runtime::spawn_blocking(move || {
         let saved = lock(&app).to_restore();
         if saved.is_empty() {
             prints::age_out(&app);
@@ -216,9 +208,6 @@ pub fn restore(app: AppHandle) {
         }
         prints::age_out(&app);
     });
-    if !started {
-        eprintln!("tack: last session's prints stay in board.json for the next start");
-    }
 }
 
 /// An entry Tack itself could have written: a picture for a print, a text

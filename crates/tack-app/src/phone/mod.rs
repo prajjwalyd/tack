@@ -42,11 +42,11 @@ pub const PORT: u16 = 7717;
 /// Where "Get NetBird" goes: NetBird's own install page, for every platform.
 pub const NETBIRD_INSTALL: &str = "https://docs.netbird.io/get-started/install";
 
-/// How often NetBird is looked at while the switch is on: it may have
-/// connected, disconnected or given this PC another address. Less often once
-/// serving, since requests look up the peers they need themselves.
-const WATCH_WAITING: Duration = Duration::from_secs(15);
-const WATCH_SERVING: Duration = Duration::from_secs(60);
+/// While the switch is on, NetBird is looked at when the network changes (it
+/// connected, disconnected or gave this PC another address) and, in case
+/// that was missed, this often. Peers are looked up by the requests that
+/// need them. While it is off, nothing is watched.
+const WATCH: Duration = Duration::from_secs(10 * 60);
 
 /// NetBird on this PC, as the page describes it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -82,7 +82,7 @@ struct Phone {
 static PHONE: Mutex<Phone> =
     Mutex::new(Phone { gate: Gate::new(), running: None, netbird: NetBirdState::Missing, error: None });
 
-/// Wakes the watcher early (the switch was flipped).
+/// Wakes the watcher early (the switch was flipped, or the network changed).
 static NUDGE: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
 /// One reconcile at a time, so two cannot both start a server.
 static RECONCILING: Mutex<()> = Mutex::new(());
@@ -94,17 +94,23 @@ fn phone() -> MutexGuard<'static, Phone> {
 /// Starts watching NetBird, so the board is served whenever the switch is on
 /// and NetBird is connected (from startup, if it was left on).
 pub fn start(app: AppHandle) {
-    let spawned = std::thread::Builder::new().name("tack-phone-watch".into()).spawn(move || loop {
-        reconcile(&app);
-        let every = if phone().running.is_some() { WATCH_SERVING } else { WATCH_WAITING };
-        let (lock, wake) = &NUDGE;
-        let nudged = lock.lock().unwrap_or_else(|p| p.into_inner());
-        let (mut nudged, _) = wake.wait_timeout_while(nudged, every, |n| !*n).unwrap_or_else(|p| p.into_inner());
-        *nudged = false;
+    let _ = std::thread::Builder::new().name("tack-phone-watch".into()).spawn(move || {
+        // Held while the switch is on.
+        let mut network = None;
+        loop {
+            reconcile(&app);
+            let on = lock(&app).settings.phone.on;
+            network = if on { network.or_else(|| netbird::NetworkWatch::start(nudge)) } else { None };
+            let (flag, wake) = &NUDGE;
+            let mut nudged = flag.lock().unwrap_or_else(|p| p.into_inner());
+            nudged = if on {
+                wake.wait_timeout_while(nudged, WATCH, |n| !*n).unwrap_or_else(|p| p.into_inner()).0
+            } else {
+                wake.wait_while(nudged, |n| !*n).unwrap_or_else(|p| p.into_inner())
+            };
+            *nudged = false;
+        }
     });
-    if let Err(e) = spawned {
-        eprintln!("tack: cannot watch NetBird for the phone board: {e}");
-    }
 }
 
 fn nudge() {

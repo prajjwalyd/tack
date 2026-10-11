@@ -223,12 +223,12 @@ pub fn handle(app: &AppHandle, id: &str) {
     if id == "tray:settings" {
         // Not from this handler, as for the windows below.
         let app = app.clone();
-        spawn("tack-settings-window", move || settings_window::open(&app, None));
+        std::thread::spawn(move || settings_window::open(&app, None));
         return;
     }
     if id == "tray:updates" {
         let app = app.clone();
-        spawn("tack-updates-window", move || {
+        std::thread::spawn(move || {
             settings_window::open(&app, Some("updates"));
             // With an update ready, Settings is where to install it; otherwise
             // look now, and Settings shows the answer.
@@ -240,14 +240,14 @@ pub fn handle(app: &AppHandle, id: &str) {
     }
     if id == "tray:phone" {
         let app = app.clone();
-        spawn("tack-settings-phone", move || settings_window::open(&app, Some("phone")));
+        std::thread::spawn(move || settings_window::open(&app, Some("phone")));
         return;
     }
     if id == "tray:shortcuts" || id.starts_with("tray:shortcuts-in-use") {
         // Not from this handler: building a window on the event loop's own
         // thread, inside one of its handlers, would wait on itself.
         let app = app.clone();
-        spawn("tack-shortcuts-window", move || settings_window::open(&app, Some("shortcuts")));
+        std::thread::spawn(move || settings_window::open(&app, Some("shortcuts")));
         return;
     }
     match id {
@@ -272,13 +272,6 @@ pub fn handle(app: &AppHandle, id: &str) {
             app.exit(0);
         }
         _ => {}
-    }
-}
-
-/// Runs `job` on a thread of its own; if none can start, logs and skips.
-fn spawn(name: &str, job: impl FnOnce() + Send + 'static) {
-    if let Err(e) = std::thread::Builder::new().name(name.into()).spawn(job) {
-        eprintln!("tack: cannot start {name}: {e}");
     }
 }
 
