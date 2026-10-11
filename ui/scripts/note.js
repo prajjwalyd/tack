@@ -16,11 +16,6 @@ export function isNote(data) {
   return data?.kind === "note" && !!data.note;
 }
 
-/** A note's link, if the whole note is one. */
-export function linkOf(data) {
-  return isNote(data) ? data.note.link || null : null;
-}
-
 /** An address as a note shows it: no scheme, no trailing slash. */
 export function bareLink(url) {
   return String(url).replace(/^https?:\/\//i, "").replace(/\/$/, "");

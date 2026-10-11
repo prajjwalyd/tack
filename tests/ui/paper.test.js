@@ -6,11 +6,10 @@ import { applyPaper, dimmed, hintTones, paperProperties, paperTones } from "../.
 import { cssValue, normalise, read, rustPresets } from "./support.js";
 
 const presets = rustPresets("paper.rs");
-const card = read("ui/styles/notes/card.css");
 const tokens = read("ui/styles/tokens.css");
 
-/** The ink as an [r, g, b] and its alpha, from card.css. */
-const [, ir, ig, ib, ia] = /rgba\((\d+), (\d+), (\d+), ([\d.]+)\)/.exec(cssValue(card, "--note-ink")).map(Number);
+/** The ink as an [r, g, b] and its alpha, from tokens.css. */
+const [, ir, ig, ib, ia] = /rgba\((\d+), (\d+), (\d+), ([\d.]+)\)/.exec(cssValue(tokens, "--note-ink")).map(Number);
 const INK = { colour: [ir, ig, ib], alpha: ia };
 
 /** Contrast of a note's ink on `paper` ([r, g, b]), the ink laid over it at its alpha. */
@@ -81,8 +80,8 @@ test("applyPaper sets the note and hint properties, an unknown paper gets the de
   assert.equal(empty.values.size, 0);
 });
 
-test("card.css no longer says what the paper's own colours are (paper.js does)", () => {
-  for (const name of ["--note-paper", "--note-link", "--note-domain"]) assert.doesNotMatch(card, new RegExp(String.raw`^\s*${name}:`, "m"));
+test("tokens.css does not say what the paper's own colours are (paper.js does)", () => {
+  for (const name of ["--note-paper", "--note-link", "--note-domain"]) assert.doesNotMatch(tokens, new RegExp(String.raw`^\s*${name}:`, "m"));
 });
 
 test("white is exactly the hint card the empty board had before it followed the paper", () => {

@@ -54,7 +54,7 @@ export const LAYOUT_EASING = hasLinear ? LAYOUT.easing : "cubic-bezier(.22, 1, .
  * would make the compositor build the print's new layers inside a 3D-turned
  * board.
  */
-export const revealMs = () => scaled(hasLinear ? REVEAL.ms : 520) + 40;
+const revealMs = () => scaled(hasLinear ? REVEAL.ms : 520) + 40;
 
 /** The same under reduced motion, where the board slides plainly (motion.css): until it is at rest, ms. */
 export const restMs = () => (state.reduced ? scaled(100) : revealMs());

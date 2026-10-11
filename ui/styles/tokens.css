@@ -1,7 +1,3 @@
-/* Note paper: one set from notes/: card.css
-   (white index card, shipped), classic.css or sticky.css. Change this line to switch. */
-@import url("notes/card.css");
-
 /* Design tokens: sizes, colours, radii, shadows and durations as custom
    properties. Colours are light-dark() pairs resolved against the board's
    `color-scheme` (board.css), which follows Windows unless
@@ -79,7 +75,22 @@
   --hint-ink: rgba(44, 34, 24, .62);
   --hint-ink-strong: rgba(44, 34, 24, .82);
 
-  /* colour: paper notes (--note-*) come from the notes/ set imported above */
+  /* colour: paper notes. The index card: a red header rule under the pin and blue rules the text
+     sits on (12 px type on 15 px lines from 18 px down: note.css). The paper's colour and the link
+     and domain colours on it are the Note paper setting's (--note-paper, --note-link, --note-domain,
+     set on #board by scripts/paper.js, which dims the paper in the dark theme). */
+  --note-ink: rgba(28, 32, 42, .86);
+  --note-curl: rgba(40, 46, 60, .06);
+  --note-rule-red: rgba(222, 72, 72, .62);
+  --note-rule-blue: rgba(84, 140, 214, .24);
+  --note-face:
+    linear-gradient(180deg,
+      transparent 16px, var(--note-rule-red) 16px, var(--note-rule-red) 17px, transparent 17px,
+      transparent 31px, var(--note-rule-blue) 31px, var(--note-rule-blue) 32px, transparent 32px,
+      transparent 46px, var(--note-rule-blue) 46px, var(--note-rule-blue) 47px, transparent 47px,
+      transparent 61px, var(--note-rule-blue) 61px, var(--note-rule-blue) 62px, transparent 62px,
+      transparent 76px, var(--note-rule-blue) 76px, var(--note-rule-blue) 77px, transparent 77px);
+  --shadow-note-corner: 5px 7px 7px -7px light-dark(rgba(0, 14, 6, .40), rgba(0, 0, 0, .5));
 
   /* colour: keyboard focus. A light ring with dark hairlines reads on felt and paper in both themes. */
   --focus-ring: rgba(255, 255, 255, .96);
