@@ -104,8 +104,11 @@ pub fn recycle(path: PathBuf) {
 /// Puts the full image (not the thumbnail) on the clipboard. Slow for a big
 /// screenshot, so call it off the UI thread.
 pub fn copy_image(path: &Path) -> Result<(), String> {
-    let rgba = tack_core::thumbnail::decode(path)?.to_rgba8();
-    crate::clipboard::put_picture(&rgba)
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let rgba = tack_core::thumbnail::decode_bytes(&bytes)?.into_rgba8();
+    // A PNG file goes on the clipboard as it is, not encoded again.
+    let png = bytes.starts_with(b"\x89PNG\r\n\x1a\n").then_some(bytes.as_slice());
+    crate::clipboard::put_picture(&rgba, png)
 }
 
 /// Puts text on the clipboard, with Windows line breaks.

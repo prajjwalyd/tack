@@ -456,19 +456,28 @@ pub(crate) fn put_text(text: &str) -> Result<(), String> {
     set_bytes(CF_UNICODETEXT.0 as u32, &wide)
 }
 
-/// Puts a picture on the clipboard as PNG and as a bitmap, both encoded
-/// before it is opened.
-pub(crate) fn put_picture(rgba: &RgbaImage) -> Result<(), String> {
-    let mut png = Vec::new();
-    PngEncoder::new(&mut png)
-        .write_image(rgba.as_raw(), rgba.width(), rgba.height(), ExtendedColorType::Rgba8)
-        .map_err(|e| e.to_string())?;
+/// Puts a picture on the clipboard as PNG and as a bitmap, both made before
+/// it is opened. `png` is the picture's own PNG file, when it came from one:
+/// it goes on as it is instead of being encoded again.
+pub(crate) fn put_picture(rgba: &RgbaImage, png: Option<&[u8]>) -> Result<(), String> {
+    let encoded;
+    let png = match png {
+        Some(png) => png,
+        None => {
+            let mut out = Vec::new();
+            PngEncoder::new(&mut out)
+                .write_image(rgba.as_raw(), rgba.width(), rgba.height(), ExtendedColorType::Rgba8)
+                .map_err(|e| e.to_string())?;
+            encoded = out;
+            &encoded
+        }
+    };
     let dib = dibv5(rgba);
     let _open = Open::new(None).ok_or("the clipboard is busy")?;
     unsafe { EmptyClipboard() }.map_err(|e| e.to_string())?;
     // PNG first: apps that take the first picture format they know get the
     // one that keeps transparency exactly.
-    set_bytes(registered(w!("PNG")), &png)?;
+    set_bytes(registered(w!("PNG")), png)?;
     set_bytes(CF_DIBV5.0 as u32, &dib)
 }
 
@@ -487,11 +496,12 @@ fn dibv5(rgba: &RgbaImage) -> Vec<u8> {
     // Endpoints and gamma: unused with sRGB.
     out.resize(108, 0);
     out.extend([4u32 /* LCS_GM_IMAGES */, 0, 0, 0].iter().flat_map(|v| v.to_le_bytes()));
-    for row in rgba.rows().rev() {
-        for p in row {
-            out.extend_from_slice(&[p[2], p[1], p[0], p[3]]);
-        }
+    let start = out.len();
+    for row in rgba.as_raw().chunks_exact(width as usize * 4).rev() {
+        out.extend_from_slice(row);
     }
+    // The rows went in as RGBA; the bitmap wants BGRA.
+    out[start..].as_chunks_mut::<4>().0.iter_mut().for_each(|px| px.swap(0, 2));
     out
 }
 
