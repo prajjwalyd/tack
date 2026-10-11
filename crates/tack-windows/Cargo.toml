@@ -9,7 +9,6 @@ publish.workspace = true
 
 [dependencies]
 tack-core.workspace = true
-arboard.workspace = true
 image.workspace = true
 trash.workspace = true
 windows-core.workspace = true

@@ -111,6 +111,5 @@ pub fn copy_image(path: &Path) -> Result<(), String> {
 /// Puts text on the clipboard, with Windows line breaks.
 pub fn copy_text(text: &str) -> Result<(), String> {
     let text = text.replace("\r\n", "\n").replace('\n', "\r\n");
-    let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-    clipboard.set_text(text).map_err(|e| e.to_string())
+    crate::clipboard::put_text(&text)
 }

@@ -448,6 +448,14 @@ pub(crate) fn take_picture(window: Option<HWND>, since: u32, tries: u32, gap: Du
     Err(why)
 }
 
+/// Puts text on the clipboard, as Unicode text.
+pub(crate) fn put_text(text: &str) -> Result<(), String> {
+    let wide: Vec<u8> = text.encode_utf16().chain([0]).flat_map(u16::to_le_bytes).collect();
+    let _open = Open::new(None).ok_or("the clipboard is busy")?;
+    unsafe { EmptyClipboard() }.map_err(|e| e.to_string())?;
+    set_bytes(CF_UNICODETEXT.0 as u32, &wide)
+}
+
 /// Puts a picture on the clipboard as PNG and as a bitmap, both encoded
 /// before it is opened.
 pub(crate) fn put_picture(rgba: &RgbaImage) -> Result<(), String> {
