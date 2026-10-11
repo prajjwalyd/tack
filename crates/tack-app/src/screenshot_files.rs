@@ -3,20 +3,21 @@
 //! pinned file refreshes its thumbnail; if a pinned file is deleted or moved
 //! elsewhere, its print is unpinned with a short fade.
 //!
-//! The captures and notes folders are watched too, but only for edits and
-//! removals of pinned files: new files there are Tack's own. An edited note
-//! (Notepad saving it) shows its new text. Also puts last session's prints
-//! and notes back at startup.
+//! Tack's own files (captures, notes) have no watcher: each reveal looks them
+//! over instead ([`check_owned`]), so an edited note (Notepad saving it)
+//! shows its new text and a deleted one goes. Also puts last session's
+//! prints and notes back at startup.
 
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use tack_core::store::SavedPrint;
-use tack_core::{capture, files, note, thumbnail, Arrival, Kind, Origin, RevealReason};
+use tack_core::{files, note, thumbnail, Arrival, Kind, Origin, RevealReason};
 use tack_windows::screenshots::{self, FolderEvent};
 use tauri::AppHandle;
 
+use crate::captures;
 use crate::ipc::events::Removal;
 use crate::prints::{self, Pin};
 use crate::reveal::{self, after};
@@ -47,9 +48,6 @@ fn arrived(app: &AppHandle, path: PathBuf) {
         return;
     }
     if !files::is_image(&path) {
-        return;
-    }
-    if capture::in_captures(&path) {
         return;
     }
     let key = files::path_key(&path);
@@ -105,6 +103,24 @@ fn changed(app: &AppHandle, path: PathBuf) {
         lock(&handle).decoding.remove(&key);
         refresh(&handle, &path);
     });
+}
+
+/// Looks Tack's own files over, on the calling (worker) thread: a pinned
+/// capture or note that was edited or deleted elsewhere is treated as the
+/// watcher would have. A capture still being written is left alone.
+pub fn check_owned(app: &AppHandle) {
+    let owned: Vec<_> =
+        lock(app).board.prints().iter().filter(|p| p.owned()).map(|p| (p.path.clone(), p.stamp)).collect();
+    for (path, old) in owned {
+        if captures::is_saving(&path) {
+            continue;
+        }
+        match files::file_stamp(&path) {
+            None if old.is_some() => gone(app, path),
+            now if now != old => changed(app, path),
+            _ => {}
+        }
+    }
 }
 
 fn refresh(app: &AppHandle, path: &Path) {

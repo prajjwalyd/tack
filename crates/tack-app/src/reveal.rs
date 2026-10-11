@@ -19,7 +19,7 @@ use windows::Win32::Foundation::POINT;
 
 use crate::ipc::events;
 use crate::state::lock;
-use crate::{keyboard, prints, webview_power, webview_privacy};
+use crate::{keyboard, prints, screenshot_files, webview_power, webview_privacy};
 
 /// The board window's label in tauri.conf.json.
 pub const WINDOW_LABEL: &str = "board";
@@ -371,11 +371,13 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
 }
 
 /// What may have changed while the board was tucked, looked at as it comes
-/// down (so nothing runs while it is away): prints that grew too old.
+/// down (so nothing runs while it is away): prints that grew too old, and
+/// Tack's own files edited or deleted elsewhere.
 fn catch_up(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         prints::age_out(&app);
+        screenshot_files::check_owned(&app);
     });
 }
 

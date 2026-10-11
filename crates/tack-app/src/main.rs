@@ -42,7 +42,6 @@ mod webview_privacy;
 
 use std::sync::Mutex;
 
-use tack_core::{capture, note};
 use tack_windows::{autostart, edge_reveal, sandbox, screenshots, single_instance};
 use tauri::RunEvent;
 
@@ -148,8 +147,6 @@ fn main() {
             }
             screenshot_files::restore(handle.clone());
             screenshot_files::watch(handle.clone(), screenshots::folder());
-            screenshot_files::watch(handle.clone(), capture::captures_folder());
-            screenshot_files::watch(handle.clone(), note::notes_folder());
             captures::start(handle.clone());
             phone::start(handle.clone());
             updates::start(&handle);
