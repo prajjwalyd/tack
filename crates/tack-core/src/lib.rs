@@ -29,6 +29,7 @@ pub mod recycle;
 pub mod reveal_speed;
 pub mod settings;
 pub mod shortcut;
+pub mod shown;
 pub mod store;
 pub mod thumbnail;
 pub mod view;
