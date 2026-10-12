@@ -12,8 +12,8 @@ https://github.com/user-attachments/assets/0e2f1078-f804-4241-9b8f-a8305564e11d
 - **Snip the way you already do.** Win + Shift + S, Print Screen, or any tool
   that saves to your Screenshots folder. The board drops down, pins it, and
   tucks away again.
-- **Get it back in a flick.** Push the pointer against the top edge, or press
-  **Win + Alt + S**.
+- **Get it back in a flick.** Push the pointer against the middle of the top
+  edge, or press **Win + Alt + S**. Pick how quick it is: Instant, Normal or Slow.
 - **Use it anywhere.** Click to copy, drag it straight into a chat or email,
   double-click to open, press and hold to edit.
 - **Pin text on purpose.** Select something and press **Win + Alt + C**.
@@ -42,6 +42,12 @@ through [NetBird](https://netbird.io), a free, open-source private network.
 Add it to your home screen and it's one tap from then on. Only devices you
 allow get in, and your board never leaves your PC.
 
+## Make it yours
+
+Open **Settings** from the tray icon. Choose the felt colour (or match your
+Windows accent), the frame finish, the paper your notes are written on, and how
+fast the board moves. Shortcuts, the phone link and updates live there too.
+
 ## Shortcuts
 
 | | |
@@ -58,7 +64,10 @@ Both shortcuts can be changed in Settings, under **Shortcuts** (the tray menu's 
 
 ## Private by design
 
-- Your board stays on your PC. Tack never talks to the internet.
+- Your board stays on your PC. Tack only goes online to ask GitHub whether a
+  new version exists (once a day, and you can turn it off in Settings), and
+  to download one when you choose to install it. Updates are signed, and Tack
+  refuses any that aren't.
 - Text is never read from your clipboard on its own, only when you press
   Win + Alt + C, and your clipboard is put back as it was.
 - Nothing is deleted for good: Tack's own copies go to the Recycle Bin.
@@ -70,6 +79,9 @@ The details are in [docs/privacy.md](docs/privacy.md).
 1. Download **Tack_…_x64-setup.exe** (or **…_arm64-setup.exe** on an ARM PC) from the [latest release](https://github.com/prajjwalyd/tack/releases/latest).
 2. Open it. Windows may say **"Windows protected your PC"**, because the installer isn't code-signed yet: click **More info**, then **Run anyway**.
 3. Tack appears at the top of your screen, and its icon sits in the tray.
+
+Tack updates itself: when a new version is out, Settings offers it, and one
+click installs it. Your board stays as it was.
 
 Windows 10 or 11.
 
