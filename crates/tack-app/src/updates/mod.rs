@@ -7,7 +7,7 @@
 //! The checker is one thread that parks until the next check is due, or
 //! until a setting changes (it reads `settings.updates.check` each time it
 //! wakes), so an idle Tack does nothing for it. The first check is 45 s after
-//! start, then one a day. A check the person asks for (Settings, the tray)
+//! start, then one a day (an hour after a failed one). A check the person asks for (Settings, the tray)
 //! goes ahead whatever the setting says. Every change of status is sent to
 //! all windows as `updates:status`.
 //!
@@ -37,8 +37,10 @@ pub use status::{Phase, UpdateStatus};
 
 /// After Tack starts.
 const FIRST_CHECK_DELAY: Duration = Duration::from_secs(45);
-/// After a check starts, failed or not.
+/// After a good check.
 const CHECK_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
+/// After the checker's check failed (no network yet, say).
+const RETRY_INTERVAL: Duration = Duration::from_secs(60 * 60);
 
 struct Inner {
     status: UpdateStatus,
@@ -50,10 +52,12 @@ struct Inner {
 
 impl Inner {
     /// Starts a check, unless one or an install is going, or (for the
-    /// checker) one is waiting to be installed. Either way the next turn is
-    /// a day away.
+    /// checker) one is waiting to be installed. The checker's turn is over
+    /// either way: its next is a day away (`reschedule` adjusts it after).
     fn begin_check(&mut self, now: u64, by_checker: bool) -> bool {
-        self.next_check = now + CHECK_INTERVAL.as_millis() as u64;
+        if by_checker {
+            self.next_check = now + CHECK_INTERVAL.as_millis() as u64;
+        }
         let state = self.status.state;
         if state.is_busy() || (by_checker && state == Phase::Available) {
             return false;
@@ -61,6 +65,16 @@ impl Inner {
         self.update = None;
         self.status = self.status.checking();
         true
+    }
+
+    /// The checker's next turn once a check ends: a day after a good one, an
+    /// hour after one of its own that failed. A failed manual check leaves it be.
+    fn reschedule(&mut self, now: u64, ok: bool, by_checker: bool) {
+        if ok {
+            self.next_check = now + CHECK_INTERVAL.as_millis() as u64;
+        } else if by_checker {
+            self.next_check = now + RETRY_INTERVAL.as_millis() as u64;
+        }
     }
 }
 
@@ -131,13 +145,16 @@ fn run_check(app: &AppHandle, by_checker: bool) -> UpdateStatus {
     announce(app, &checking);
 
     let found = plugin::check(app);
-    change(app, &updates, |inner| match found {
-        Ok(Some(update)) => {
-            inner.status = UpdateStatus::found(update.version.clone(), update.body.clone(), now_ms());
-            inner.update = Some(update);
+    change(app, &updates, |inner| {
+        inner.reschedule(now_ms(), found.is_ok(), by_checker);
+        match found {
+            Ok(Some(update)) => {
+                inner.status = UpdateStatus::found(update.version.clone(), update.body.clone(), now_ms());
+                inner.update = Some(update);
+            }
+            Ok(None) => inner.status = UpdateStatus::up_to_date(now_ms()),
+            Err(message) => inner.status = inner.status.failed(message),
         }
-        Ok(None) => inner.status = UpdateStatus::up_to_date(now_ms()),
-        Err(message) => inner.status = inner.status.failed(message),
     })
 }
 
@@ -211,7 +228,7 @@ mod tests {
     }
 
     #[test]
-    fn any_check_pushes_the_next_one_a_day_out() {
+    fn the_checkers_turn_is_a_day_out_even_when_it_does_not_check() {
         for (state, by_checker, starts) in [
             (Phase::Idle, true, true),
             (Phase::Error, true, true),
@@ -224,8 +241,23 @@ mod tests {
         ] {
             let mut inner = inner(state);
             assert_eq!(inner.begin_check(500, by_checker), starts, "{state:?} {by_checker}");
-            assert_eq!(inner.next_check, 500 + DAY);
+            assert_eq!(inner.next_check, if by_checker { 500 + DAY } else { 0 });
             assert_eq!(inner.status.state, if starts { Phase::Checking } else { state });
         }
+    }
+
+    #[test]
+    fn a_failed_check_of_the_checker_is_retried_in_an_hour() {
+        const HOUR: u64 = 60 * 60 * 1000;
+        let mut inner = inner(Phase::Checking);
+        inner.reschedule(1_000, true, true);
+        assert_eq!(inner.next_check, 1_000 + DAY);
+        inner.reschedule(2_000, false, true);
+        assert_eq!(inner.next_check, 2_000 + HOUR);
+        // A manual failure leaves the schedule as it was; a manual success resets it.
+        inner.reschedule(3_000, false, false);
+        assert_eq!(inner.next_check, 2_000 + HOUR);
+        inner.reschedule(4_000, true, false);
+        assert_eq!(inner.next_check, 4_000 + DAY);
     }
 }
