@@ -136,9 +136,9 @@ fn temp_file(file: &Path) -> PathBuf {
 /// whatever prints could be made out. A board.json that cannot be used as is
 /// gets copied to `board.json.bad-<now_ms>` first, so no save can lose it.
 ///
-/// Prints saved without a pin time get their file's modification time, or
-/// `now_ms` if that cannot be read. A `.tmp` left by an interrupted save is
-/// removed: it never replaced the real file, so it holds nothing needed.
+/// Prints saved without a pin time count as pinned at `now_ms`. A `.tmp` left
+/// by an interrupted save is removed: it never replaced the real file, so it
+/// holds nothing needed.
 pub fn load(file: &Path, now_ms: u64) -> (Saved, Loaded) {
     let _ = std::fs::remove_file(temp_file(file));
     let bytes = match std::fs::read(file) {
@@ -149,8 +149,7 @@ pub fn load(file: &Path, now_ms: u64) -> (Saved, Loaded) {
             return (Saved::default(), Loaded::Unreadable { reason, backup: back_up(file, now_ms) });
         }
     };
-    let modified = |path: &Path| std::fs::metadata(path).and_then(|m| m.modified()).ok().and_then(history::epoch_ms);
-    match parse(&bytes, now_ms, modified) {
+    match parse(&bytes, now_ms) {
         (saved, Loaded::Unreadable { reason, .. }) => {
             (saved, Loaded::Unreadable { reason, backup: back_up(file, now_ms) })
         }
@@ -170,15 +169,14 @@ fn back_up(file: &Path, now_ms: u64) -> Option<PathBuf> {
     }
 }
 
-/// Parses the contents of a board.json. `modified` gives a file's
-/// modification time in ms since the Unix epoch, for prints saved without a
-/// pin time; failing that they count as pinned at `now_ms`.
+/// Parses the contents of a board.json. Prints saved without a pin time count
+/// as pinned at `now_ms`.
 ///
 /// Contents that do not parse are an empty board. A newer schema is read as
 /// far as this build understands it, but reported as
 /// [`Loaded::Unreadable`]. The `backup` of an unreadable result is always
 /// `None` here; [`load`] makes the copy.
-fn parse(bytes: &[u8], now_ms: u64, modified: impl Fn(&Path) -> Option<u64>) -> (Saved, Loaded) {
+fn parse(bytes: &[u8], now_ms: u64) -> (Saved, Loaded) {
     let stored: Stored = match serde_json::from_slice(bytes) {
         Ok(stored) => stored,
         Err(e) => {
@@ -209,7 +207,7 @@ fn parse(bytes: &[u8], now_ms: u64, modified: impl Fn(&Path) -> Option<u64>) -> 
                     return None;
                 }
             };
-            let pinned_at = p.pinned_at.or_else(|| modified(&p.path)).unwrap_or(now_ms);
+            let pinned_at = p.pinned_at.unwrap_or(now_ms);
             // A kept print saved without its time counts as kept when pinned.
             let kept_at = p.kept.then(|| p.kept_at.unwrap_or(pinned_at));
             // A note's file is always Tack's own.

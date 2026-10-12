@@ -7,10 +7,6 @@ use crate::recycle::testing::NotingBin;
 
 const NOW: u64 = 1_800_000_000_000;
 
-fn no_files(_: &Path) -> Option<u64> {
-    None
-}
-
 fn saved(path: &str, origin: Origin, pinned_at: u64, kept_at: Option<u64>) -> SavedPrint {
     SavedPrint { path: PathBuf::from(path), kind: Kind::Image, origin, pinned_at, kept_at }
 }
@@ -96,7 +92,7 @@ fn a_board_json_as_v0_1_1_writes_it_loads_unchanged() {
     ]
   }
 }"#;
-    let (saved_board, loaded) = parse(v0_1_1, NOW, no_files);
+    let (saved_board, loaded) = parse(v0_1_1, NOW);
     assert_eq!(loaded, Loaded::Ok);
     let settings = Settings {
         sound: false,
@@ -141,7 +137,7 @@ fn missing_fields_take_their_defaults() {
         { "path": "C:\\Pics\\b.png", "kept": true, "pinnedAt": 5 },
         { "path": "C:\\Pics\\c.png", "kept": false, "keptAt": 9, "pinnedAt": 7 }
     ] }"#;
-    let (saved_board, loaded) = parse(json, NOW, no_files);
+    let (saved_board, loaded) = parse(json, NOW);
     assert_eq!(loaded, Loaded::Ok, "a file without a version is not a newer one");
     assert_eq!(saved_board.settings, Settings::default());
     assert_eq!(
@@ -160,7 +156,7 @@ fn missing_fields_take_their_defaults() {
 fn known_versions_are_understood() {
     for v in 1..=VERSION {
         let json = format!(r#"{{ "version": {v}, "prints": [] }}"#);
-        assert_eq!(parse(json.as_bytes(), NOW, no_files).1, Loaded::Ok);
+        assert_eq!(parse(json.as_bytes(), NOW).1, Loaded::Ok);
     }
 }
 
@@ -171,7 +167,7 @@ fn notes_load_as_tacks_own_files_and_unknown_kinds_are_skipped() {
         { "path": "C:\\Pics\\b.png", "pinnedAt": 8 },
         { "path": "C:\\Else\\c.ink", "kind": "sketch", "pinnedAt": 7 }
     ], "togglePinShortcut": "ignored", "pinShortcut": "" }"#;
-    let (saved_board, loaded) = parse(v3, NOW, no_files);
+    let (saved_board, loaded) = parse(v3, NOW);
     assert_eq!(loaded, Loaded::Ok);
     assert_eq!(saved_board.prints.len(), 2);
     let note = &saved_board.prints[0];
@@ -201,7 +197,7 @@ fn only_notes_are_saved_with_a_kind() {
 fn damaged_contents_are_an_empty_board_that_cannot_be_trusted() {
     // Garbage, an empty file, and a save cut short.
     for bytes in [&b"not json"[..], b"", br#"{ "version": 2, "prints": [ { "path": "C:\\a"#] {
-        let (saved_board, loaded) = parse(bytes, NOW, no_files);
+        let (saved_board, loaded) = parse(bytes, NOW);
         assert!(saved_board.prints.is_empty());
         assert_eq!(saved_board.settings, Settings::default());
         assert!(matches!(loaded, Loaded::Unreadable { .. }));
@@ -212,7 +208,7 @@ fn damaged_contents_are_an_empty_board_that_cannot_be_trusted() {
 fn a_newer_schema_is_read_but_not_trusted() {
     let json = br#"{ "version": 99, "prints": [ { "path": "C:\\Cap\\a.png", "capture": true, "pinnedAt": 5 } ],
         "somethingNew": [1, 2, 3] }"#;
-    let (saved_board, loaded) = parse(json, NOW, no_files);
+    let (saved_board, loaded) = parse(json, NOW);
     assert_eq!(saved_board.prints, vec![saved(r"C:\Cap\a.png", Origin::Capture, 5, None)]);
     assert!(matches!(loaded, Loaded::Unreadable { .. }));
 }
@@ -389,12 +385,12 @@ fn only_an_understood_board_json_lets_the_sweep_run() {
 #[test]
 fn a_board_json_without_a_print_list_is_not_trusted() {
     for json in [&b"{}"[..], br#"{ "version": 3, "sound": false }"#, br#"{ "paths": ["C:\\a.png"] }"#] {
-        let (saved_board, loaded) = parse(json, NOW, no_files);
+        let (saved_board, loaded) = parse(json, NOW);
         assert!(saved_board.prints.is_empty());
         assert!(matches!(loaded, Loaded::Unreadable { .. }), "{}", String::from_utf8_lossy(json));
     }
     // An empty list is a list: this build's own file with nothing pinned.
-    let (_, loaded) = parse(br#"{ "version": 3, "prints": [] }"#, NOW, no_files);
+    let (_, loaded) = parse(br#"{ "version": 3, "prints": [] }"#, NOW);
     assert_eq!(loaded, Loaded::Ok);
 }
 
