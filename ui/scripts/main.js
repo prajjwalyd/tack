@@ -14,6 +14,7 @@ import { fixed, setMotionScale } from "./motion/scale.js";
 import { restMs } from "./motion/spring.js";
 import { gust, scheduleGust, stopGusts } from "./motion/swing.js";
 import { hideNotice, notice, noticeAfterReveal } from "./notice.js";
+import { onClickThrough } from "./pointer.js";
 import { addPrint, applyOrder, printById, removePrint, showCopied, updatePrint } from "./print.js";
 import { reveal, tuck, warmUp } from "./reveal.js";
 import { dom, reducedMotion, state } from "./state.js";
@@ -83,7 +84,7 @@ async function init() {
     ipc.on(EVENTS.NOTICE, (p) => notice(p.text)),
     ipc.on(EVENTS.PRINT_DRAGGING, (p) => onDragging(printById(p.id), p.id)),
     ipc.on(EVENTS.PRINT_DRAG_ENDED, (p) => onDragEnded(printById(p.id), p.id)),
-    ipc.on(EVENTS.POINTER_LEFT, () => onPointerLeft()),
+    ipc.on(EVENTS.POINTER_LEFT, () => { onPointerLeft(); onClickThrough(); }),
     ipc.on(EVENTS.GUST, () => gust()),
     ipc.on(EVENTS.SETTINGS, applySettings),
   ]);

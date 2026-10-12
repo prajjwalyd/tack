@@ -72,6 +72,7 @@ fn main() {
             tauri::generate_handler![
                 commands::board_ready,
                 commands::set_board_rect,
+                commands::pointer_off_board,
                 commands::copy_print,
                 commands::open_print,
                 commands::edit_print,

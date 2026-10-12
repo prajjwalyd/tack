@@ -191,6 +191,7 @@ function pushRect(w) {
     w: Math.round((right - x) * dpr),
     h: Math.round((BOARD_H + LIFT) * dpr),
   };
+  state.hit[0] = r;
   const key = `${r.x},${r.y},${r.w},${r.h}`;
   if (key === lastRect) return;
   lastRect = key;

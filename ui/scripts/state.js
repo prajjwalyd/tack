@@ -25,6 +25,7 @@ export const state = {
   timers: new Set(),    // short-lived animation timeouts, cleared on tuck
   awaiting: [],         // prints to pin on once the board is revealed
   boardW: 0,            // current board width, CSS px
+  hit: [],              // where the window takes clicks, physical px relative to the window: the board's rect, the tip's (what the backend has, pointer.js)
   reduced: reducedMotion.matches,
 };
 
