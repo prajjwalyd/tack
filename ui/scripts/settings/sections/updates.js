@@ -9,7 +9,6 @@ import { when } from "../../dialog.js";
 import { group, showSwitch, switchRow } from "../markup.js";
 
 const CHECK = { label: "Check for updates", act: "check" };
-const REFRESH_MS = 30000;   // "Last checked 5 minutes ago" is kept current
 
 /**
  * What to show for a status: a headline, a line under it, the button (null:
@@ -123,7 +122,7 @@ export function mount(host, api) {
   });
 
   api.updates.subscribe(render);
-  setInterval(() => render(api.updates.get()), REFRESH_MS);
+  window.addEventListener("focus", () => render(api.updates.get()));   // "Last checked 5 minutes ago" is current when the window is looked at
   return {
     render(view) {
       $("#version").textContent = `Version ${view.version}`;

@@ -23,7 +23,7 @@ pub mod server;
 use std::collections::hash_map::RandomState;
 use std::hash::BuildHasher;
 use std::sync::{Condvar, Mutex, MutexGuard};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use serde::Serialize;
 use tack_core::history;
@@ -41,12 +41,6 @@ pub const PORT: u16 = 7717;
 
 /// Where "Get NetBird" goes: NetBird's own install page, for every platform.
 pub const NETBIRD_INSTALL: &str = "https://docs.netbird.io/get-started/install";
-
-/// While the switch is on, NetBird is looked at when the network changes (it
-/// connected, disconnected or gave this PC another address) and, in case
-/// that was missed, this often. Peers are looked up by the requests that
-/// need them. While it is off, nothing is watched.
-const WATCH: Duration = Duration::from_secs(10 * 60);
 
 /// NetBird on this PC, as the page describes it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -92,7 +86,10 @@ fn phone() -> MutexGuard<'static, Phone> {
 }
 
 /// Starts watching NetBird, so the board is served whenever the switch is on
-/// and NetBird is connected (from startup, if it was left on).
+/// and NetBird is connected (from startup, if it was left on). NetBird is
+/// looked at when the switch is flipped and when the network changes (it
+/// connected, disconnected or gave this PC another address); peers are looked
+/// up by the requests that need them. Nothing runs on a timer.
 pub fn start(app: AppHandle) {
     let _ = std::thread::Builder::new().name("tack-phone-watch".into()).spawn(move || {
         // Held while the switch is on.
@@ -102,13 +99,8 @@ pub fn start(app: AppHandle) {
             let on = lock(&app).settings.phone.on;
             network = if on { network.or_else(|| netbird::NetworkWatch::start(nudge)) } else { None };
             let (flag, wake) = &NUDGE;
-            let mut nudged = flag.lock().unwrap_or_else(|p| p.into_inner());
-            nudged = if on {
-                wake.wait_timeout_while(nudged, WATCH, |n| !*n).unwrap_or_else(|p| p.into_inner()).0
-            } else {
-                wake.wait_while(nudged, |n| !*n).unwrap_or_else(|p| p.into_inner())
-            };
-            *nudged = false;
+            let nudged = flag.lock().unwrap_or_else(|p| p.into_inner());
+            *wake.wait_while(nudged, |n| !*n).unwrap_or_else(|p| p.into_inner()) = false;
         }
     });
 }
