@@ -4,12 +4,10 @@
 //! and only from Rust; `status.rs` is what the UI is told; this file keeps
 //! the state and decides when to check.
 //!
-//! The checker is one thread that parks until the next check is due, or
-//! until a setting changes (it reads `settings.updates.check` each time it
-//! wakes), so an idle Tack does nothing for it. The first check is 45 s after
-//! start, then one a day (an hour after a failed one). A check the person asks for (Settings, the tray)
-//! goes ahead whatever the setting says. Every change of status is sent to
-//! all windows as `updates:status`.
+//! Tack checks once on its own, about 45 s after it starts, if
+//! `settings.updates.check` is on and nothing has been checked since. A check
+//! the person asks for (Settings, the tray) goes ahead whatever the setting
+//! says. Every change of status is sent to all windows as `updates:status`.
 //!
 //! `config_guard.rs` holds tests that pin the safeguards in `tauri.conf.json`
 //! (one HTTPS endpoint, the built-in signing key, signed versions required,
@@ -22,59 +20,39 @@ mod status;
 mod config_guard;
 
 use std::sync::{Mutex, MutexGuard};
-use std::thread;
 use std::time::Duration;
 
 use tack_core::history::now_ms;
-use tauri::{AppHandle, Listener, Manager};
+use tauri::{AppHandle, Manager};
 use tauri_plugin_updater::Update;
 
 use crate::ipc::events;
+use crate::reveal::after;
 use crate::state::lock;
 use crate::tray;
 
 pub use status::{Phase, UpdateStatus};
 
-/// After Tack starts.
-const FIRST_CHECK_DELAY: Duration = Duration::from_secs(45);
-/// After a good check.
-const CHECK_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
-/// After the checker's check failed (no network yet, say).
-const RETRY_INTERVAL: Duration = Duration::from_secs(60 * 60);
+/// After Tack starts, when its one automatic check is made.
+const START_CHECK_DELAY: Duration = Duration::from_secs(45);
 
 struct Inner {
     status: UpdateStatus,
     /// What `Available` installs.
     update: Option<Update>,
-    /// When the checker looks next, in ms since the Unix epoch.
-    next_check: u64,
 }
 
 impl Inner {
-    /// Starts a check, unless one or an install is going, or (for the
-    /// checker) one is waiting to be installed. The checker's turn is over
-    /// either way: its next is a day away (`reschedule` adjusts it after).
-    fn begin_check(&mut self, now: u64, by_checker: bool) -> bool {
-        if by_checker {
-            self.next_check = now + CHECK_INTERVAL.as_millis() as u64;
-        }
+    /// Starts a check, unless one or an install is going. The automatic one
+    /// also needs the setting on and nothing checked yet.
+    fn begin_check(&mut self, automatic: bool, setting_on: bool) -> bool {
         let state = self.status.state;
-        if state.is_busy() || (by_checker && state == Phase::Available) {
-            return false;
+        let allowed = if automatic { setting_on && state == Phase::Idle } else { !state.is_busy() };
+        if allowed {
+            self.update = None;
+            self.status = self.status.checking();
         }
-        self.update = None;
-        self.status = self.status.checking();
-        true
-    }
-
-    /// The checker's next turn once a check ends: a day after a good one, an
-    /// hour after one of its own that failed. A failed manual check leaves it be.
-    fn reschedule(&mut self, now: u64, ok: bool, by_checker: bool) {
-        if ok {
-            self.next_check = now + CHECK_INTERVAL.as_millis() as u64;
-        } else if by_checker {
-            self.next_check = now + RETRY_INTERVAL.as_millis() as u64;
-        }
+        allowed
     }
 }
 
@@ -88,39 +66,15 @@ impl Updates {
     }
 }
 
-/// Starts the checker. Once, at startup, after the tray exists.
+/// Sets up the state and makes the one automatic check after a delay (the
+/// setting is read then, so switching it off meanwhile counts). Once, at
+/// startup, after the tray exists.
 pub fn start(app: &AppHandle) {
-    let next_check = now_ms() + FIRST_CHECK_DELAY.as_millis() as u64;
-    app.manage(Updates(Mutex::new(Inner { status: UpdateStatus::idle(), update: None, next_check })));
-
-    let checker_app = app.clone();
-    if let Ok(checker) = thread::Builder::new().name("tack-updates".into()).spawn(move || check_when_due(checker_app)) {
-        // A setting changed (any of them): the check may have been switched on.
-        let checker = checker.thread().clone();
-        app.listen(events::SETTINGS_CHANGED, move |_| checker.unpark());
-    }
-}
-
-/// The checker's loop: check when due, else park until then (for good while
-/// the check is off). A wake, spurious or not, only looks again.
-fn check_when_due(app: AppHandle) {
-    loop {
-        let enabled = lock(&app).settings.updates.check;
-        let wait = wait_for(app.state::<Updates>().lock().next_check, now_ms());
-        if !enabled {
-            thread::park();
-        } else if wait.is_zero() {
-            run_check(&app, true);
-        } else {
-            thread::park_timeout(wait);
-        }
-    }
-}
-
-/// How long until `next_check`. At most a day: if the clock was set back
-/// the check is not pushed out further than that.
-fn wait_for(next_check: u64, now: u64) -> Duration {
-    Duration::from_millis(next_check.saturating_sub(now)).min(CHECK_INTERVAL)
+    app.manage(Updates(Mutex::new(Inner { status: UpdateStatus::idle(), update: None })));
+    let app = app.clone();
+    after(START_CHECK_DELAY, move || {
+        run_check(&app, true);
+    });
 }
 
 /// The status as it stands (idle before [`start`]).
@@ -133,11 +87,12 @@ pub fn check(app: &AppHandle) -> UpdateStatus {
     run_check(app, false)
 }
 
-fn run_check(app: &AppHandle, by_checker: bool) -> UpdateStatus {
+fn run_check(app: &AppHandle, automatic: bool) -> UpdateStatus {
     let Some(updates) = app.try_state::<Updates>() else { return UpdateStatus::idle() };
+    let setting_on = lock(app).settings.updates.check;
     let checking = {
         let mut inner = updates.lock();
-        if !inner.begin_check(now_ms(), by_checker) {
+        if !inner.begin_check(automatic, setting_on) {
             return inner.status.clone();
         }
         inner.status.clone()
@@ -146,7 +101,6 @@ fn run_check(app: &AppHandle, by_checker: bool) -> UpdateStatus {
 
     let found = plugin::check(app);
     change(app, &updates, |inner| {
-        inner.reschedule(now_ms(), found.is_ok(), by_checker);
         match found {
             Ok(Some(update)) => {
                 inner.status = UpdateStatus::found(update.version.clone(), update.body.clone(), now_ms());
@@ -212,52 +166,49 @@ fn announce(app: &AppHandle, status: &UpdateStatus) {
 mod tests {
     use super::*;
 
-    const DAY: u64 = 24 * 60 * 60 * 1000;
-
     fn inner(state: Phase) -> Inner {
-        Inner { status: UpdateStatus { state, ..UpdateStatus::idle() }, update: None, next_check: 0 }
+        Inner { status: UpdateStatus { state, ..UpdateStatus::idle() }, update: None }
     }
 
     #[test]
-    fn the_wait_is_until_the_due_time_but_never_more_than_a_day() {
-        assert_eq!(wait_for(1_000 + 45_000, 1_000), Duration::from_secs(45));
-        assert_eq!(wait_for(1_000, 1_000), Duration::ZERO);
-        assert_eq!(wait_for(1_000, 9_000), Duration::ZERO);
-        // The clock was set back a week.
-        assert_eq!(wait_for(1_000 + 7 * DAY, 1_000), CHECK_INTERVAL);
-    }
-
-    #[test]
-    fn the_checkers_turn_is_a_day_out_even_when_it_does_not_check() {
-        for (state, by_checker, starts) in [
-            (Phase::Idle, true, true),
-            (Phase::Error, true, true),
+    fn a_check_starts_unless_one_or_an_install_is_going() {
+        for (state, automatic, starts) in [
+            (Phase::Idle, false, true),
+            (Phase::Error, false, true),
             (Phase::UpToDate, false, true),
             (Phase::Available, false, true),
-            (Phase::Available, true, false),
             (Phase::Checking, false, false),
-            (Phase::Downloading, true, false),
+            (Phase::Downloading, false, false),
             (Phase::Installing, false, false),
+            (Phase::Idle, true, true),
+            // The automatic one runs only while nothing has been checked.
+            (Phase::Error, true, false),
+            (Phase::UpToDate, true, false),
+            (Phase::Available, true, false),
+            (Phase::Checking, true, false),
+            (Phase::Downloading, true, false),
         ] {
             let mut inner = inner(state);
-            assert_eq!(inner.begin_check(500, by_checker), starts, "{state:?} {by_checker}");
-            assert_eq!(inner.next_check, if by_checker { 500 + DAY } else { 0 });
+            assert_eq!(inner.begin_check(automatic, true), starts, "{state:?} {automatic}");
             assert_eq!(inner.status.state, if starts { Phase::Checking } else { state });
         }
     }
 
     #[test]
-    fn a_failed_check_of_the_checker_is_retried_in_an_hour() {
-        const HOUR: u64 = 60 * 60 * 1000;
-        let mut inner = inner(Phase::Checking);
-        inner.reschedule(1_000, true, true);
-        assert_eq!(inner.next_check, 1_000 + DAY);
-        inner.reschedule(2_000, false, true);
-        assert_eq!(inner.next_check, 2_000 + HOUR);
-        // A manual failure leaves the schedule as it was; a manual success resets it.
-        inner.reschedule(3_000, false, false);
-        assert_eq!(inner.next_check, 2_000 + HOUR);
-        inner.reschedule(4_000, true, false);
-        assert_eq!(inner.next_check, 4_000 + DAY);
+    fn the_automatic_check_is_skipped_when_the_setting_is_off() {
+        let mut inner = inner(Phase::Idle);
+        assert!(!inner.begin_check(true, false));
+        assert_eq!(inner.status.state, Phase::Idle);
+        // The person's own check ignores the setting.
+        assert!(inner.begin_check(false, false));
+        assert_eq!(inner.status.state, Phase::Checking);
+    }
+
+    #[test]
+    fn a_new_check_drops_the_version_the_last_one_found() {
+        let mut inner = inner(Phase::Idle);
+        inner.status = UpdateStatus::found("0.2.0".into(), None, 5);
+        assert!(inner.begin_check(false, true));
+        assert_eq!((inner.status.version, inner.status.checked_at), (None, Some(5)));
     }
 }

@@ -1,4 +1,4 @@
-// Updates: this version, the "check automatically" switch, and the state of
+// Updates: this version, the "check when Tack starts" switch, and the state of
 // the update check and install (an UpdateStatus, ipc.js). One row says what
 // is happening and holds the one button that fits: check, install, or
 // nothing while it works. The release notes are the update server's text, so
@@ -50,7 +50,7 @@ export function mount(host, api) {
         <div class="row-text"><span class="row-title">Tack</span></div>
         <span class="row-value" id="version"></span>
       </div>
-      ${switchRow("switch-updatesCheck", "Check for updates automatically", "Tack looks for a new version now and then.")}
+      ${switchRow("switch-updatesCheck", "Check for updates when Tack starts", "Tack looks for a new version once each time it starts.")}
       <div class="row update">
         <div class="row-text">
           <span class="row-title" id="update-title"></span>

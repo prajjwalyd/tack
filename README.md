@@ -65,9 +65,10 @@ Both shortcuts can be changed in Settings, under **Shortcuts** (the tray menu's 
 ## Private by design
 
 - Your board stays on your PC. Tack only goes online to ask GitHub whether a
-  new version exists (once a day, and you can turn it off in Settings), and
-  to download one when you choose to install it. Updates are signed, and Tack
-  refuses any that aren't.
+  new version exists (once when it starts, and when you press Check for
+  updates; you can turn the check at start off in Settings), and to download
+  one when you choose to install it. Updates are signed, and Tack refuses any
+  that aren't.
 - Text is never read from your clipboard on its own, only when you press
   Win + Alt + C, and your clipboard is put back as it was.
 - Nothing is deleted for good: Tack's own copies go to the Recycle Bin.
