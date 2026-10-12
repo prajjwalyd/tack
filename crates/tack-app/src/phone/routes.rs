@@ -110,7 +110,7 @@ fn gate(app: &AppHandle, shared: &Shared, peer: &Peer, ours: bool) -> Verdict {
     }
     if ours {
         super::admit(app, peer)
-    } else if super::allowed(app, &peer.key) {
+    } else if lock(app).settings.phone.allows(&peer.key) {
         Verdict::Allowed
     } else {
         Verdict::Refused

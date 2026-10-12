@@ -91,22 +91,6 @@ impl Settings {
     }
 }
 
-/// Former default show-or-hide shortcuts. Builds that shipped them saved the
-/// default into board.json, so a saved one was Tack's choice, not the
-/// user's. Win+Alt+T belongs to the Xbox Game Bar and never registers.
-const RETIRED_TOGGLE_DEFAULTS: &[&str] = &["Win+Alt+T", "Ctrl+Alt+T"];
-
-impl Settings {
-    /// Moves a toggle shortcut still set to a retired default over to the
-    /// current one. Called once when board.json is read.
-    pub(crate) fn retire_old_defaults(&mut self) {
-        let saved = Chord::parse(&self.toggle_shortcut).ok().flatten().map(|c| c.to_string());
-        if saved.is_some_and(|s| RETIRED_TOGGLE_DEFAULTS.contains(&s.as_str())) {
-            self.toggle_shortcut = DEFAULT_TOGGLE.into();
-        }
-    }
-}
-
 fn chord_or(text: &str, default: &str) -> Option<Chord> {
     Chord::parse(text).unwrap_or_else(|_| Chord::parse(default).ok().flatten())
 }
@@ -114,20 +98,6 @@ fn chord_or(text: &str, default: &str) -> Option<Chord> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_retired_default_moves_to_the_current_one() {
-        for old in ["Win+Alt+T", "alt + win + t", "Ctrl+Alt+T"] {
-            let mut settings = Settings { toggle_shortcut: old.into(), ..Settings::default() };
-            settings.retire_old_defaults();
-            assert_eq!(settings.toggle_shortcut, DEFAULT_TOGGLE, "{old}");
-        }
-        for chosen in ["Win+Alt+Q", "Ctrl+Shift+F9", ""] {
-            let mut settings = Settings { toggle_shortcut: chosen.into(), ..Settings::default() };
-            settings.retire_old_defaults();
-            assert_eq!(settings.toggle_shortcut, chosen, "a shortcut the user chose stays");
-        }
-    }
 
     #[test]
     fn the_new_settings_default_to_the_way_it_always_was() {
