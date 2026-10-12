@@ -578,7 +578,10 @@ mod tests {
         use std::time::Duration;
         let _one = ONE_THREAD_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
         let (tx, rx) = std::sync::mpsc::channel();
-        let mut strips = EdgeStrips::start(move |event| drop(tx.send(event))).expect("a message thread");
+        let mut strips = EdgeStrips::start(move |event| {
+            let _ = tx.send(event);
+        })
+        .expect("a message thread");
         // Far off every monitor: the pointer is never over it.
         let far = Rect { x: -20000, y: -20000, w: 200, h: 100 };
         strips.set_guard(Some(far), 0, false);
