@@ -4,7 +4,7 @@
 
 Tack makes one kind of outgoing connection: looking for a new version of
 itself, and downloading it when you choose to install it ([Updates](#updates),
-below, and you can turn the automatic check off). It has no analytics and
+below, and you can turn the check at start off). It has no analytics and
 sends nothing about you or your board anywhere. The board is a local page
 whose content security policy only allows Tack's own files, `data:` images
 and the local IPC channel, so even a bug in the page could not reach the
@@ -17,11 +17,11 @@ that does is yours to switch on: **Use on your phone** (below).
 
 ## Updates
 
-Tack can update itself. By default it looks for a new version about 45
-seconds after it starts and then once every 24 hours while it runs, and
-Settings has a switch for that and a button to check now (the tray menu's
-"Check for updates" does the same). With the switch off Tack makes no
-request until you ask for one.
+Tack can update itself. By default it looks for a new version once, about 45
+seconds after it starts, and never again on its own. Settings has a switch
+for that check at start and a button to check now (the tray menu's "Check for
+updates" does the same). With the switch off Tack makes no request until you
+ask for one.
 
 What a check sends: one HTTPS request to
 `github.com/prajjwalyd/tack/releases/latest/download/latest.json`, a small

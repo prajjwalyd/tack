@@ -68,7 +68,7 @@ pub struct Appearance {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct UpdateSettings {
-    /// Look for a new version now and then (and say so when there is one).
+    /// Look for a new version once when Tack starts (and say so when there is one).
     pub check: bool,
 }
 
