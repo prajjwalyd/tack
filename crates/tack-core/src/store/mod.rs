@@ -3,11 +3,9 @@
 //! or a note's text; on startup each file is read again, and files that are
 //! gone by then are skipped.
 //!
-//! The file carries a schema [`VERSION`]. Older layouts (version 2, without
-//! notes, and the unversioned `prints` and `paths`/`captures` layouts) still
-//! load. A file from a newer Tack, or one that lists no prints at all, is
-//! read as far as it goes but never trusted for cleanup, and is backed up
-//! before this build writes over it.
+//! The file carries a schema [`VERSION`]. A file from a newer Tack, or one
+//! that lists no prints at all, is read as far as it goes but never trusted
+//! for cleanup, and is backed up before this build writes over it.
 //!
 //! Saves are snapshots ([`Snapshot`]) taken under the app's lock and written
 //! by one [`Saver`] thread outside it.
@@ -36,15 +34,8 @@ const VERSION: u32 = 3;
 #[derive(Serialize, Deserialize, Default, Debug)]
 #[serde(default, rename_all = "camelCase")]
 struct Stored {
-    /// Absent before versions were written; such files are layout 1 or older.
     version: Option<u32>,
     prints: Option<Vec<StoredPrint>>,
-    /// The older layout: the pinned paths, oldest first. Read, never written.
-    #[serde(skip_serializing)]
-    paths: Option<Vec<PathBuf>>,
-    /// The older layout: which of `paths` are captures.
-    #[serde(skip_serializing)]
-    captures: Vec<PathBuf>,
     #[serde(flatten)]
     settings: Settings,
 }
@@ -54,9 +45,8 @@ struct Stored {
 #[serde(rename_all = "camelCase")]
 struct StoredPrint {
     path: PathBuf,
-    /// "note" for a note; absent (before version 3, and for screenshots)
-    /// means a screenshot. Read as text, so a kind from a newer Tack skips
-    /// that print instead of failing the whole file.
+    /// "note" for a note; absent means a screenshot. Read as text, so a kind
+    /// from a newer Tack skips that print instead of failing the whole file.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     kind: Option<String>,
     #[serde(default)]
@@ -102,7 +92,7 @@ pub enum Loaded {
     /// board.json that was deleted, so they are left alone.
     Missing,
     /// board.json exists but could not be read, did not parse, comes from a
-    /// newer Tack, or lists no prints at all (no `prints`, no older `paths`).
+    /// newer Tack, or lists no prints at all (no `prints`).
     /// `backup` is where a copy of it was put, if one could be made; without
     /// one, nothing may write over the original.
     Unreadable { reason: String, backup: Option<PathBuf> },
@@ -203,20 +193,16 @@ fn parse(bytes: &[u8], now_ms: u64, modified: impl Fn(&Path) -> Option<u64>) -> 
         },
         // Every Tack writes a print list, even an empty one. A file without
         // one says nothing about which captures are pinned.
-        _ if stored.prints.is_none() && stored.paths.is_none() => {
-            Loaded::Unreadable { reason: "it lists no prints at all".into(), backup: None }
-        }
+        _ if stored.prints.is_none() => Loaded::Unreadable { reason: "it lists no prints at all".into(), backup: None },
         _ => Loaded::Ok,
     };
-    let entries = match stored.prints {
-        Some(prints) => prints,
-        None => legacy_prints(stored.paths.unwrap_or_default(), &stored.captures),
-    };
-    let mut prints: Vec<SavedPrint> = entries
+    let mut prints: Vec<SavedPrint> = stored
+        .prints
+        .unwrap_or_default()
         .into_iter()
         .filter_map(|p| {
             let kind = match p.kind.as_deref() {
-                None | Some("image") => Kind::Image,
+                None => Kind::Image,
                 Some("note") => Kind::Note,
                 Some(other) => {
                     eprintln!("tack: skipping a pinned {other:?}, a kind of print this build does not know");
@@ -232,27 +218,7 @@ fn parse(bytes: &[u8], now_ms: u64, modified: impl Fn(&Path) -> Option<u64>) -> 
         })
         .collect();
     prints.sort_by_key(|p| history::row_key(p.kept_at, p.pinned_at));
-    let mut settings = stored.settings;
-    settings.retire_old_defaults();
-    (Saved { settings, prints }, loaded)
-}
-
-/// The older layout as prints: unkept, with no pin time of their own.
-fn legacy_prints(paths: Vec<PathBuf>, captures: &[PathBuf]) -> Vec<StoredPrint> {
-    let captures: HashSet<String> = captures.iter().map(|p| path_key(p)).collect();
-    // Oldest first there; newest first here, so ties keep the right order.
-    paths
-        .into_iter()
-        .rev()
-        .map(|path| StoredPrint {
-            kind: None,
-            capture: captures.contains(&path_key(&path)),
-            path,
-            pinned_at: None,
-            kept: false,
-            kept_at: None,
-        })
-        .collect()
+    (Saved { settings: stored.settings, prints }, loaded)
 }
 
 /// What one save writes: taken under the app's lock (cheap, a few paths),
@@ -295,7 +261,6 @@ pub fn write(file: &Path, snapshot: &Snapshot) -> std::io::Result<()> {
         version: Some(VERSION),
         prints: Some(snapshot.prints.clone()),
         settings: snapshot.settings.clone(),
-        ..Stored::default()
     };
     let bytes = serde_json::to_vec_pretty(&stored).map_err(std::io::Error::other)?;
     replace(file, &bytes)
