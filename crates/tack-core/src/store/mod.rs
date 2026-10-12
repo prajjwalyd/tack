@@ -255,11 +255,8 @@ impl Snapshot {
 
 /// Writes board.json from a snapshot, replacing the file in one step.
 pub fn write(file: &Path, snapshot: &Snapshot) -> std::io::Result<()> {
-    let stored = Stored {
-        version: Some(VERSION),
-        prints: Some(snapshot.prints.clone()),
-        settings: snapshot.settings.clone(),
-    };
+    let stored =
+        Stored { version: Some(VERSION), prints: Some(snapshot.prints.clone()), settings: snapshot.settings.clone() };
     let bytes = serde_json::to_vec_pretty(&stored).map_err(std::io::Error::other)?;
     replace(file, &bytes)
 }

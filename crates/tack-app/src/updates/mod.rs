@@ -100,15 +100,13 @@ fn run_check(app: &AppHandle, automatic: bool) -> UpdateStatus {
     announce(app, &checking);
 
     let found = plugin::check(app);
-    change(app, &updates, |inner| {
-        match found {
-            Ok(Some(update)) => {
-                inner.status = UpdateStatus::found(update.version.clone(), update.body.clone(), now_ms());
-                inner.update = Some(update);
-            }
-            Ok(None) => inner.status = UpdateStatus::up_to_date(now_ms()),
-            Err(message) => inner.status = inner.status.failed(message),
+    change(app, &updates, |inner| match found {
+        Ok(Some(update)) => {
+            inner.status = UpdateStatus::found(update.version.clone(), update.body.clone(), now_ms());
+            inner.update = Some(update);
         }
+        Ok(None) => inner.status = UpdateStatus::up_to_date(now_ms()),
+        Err(message) => inner.status = inner.status.failed(message),
     })
 }
 

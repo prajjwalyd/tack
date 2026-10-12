@@ -123,7 +123,12 @@ fn a_board_json_as_v0_1_1_writes_it_loads_unchanged() {
         saved_board.prints,
         vec![
             // Kept prints come first, then the rest newest first.
-            saved(r"C:\Users\me\Pictures\Screenshots\kept.png", Origin::Folder, 1_790_000_001_000, Some(1_790_000_002_000)),
+            saved(
+                r"C:\Users\me\Pictures\Screenshots\kept.png",
+                Origin::Folder,
+                1_790_000_001_000,
+                Some(1_790_000_002_000)
+            ),
             note,
             saved(&format!(r"{captures}\Screenshot 2026-10-08 023223.png"), Origin::Capture, 1_790_000_000_000, None),
         ]
