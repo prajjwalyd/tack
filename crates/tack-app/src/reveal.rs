@@ -11,10 +11,10 @@
 use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::time::{Duration, Instant};
 
-use tack_core::{Rect, RevealReason, RevealSpeed, Settings, View};
+use tack_core::{shown, Rect, RevealReason, RevealSpeed, Settings, View};
 use tack_windows::edge_reveal::{self, EdgeHost};
-use tack_windows::{overlay, pointer, snipping_tool, HWND};
-use tauri::{AppHandle, Manager, WebviewWindowBuilder};
+use tack_windows::{focus, overlay, pointer, snipping_tool, HWND};
+use tauri::{AppHandle, Manager, WebviewWindowBuilder, WindowEvent};
 use windows::Win32::Foundation::POINT;
 
 use crate::ipc::events;
@@ -127,6 +127,14 @@ pub fn init_window(app: &AppHandle) {
     if let Some(hwnd) = board_hwnd(app) {
         BOARD.store(hwnd.0 as isize, Ordering::Release);
         overlay::make_unfocusable(hwnd);
+    }
+    if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
+        let handle = app.clone();
+        window.on_window_event(move |event| {
+            if let WindowEvent::Focused(false) = event {
+                focus_lost(&handle);
+            }
+        });
     }
     webview_privacy::apply(app);
     webview_power::attach(app);
@@ -291,12 +299,14 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
         }
         match reason {
             RevealReason::Hotkey | RevealReason::Tray => v.stay_open = true,
-            // Never cut short a longer peek (the tip's) already running.
-            RevealReason::New => {
+            // Never cut short a longer peek (the tip's) already running. The
+            // edge's is the time to reach the board: nothing sees the pointer
+            // along the top of the screen, as nothing may swallow its clicks.
+            RevealReason::New | RevealReason::Edge => {
                 v.peek_until = v.peek_until.max(Some(now + peek));
                 trace!("reveal {reason:?}: peek {peek:?} at scale {scale}");
             }
-            RevealReason::Edge | RevealReason::Settings => {}
+            RevealReason::Settings => {}
         }
         if v.shown {
             if reason == RevealReason::New && (v.window_pos != place.pos || v.window_size != place.size) {
@@ -322,6 +332,8 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
             } else {
                 trace!("reveal {reason:?}: already shown");
             }
+            // A longer peek, or another monitor: the pointer rules follow.
+            edge_reveal::wake();
             return;
         }
         v.shown = true;
@@ -442,6 +454,8 @@ pub fn tuck(app: &AppHandle) {
         let Some(generation) = s.view.tuck() else { return };
         (generation, hide_after)
     };
+    // The guard comes down and the edge strips go up.
+    edge_reveal::wake();
     events::tuck(app);
     // The keyboard goes back to the window that had it, if the board had it.
     let handle = app.clone();
@@ -475,17 +489,20 @@ pub fn tuck(app: &AppHandle) {
 /// front; it never takes the keyboard from Settings (the reason is
 /// [`RevealReason::Settings`], which only the shortcut's reveal differs from).
 /// A board already down is just kept: no new swing. While held, the pointer
-/// poller does not tuck it (leaving, the peek ending, a click in Settings; the
-/// board is never activated by a click, so using it keeps Settings focused),
-/// a full-screen app still does, and so does an explicit tuck; both end the
-/// hold. Letting go tucks nothing itself: the poller's usual rules take over,
-/// so a board the shortcut or the tray opened, or one the pointer is on,
-/// stays, and any other goes after the leave delay.
+/// rules do not tuck it (leaving, the peek ending; the board is never
+/// activated by a click, so using it keeps Settings focused), a full-screen
+/// app still does, and so does an explicit tuck; both end the hold. Letting
+/// go tucks nothing itself: the usual rules take over, so a board the
+/// shortcut or the tray opened, or one the pointer is on, stays, and any
+/// other goes after the leave delay.
 ///
 /// Asking twice for the same thing does nothing. From the main thread (the
 /// window's events).
 pub fn hold_for_settings(app: &AppHandle, on: bool) {
-    if !lock(app).view.hold_for_settings(on) {
+    let reveal = lock(app).view.hold_for_settings(on);
+    // Letting go starts the leave delay of a board nothing else holds.
+    edge_reveal::wake();
+    if !reveal {
         return;
     }
     // Asked afresh, not the poller's last reading, which may be stale while
@@ -524,6 +541,8 @@ pub fn set_tip(app: &AppHandle, rect: Option<Rect>) {
             }
         }
     }
+    // The tip is part of the board's zone, and its peek is a wait.
+    edge_reveal::wake();
 }
 
 /// The hotkey and the tray icon: down if it is up, up if it is down.
@@ -533,6 +552,24 @@ pub fn toggle(app: &AppHandle, reason: RevealReason) {
         tuck(app);
     } else {
         reveal(app, reason);
+    }
+}
+
+/// The board window lost the keyboard focus. A board that took it (the
+/// shortcut's) goes when another window has it now: that is the click
+/// outside, as far as a board nothing sees the pointer clicking can hear one.
+/// A board opened any other way never had the focus, and goes when the
+/// pointer leaves.
+fn focus_lost(app: &AppHandle) {
+    // Not the page, a window of its own inside the board's, taking it.
+    if focus::is_foreground(HWND(BOARD.load(Ordering::Acquire) as *mut _)) {
+        return;
+    }
+    let on_taskbar = pointer::cursor_pos().is_some_and(pointer::on_taskbar);
+    let tucks = shown::tucks_when_unfocused(&lock(app).view, keyboard::taken(), on_taskbar);
+    if tucks {
+        trace!("tuck requested: the board lost the keyboard to another window");
+        tuck(app);
     }
 }
 
@@ -559,12 +596,16 @@ impl EdgeHost for EdgeGlue {
         if crate::stress::running() {
             return;
         }
-        trace!("tuck requested: the pointer poller (peek over, pointer left, click outside or full screen)");
+        trace!("tuck requested: the pointer rules (peek over, pointer left or full screen)");
         tuck(&self.0);
     }
 
     fn set_click_through(&self, ignore: bool) {
         set_click_through(ignore);
+    }
+
+    fn board_window(&self) -> isize {
+        BOARD.load(Ordering::Acquire)
     }
 
     fn pointer_left(&self) {

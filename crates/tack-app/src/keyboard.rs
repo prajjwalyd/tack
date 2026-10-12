@@ -24,6 +24,11 @@ static PREVIOUS: AtomicIsize = AtomicIsize::new(0);
 /// The board has the keyboard and has not given it back yet.
 static TAKEN: AtomicBool = AtomicBool::new(false);
 
+/// The board has the keyboard and has not given it back yet.
+pub fn taken() -> bool {
+    TAKEN.load(Ordering::SeqCst)
+}
+
 /// Gives the board keyboard focus, if it is down because of the shortcut.
 /// On the main thread.
 pub fn take(app: &AppHandle) -> bool {

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use tack_core::thumbnail;
-use tack_windows::drag_out;
+use tack_windows::{drag_out, edge_reveal};
 use tauri::AppHandle;
 
 use crate::captures;
@@ -56,6 +56,8 @@ pub fn start(app: &AppHandle, id: String) {
 
 fn finish(app: &AppHandle, id: String, path: PathBuf) {
     lock(app).view.dragging = None;
+    // What the drag held down is over: the leave delay starts if the pointer is away.
+    edge_reveal::wake();
     events::print_drag_ended(app, &id);
     for at in RECHECKS {
         let (app, path) = (app.clone(), path.clone());

@@ -71,6 +71,11 @@ unsafe fn force_foreground(hwnd: HWND) {
     }
 }
 
+/// `hwnd` is the foreground window.
+pub fn is_foreground(hwnd: HWND) -> bool {
+    unsafe { GetForegroundWindow() == hwnd }
+}
+
 /// The process whose window is in front.
 pub fn foreground_process() -> Option<u32> {
     window_process(unsafe { GetForegroundWindow() })

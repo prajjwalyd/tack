@@ -1,33 +1,46 @@
 //! Decides when the board comes down from the top edge and when it tucks
 //! away, and flips the window's click-through as the pointer crosses the
-//! board. Tucked, nothing is polled: the edge strips ([`crate::edge_strip`])
-//! tell when the pointer reaches the middle of the top edge, or something
-//! carried from another app does, and the poller sleeps in between. Shown, it
-//! polls rather than hooking the mouse, which would add latency to every app
-//! on the system. Wake-ups per second:
+//! board. Nothing is polled to do it, which would hold a thread awake, and
+//! hooking the mouse would add latency to every app on the system: the
+//! poller is told, and sleeps in between.
+//!
+//! - Tucked, the edge strips ([`crate::edge_strip`]) tell when the pointer
+//!   reaches the middle of the top edge, or something carried from another
+//!   app does.
+//! - Shown, the guard window (the same module) hears the pointer move over,
+//!   and leave, the board's zone; the page says when the pointer is off the
+//!   board but over the window; the app says when something that held the
+//!   board lets go or the board's place changes. Each is one look at the
+//!   pointer ([`tack_core::shown`]), and a one-shot wait is asked for only
+//!   while something counts down: a peek, or the leave delay.
+//!
+//! Wake-ups per second:
 //!
 //! - tucked: 0, edge reveal on or off
 //! - tucked, the pointer at the edge, until it leaves or the board comes
 //!   down: 40, fewer than that while the reveal dwell is about to end
 //! - tucked, something carried to the edge: 1 or 2, until its dwell ends
 //! - tucked just now under the pointer at the edge: 10, until it leaves
-//! - shown: 40
+//! - shown: 0 with the pointer still. One for each input event while it
+//!   moves over the board's zone (or something is carried over it), one at
+//!   the end of a peek, one at the end of the leave delay.
 //! - tucked, the strips could not be made: 10
-//! - the pointer unreadable (a UAC prompt): 1 for three seconds, then 0.1
+//! - tucked, the strips could not be made and the pointer unreadable (a UAC
+//!   prompt): 1 for three seconds, then 0.1
 
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
-use tack_core::view::STRIP_H;
-use tack_core::{Rect, RevealReason, Settings, View};
+use tack_core::shown::Shown;
+use tack_core::{Settings, View};
 use windows::Win32::Foundation::POINT;
 
 use crate::edge_strip::{self, EdgeEvent, EdgeStrips};
 use crate::pointer::{self, VK_LBUTTON, VK_RBUTTON};
 use crate::{overlay, snipping_tool};
 
-/// Shown, and tucked with the pointer at the edge.
+/// Tucked with the pointer at the edge.
 const POLL: Duration = Duration::from_millis(25);
 /// Tucked without edge strips: a look this often. Nothing tells then that the
 /// pointer is at the edge.
@@ -46,8 +59,6 @@ const DRAG_DWELL: Duration = Duration::from_millis(220);
 // user's speed too ([`tack_core::RevealSpeed::leave_delay`]). Everything else
 // here is class C (see the policy on `RevealSpeed`): an input threshold, a
 // physical gesture's time or polling the system, which never scale.
-/// Slack around the board before the pointer counts as gone, CSS px.
-const LEAVE_MARGIN: f64 = 10.0;
 /// SHQueryUserNotificationState is not free; nobody notices half a second.
 const FULLSCREEN_CHECK: Duration = Duration::from_millis(500);
 /// The pointer cannot be read: another desktop has the input (a UAC prompt,
@@ -61,7 +72,7 @@ const POLL_UNREADABLE_SLOW: Duration = Duration::from_secs(10);
 pub trait EdgeHost: Send + 'static {
     /// Runs `f` on the shared view, with the settings, under the board lock.
     fn with_view<R>(&self, f: impl FnOnce(&mut View, &Settings) -> R) -> R;
-    /// The pointer rested on the top edge: reveal with [`RevealReason::Edge`].
+    /// The pointer rested on the top edge: reveal.
     fn reveal(&self);
     fn tuck(&self);
     /// Make the window click-through (`true`) or not.
@@ -69,12 +80,14 @@ pub trait EdgeHost: Send + 'static {
     /// The window just became click-through, so the UI may never see the
     /// pointer leave a print (which would stay in its hover state); tell it.
     fn pointer_left(&self);
+    /// The board's window, a raw handle (0 before it exists): the guard goes
+    /// just under it.
+    fn board_window(&self) -> isize;
 }
 
 enum Action {
     None,
     Reveal,
-    Tuck,
 }
 
 /// What the poller remembers between ticks.
@@ -82,23 +95,21 @@ struct Poller {
     /// `None`: they could not be made, so the tucked poller looks slowly.
     strips: Option<EdgeStrips>,
     edge: EdgeWatch,
-    away_since: Option<Instant>,
-    prev_left: bool,
-    prev_right: bool,
-    /// The left button went down over the board and is still held: a press,
-    /// a long press or the start of a drag. Never tuck or flip click-through
-    /// under it.
-    press_inside: bool,
+    /// What a shown board remembers of the pointer.
+    shown: Shown,
+    /// The guard window could not be made, so the pointer's leaving the
+    /// board's zone would never be heard.
+    guard_failed: bool,
     last_fullscreen_check: Option<Instant>,
-    /// The last tick did not watch the buttons.
-    unwatched: bool,
     /// Ticks in a row that could not read the pointer.
     unreadable: u32,
 }
 
 /// What wakes the poller.
 enum Heard {
-    /// The board came down, or edge reveal changed: look at once.
+    /// Something changed: look at once. The board came down or went up, edge
+    /// reveal changed, something holding the board let go, the page says the
+    /// pointer is off the board.
     Wake,
     Edge(EdgeEvent),
 }
@@ -121,12 +132,9 @@ pub fn start<H: EdgeHost>(host: H) {
             let mut p = Poller {
                 strips,
                 edge: EdgeWatch::default(),
-                away_since: None,
-                prev_left: false,
-                prev_right: false,
-                press_inside: false,
+                shown: Shown::default(),
+                guard_failed: false,
                 last_fullscreen_check: None,
-                unwatched: false,
                 unreadable: 0,
             };
             let mut wait = p.tick(&host);
@@ -137,6 +145,7 @@ pub fn start<H: EdgeHost>(host: H) {
                     None => rx.recv().map_err(|_| RecvTimeoutError::Disconnected),
                 };
                 match heard {
+                    Ok(Heard::Edge(EdgeEvent::GuardFailed)) => p.guard_failed = true,
                     Ok(Heard::Edge(event)) => p.edge.hear(event, Instant::now()),
                     Ok(Heard::Wake) | Err(RecvTimeoutError::Timeout) => {}
                     Err(RecvTimeoutError::Disconnected) => return,
@@ -147,9 +156,12 @@ pub fn start<H: EdgeHost>(host: H) {
         .expect("pointer thread");
 }
 
-/// The board just came down, or edge reveal came on or off: the poller looks
-/// at once rather than at its next (perhaps parked) tick, so click-through
-/// follows the pointer from the start and the edge strips follow the setting.
+/// Something changed that a look at the pointer may find a decision in: the
+/// board just came down or went up, edge reveal came on or off, something
+/// that held the board let go, the board's rect moved, or the page says the
+/// pointer is off the board. The poller looks at once rather than at its next
+/// (perhaps parked) tick, so click-through follows the pointer from the start
+/// and the edge strips and the guard follow the board.
 pub fn wake() {
     if let Some(poller) = POLLER.get() {
         let _ = poller.send(Heard::Wake);
@@ -160,15 +172,23 @@ impl Poller {
     /// Nothing is being watched: forget what a watch builds up.
     fn forget(&mut self) {
         self.edge.reset();
-        self.away_since = None;
-        self.press_inside = false;
-        // Asked afresh when there is a reason to again.
+        // Asked afresh, when there is a reason to again.
         self.last_fullscreen_check = None;
-        self.unwatched = true;
     }
 
-    /// One look at the pointer; returns how long to wait for the next, or
-    /// `None` to wait to be told.
+    /// Windows' word on whether a full-screen app is in front (and whether it
+    /// is Snipping Tool's own overlay), if it is due: asking costs a little.
+    fn fullscreen_reading(&mut self, now: Instant) -> Option<(bool, bool)> {
+        if self.last_fullscreen_check.is_some_and(|t| now - t < FULLSCREEN_CHECK) {
+            return None;
+        }
+        self.last_fullscreen_check = Some(now);
+        let fs = overlay::fullscreen_app_in_front();
+        Some((fs, fs && snipping_tool::in_front()))
+    }
+
+    /// A look at the board, tucked or shown; returns how long to wait for the
+    /// next, or `None` to wait to be told.
     fn tick(&mut self, host: &impl EdgeHost) -> Option<Duration> {
         let now = Instant::now();
         let (shown, edge_reveal) = host.with_view(|v, settings| {
@@ -182,7 +202,18 @@ impl Poller {
             strips.set_enabled(!shown && edge_reveal);
             self.edge.listen(strips.enabled());
         }
-        if !shown && !edge_reveal {
+        if shown {
+            return self.look(host, now);
+        }
+
+        // Tucked: the guard goes with the board, and so does what a shown
+        // board builds up.
+        self.shown = Shown::default();
+        self.guard_failed = false;
+        if let Some(strips) = &mut self.strips {
+            strips.set_guard(None, 0, false);
+        }
+        if !edge_reveal {
             self.forget();
             return None;
         }
@@ -190,7 +221,7 @@ impl Poller {
         let Some(pt) = pointer::cursor_pos() else {
             // Not (0, 0), which would read as the top edge.
             self.forget();
-            if !shown && self.strips.is_some() {
+            if self.strips.is_some() {
                 // The strips say when it is back.
                 return None;
             }
@@ -200,198 +231,97 @@ impl Poller {
         self.unreadable = 0;
         let left = pointer::key_down(VK_LBUTTON.0);
         let right = pointer::key_down(VK_RBUTTON.0);
-        if std::mem::take(&mut self.unwatched) {
-            // Buttons held since an unwatched stretch were not pressed just now.
-            self.prev_left = left;
-            self.prev_right = right;
-        }
-        let left_pressed = left && !self.prev_left;
-        let right_pressed = right && !self.prev_right;
-        self.prev_left = left;
-        self.prev_right = right;
-        if !left {
-            self.press_inside = false;
-        }
+        let zone = edge_strip::zone_at(pt);
 
-        // Not under the board lock: WindowFromPoint may send the window
-        // under the pointer a message and wait for its answer.
-        let on_taskbar = (left_pressed || right_pressed) && pointer::on_taskbar(pt);
-        let zone = (!shown).then(|| edge_strip::zone_at(pt));
-
-        // (full screen, and it is Snipping Tool's own overlay.) Only a board
-        // that is down (a full-screen app tucks it) or the pointer at the
-        // edge (where it would reveal) needs to know.
-        let wanted = shown || zone.is_some_and(|z| z.contains(pt.x, pt.y));
-        let fullscreen = if !wanted {
+        // (full screen, and it is Snipping Tool's own overlay.) Only the
+        // pointer at the edge, where it would reveal, needs to know.
+        let fullscreen = if zone.contains(pt.x, pt.y) {
+            self.fullscreen_reading(now)
+        } else {
             // So the edge asks at once when the pointer gets there.
             self.last_fullscreen_check = None;
             None
-        } else if self.last_fullscreen_check.is_none_or(|t| now - t >= FULLSCREEN_CHECK) {
-            self.last_fullscreen_check = Some(now);
-            let fs = overlay::fullscreen_app_in_front();
-            Some((fs, fs && snipping_tool::in_front()))
-        } else {
-            None
         };
 
-        let mut click_through = None;
-        let mut pause = Some(POLL);
+        let mut pause = None;
         let action = host.with_view(|v, settings| {
+            if v.shown {
+                // Revealed since: the reveal wakes the poller.
+                return Action::None;
+            }
             let edge_dwell = settings.reveal.dwell();
-            let leave_delay = settings.reveal.leave_delay();
             if let Some((fs, snipping)) = fullscreen {
                 v.fullscreen = fs;
                 v.snipping = snipping;
             }
-
-            if !v.shown {
-                self.away_since = None;
-                self.press_inside = false;
-                v.drag_in = false;
-                let at_top = zone.unwrap_or_else(|| edge_strip::zone_at(pt)).contains(pt.x, pt.y);
-                if !at_top {
-                    v.edge_armed = true;
-                }
-                let free = !left && !right;
-                let action = if !settings.edge_reveal || !at_top || !v.edge_armed || v.fullscreen {
-                    self.edge.reset();
-                    Action::None
-                } else {
-                    match self.edge.rested(now, pt, free, edge_dwell) {
-                        Rest::No => Action::None,
-                        Rest::Edge => Action::Reveal,
-                        Rest::Drag => {
-                            v.drag_in = true;
-                            Action::Reveal
-                        }
-                    }
-                };
-                pause = tucked_wait(
-                    self.strips.is_some(),
-                    self.edge.next_look(now, edge_dwell, v.edge_armed, v.fullscreen),
-                );
-                action
-            } else {
-                self.edge.reset();
-                if !left {
-                    // Dropped (or let go elsewhere): from now on it leaves
-                    // like any reveal from the edge.
-                    v.drag_in = false;
-                }
-                let scale = v.scale;
-                // The board, and the one-time tip under it while that shows.
-                let board = v.zone_on_screen();
-                // The UI already adds a small margin around the board.
-                let over_board = v.hit(pt.x, pt.y);
-
-                // Above the board counts as inside: the zone stretches from the
-                // board's margin to the monitor's top edge, because the pointer
-                // tends to drift back up the way it came.
-                let mut in_zone = board
-                    .map(|r| {
-                        let z = r.inflate((LEAVE_MARGIN * scale).round() as i32);
-                        let top = z.y.min(v.monitor_top);
-                        Rect { x: z.x, y: top, w: z.w, h: z.y + z.h - top }.contains(pt.x, pt.y)
-                    })
-                    .unwrap_or(false);
-                if in_zone {
-                    v.entered = true;
-                    // Visited: from now on it leaves like any other reveal.
-                    v.stay_open = false;
-                } else if (!v.entered && v.reason == RevealReason::Edge) || v.drag_in {
-                    // Fresh from the edge the pointer may be anywhere along
-                    // the top; the whole strip counts until it finds the
-                    // board, and for as long as something is carried to it.
-                    let strip = Rect {
-                        x: v.window_pos.0,
-                        y: v.monitor_top,
-                        w: v.window_size.0,
-                        h: v.window_pos.1 - v.monitor_top + (STRIP_H * scale).round() as i32,
-                    };
-                    in_zone = strip.contains(pt.x, pt.y);
-                }
-
-                let held = v.dragging.is_some() || v.menu_open;
-                if left_pressed && over_board {
-                    self.press_inside = true;
-                }
-                // Not the taskbar: a click on the tray icon toggles the board
-                // itself when the button comes up, and tucking here on the way
-                // down would make it bounce straight back.
-                // Nor in Settings, which counts as outside the board but is
-                // what holds it down.
-                let clicked_outside = (left_pressed || right_pressed) && !over_board && !on_taskbar && !v.settings_held;
-
-                // The window covers the whole work area, and the drag loop
-                // drops on whatever window is under the pointer: off the
-                // board it must let a print being dragged out through.
-                let follow = v.dragging.is_some() || (!held && !self.press_inside);
-                if follow && over_board == v.ignoring {
-                    v.ignoring = !over_board;
-                    click_through = Some(v.ignoring);
-                }
-
-                let peeking = !v.entered && v.peek_until.is_some_and(|t| now < t);
-                // Settings has the focus: the board stays down (no leave, no
-                // peek end) for as long as it does.
-                let busy = held || self.press_inside || v.stay_open || peeking || v.settings_held;
-
-                // A full-screen app coming to the front sends the edge's and a
-                // new capture's board back up; Snipping Tool's overlay only
-                // the edge's, since a new capture's board may well come down
-                // while that overlay is still fading out.
-                let fullscreen_tucks = v.fullscreen
-                    && (match v.reason {
-                        RevealReason::Edge => true,
-                        RevealReason::New => !v.snipping,
-                        RevealReason::Hotkey | RevealReason::Tray | RevealReason::Settings => false,
-                    }
-                        // A full-screen app wins over the Settings hold,
-                        // whoever revealed the board; the hold ends with the
-                        // tuck (but not for Snipping Tool's own overlay).
-                        || (v.settings_held && !v.snipping));
-                if (!held && clicked_outside) || (!held && fullscreen_tucks) {
-                    if cfg!(debug_assertions) {
-                        eprintln!(
-                            "tack: tuck: {} (left {left_pressed}, right {right_pressed}, at {}, {})",
-                            if clicked_outside { "a click outside" } else { "full screen" },
-                            pt.x,
-                            pt.y
-                        );
-                    }
-                    Action::Tuck
-                } else if in_zone || busy {
-                    self.away_since = None;
-                    Action::None
-                } else {
-                    let since = *self.away_since.get_or_insert(now);
-                    if now - since >= leave_delay {
-                        Action::Tuck
-                    } else {
-                        Action::None
-                    }
-                }
+            let at_top = zone.contains(pt.x, pt.y);
+            if !at_top {
+                v.edge_armed = true;
             }
+            let free = !left && !right;
+            let action = if !settings.edge_reveal || !at_top || !v.edge_armed || v.fullscreen {
+                self.edge.reset();
+                Action::None
+            } else {
+                match self.edge.rested(now, pt, free, edge_dwell) {
+                    Rest::No => Action::None,
+                    Rest::Edge => Action::Reveal,
+                    Rest::Drag => {
+                        v.drag_in = true;
+                        Action::Reveal
+                    }
+                }
+            };
+            pause =
+                tucked_wait(self.strips.is_some(), self.edge.next_look(now, edge_dwell, v.edge_armed, v.fullscreen));
+            action
         });
 
-        if let Some(ignore) = click_through {
-            host.set_click_through(ignore);
-            if ignore {
-                host.pointer_left();
-            }
-        }
         match action {
             Action::None => pause,
             Action::Reveal => {
                 host.reveal();
                 Some(POLL)
             }
-            Action::Tuck => {
-                self.away_since = None;
-                host.tuck();
-                pause
+        }
+    }
+
+    /// One look at a shown board: the pointer decides whether it tucks, whether
+    /// the window takes clicks and where the guard goes; the wait is until
+    /// something counting down ends.
+    fn look(&mut self, host: &impl EdgeHost, now: Instant) -> Option<Duration> {
+        // Not under the board lock: reading the pointer may involve other
+        // windows.
+        let pt = pointer::cursor_pos();
+        let left = pointer::key_down(VK_LBUTTON.0);
+        let fullscreen = self.fullscreen_reading(now);
+        // Without the guard nothing would say when the pointer leaves.
+        let watched = self.strips.is_some() && !self.guard_failed;
+
+        let step = host.with_view(|v, settings| {
+            if let Some((fs, snipping)) = fullscreen {
+                v.fullscreen = fs;
+                v.snipping = snipping;
+            }
+            let delay = settings.reveal.leave_delay();
+            self.shown.look(v, pt.map(|p| (p.x, p.y)), left, now, delay, watched)
+        });
+
+        if let Some(ignore) = step.click_through {
+            host.set_click_through(ignore);
+            if ignore {
+                host.pointer_left();
             }
         }
+        if let Some(strips) = &mut self.strips {
+            // Click-through now: the guard is the one to hear the pointer.
+            strips.set_guard(step.zone, host.board_window(), step.click_through == Some(true));
+        }
+        if step.tuck {
+            // The tuck wakes the poller, which takes the guard down.
+            host.tuck();
+        }
+        step.wait
     }
 }
 
@@ -453,6 +383,9 @@ impl EdgeWatch {
             }
             EdgeEvent::DragEntered => self.drag = Some(now),
             EdgeEvent::DragLeft => self.drag = None,
+            // The guard's only wake the poller: a shown board looks at the
+            // pointer, not at the edge.
+            EdgeEvent::GuardMoved | EdgeEvent::GuardLeft | EdgeEvent::GuardFailed => {}
         }
     }
 
