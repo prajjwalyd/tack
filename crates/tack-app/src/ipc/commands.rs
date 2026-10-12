@@ -9,6 +9,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tack_core::{Print, Rect};
+use tack_windows::edge_reveal;
 use tauri::AppHandle;
 
 use crate::ipc::events::Removal;
@@ -53,15 +54,30 @@ pub fn board_ready(app: AppHandle) -> Ready {
 }
 
 /// Where the board is, in physical px relative to the window, for
-/// click-through and leave detection.
+/// click-through and leave detection. The guard window follows it.
 #[tauri::command]
 pub fn set_board_rect(app: AppHandle, x: f64, y: f64, w: f64, h: f64) {
-    lock(&app).view.rect = Some(Rect {
-        x: x.round() as i32,
-        y: y.round() as i32,
-        w: w.round().max(0.0) as i32,
-        h: h.round().max(0.0) as i32,
-    });
+    let shown = {
+        let mut s = lock(&app);
+        s.view.rect = Some(Rect {
+            x: x.round() as i32,
+            y: y.round() as i32,
+            w: w.round().max(0.0) as i32,
+            h: h.round().max(0.0) as i32,
+        });
+        s.view.shown
+    };
+    if shown {
+        edge_reveal::wake();
+    }
+}
+
+/// The pointer is over the window but off the board and its tip, or it left
+/// the window: the window takes clicks only on the board, so the backend
+/// looks at the pointer at once. Sent once per time, not for every move.
+#[tauri::command]
+pub fn pointer_off_board() {
+    edge_reveal::wake();
 }
 
 #[tauri::command]

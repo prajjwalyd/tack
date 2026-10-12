@@ -106,6 +106,8 @@ export function on(name, fn) {
 export const boardReady = () => invoke("board_ready");
 /** The board rect in physical px relative to the window. */
 export const setBoardRect = (rect) => invoke("set_board_rect", rect);
+/** The pointer is over the window but off the board and the tip (or left the window): the backend looks at it at once. Once per time, never per move (pointer.js). */
+export const pointerOffBoard = () => invoke("pointer_off_board");
 export const copyPrint = (id) => invoke("copy_print", { id });
 export const openPrint = (id) => invoke("open_print", { id });
 export const editPrint = (id) => invoke("edit_print", { id });

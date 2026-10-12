@@ -218,6 +218,7 @@ const commands = {
     if (r) Object.assign(r.style, { left: x / dpr + "px", top: y / dpr + "px", width: w / dpr + "px", height: h / dpr + "px" });
     if (r) r.querySelector("span").textContent = `board rect ${x},${y} ${w}×${h} phys px`;
   },
+  pointer_off_board: () => {},
   copy_print: ({ id }) => setTimeout(() => emit(EVENTS.PRINT_COPIED, { id }), 40),
   open_print: ({ id }) => log(`(would open ${prints.find((x) => x.id === id)?.note?.link || id})`),
   edit_print: ({ id }) => log(`(would edit ${prints.find((x) => x.id === id)?.name || id})`),
@@ -285,7 +286,7 @@ function pin(print, animate = true) {
 window.__TAURI__ = {
   core: {
     invoke: (cmd, args = {}) => {
-      if (cmd !== "set_board_rect") log(`invoke ${cmd} ${JSON.stringify(args).slice(0, 120)}`);
+      if (cmd !== "set_board_rect" && cmd !== "pointer_off_board") log(`invoke ${cmd} ${JSON.stringify(args).slice(0, 120)}`);
       const fn = commands[cmd];
       if (!fn) return Promise.reject(new Error(`unknown command ${cmd}`));
       return Promise.resolve(fn(args) ?? null);

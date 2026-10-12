@@ -22,7 +22,7 @@ pub(crate) fn key_down(vk: u16) -> bool {
 
 /// The taskbar (any monitor's) or the notification area overflow is under
 /// the point.
-pub(crate) fn on_taskbar(pt: POINT) -> bool {
+pub fn on_taskbar(pt: POINT) -> bool {
     const CLASSES: [&str; 4] =
         ["Shell_TrayWnd", "Shell_SecondaryTrayWnd", "NotifyIconOverflowWindow", "TopLevelWindowForOverflowXamlIsland"];
     unsafe {

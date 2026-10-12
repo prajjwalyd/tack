@@ -310,10 +310,11 @@ export function showTip() {
   // Measured at rest, before the entrance animation moves it.
   const r = el.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
-  ipc.setTip({
+  state.hit[1] = {
     x: Math.round(r.left * dpr), y: Math.round(r.top * dpr),
     w: Math.round(r.width * dpr), h: Math.round(r.height * dpr),
-  });
+  };
+  ipc.setTip(state.hit[1]);
   if (state.reduced) {
     el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: scaled(200), easing: "ease-out" });
     return;
@@ -331,6 +332,7 @@ function closeTip() {
   const el = tip;
   if (!el) return;
   tip = null;
+  state.hit[1] = null;
   ipc.setTip(null);
   const a = el.animate([
     { opacity: 1, transform: "rotate(-.6deg)" },
@@ -344,4 +346,5 @@ export function dropTip() {
   if (!tip) return;
   tip.remove();
   tip = null;
+  state.hit[1] = null;
 }

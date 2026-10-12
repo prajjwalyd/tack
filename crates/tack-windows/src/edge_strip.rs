@@ -21,10 +21,29 @@
 //! afterwards (a full-screen player, say) hides it until the strips are made
 //! again, which is at every tuck: the strips exist only while the board is
 //! tucked and edge reveal is on ([`EdgeStrips::set_enabled`]).
+//!
+//! The thread has one more window, for the board while it is shown: the
+//! guard ([`EdgeStrips::set_guard`]). It is the same kind of window, laid
+//! just under the board's in the z-order across the board's zone, and it is
+//! for the same thing: to be told, not to look. The pointer is over the
+//! board's window (which lets it through except on the board), or over the
+//! guard, or outside both.
+//!
+//! - The pointer moves on the guard, or something is carried over it:
+//!   [`EdgeEvent::GuardMoved`]. The board's window is click-through where
+//!   the board is not, so this is how the pointer is seen reaching the board.
+//! - The pointer leaves the guard (`TME_LEAVE`, asked again after each
+//!   leave), or a window above it covers the pointer, which Windows reports
+//!   as a leave too: [`EdgeEvent::GuardLeft`]. What that means (gone, or
+//!   only onto the board) is for a look at the pointer to say.
+//!
+//! Unlike a strip, the guard takes the clicks that fall on it: turned
+//! click-through it could not hear the pointer leave.
 
 use std::cell::{Cell, OnceCell};
 use std::io;
 use std::sync::mpsc::{sync_channel, SyncSender};
+use std::sync::Mutex;
 use std::thread::JoinHandle;
 
 use tack_core::Rect;
@@ -39,13 +58,14 @@ use windows::Win32::System::Ole::{
 };
 use windows::Win32::System::SystemServices::MODIFIERKEYS_FLAGS;
 use windows::Win32::System::Threading::GetCurrentThreadId;
+use windows::Win32::UI::Input::KeyboardAndMouse::{TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, GetWindowLongPtrW,
     GetWindowRect, KillTimer, LoadCursorW, PeekMessageW, PostThreadMessageW, RegisterClassW,
     SetLayeredWindowAttributes, SetTimer, SetWindowLongPtrW, SetWindowPos, UnregisterClassW, GWL_EXSTYLE, HWND_TOPMOST,
-    IDC_ARROW, LWA_ALPHA, MA_NOACTIVATE, MSG, PM_NOREMOVE, SWP_NOACTIVATE, SWP_SHOWWINDOW, WM_APP, WM_DISPLAYCHANGE,
-    WM_DPICHANGED, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_QUIT, WM_TIMER, WM_USER, WNDCLASSW, WS_EX_LAYERED,
-    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    IDC_ARROW, LWA_ALPHA, MA_NOACTIVATE, MSG, PM_NOREMOVE, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, WM_APP,
+    WM_DISPLAYCHANGE, WM_DPICHANGED, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_QUIT, WM_TIMER, WM_USER, WNDCLASSW,
+    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 
 use crate::overlay;
@@ -63,6 +83,13 @@ const LEAVE_TIMER: usize = 1;
 /// Between the thread and its handle.
 const WM_ENABLE: u32 = WM_APP + 1;
 const WM_RELAYOUT: u32 = WM_APP + 2;
+const WM_GUARD: u32 = WM_APP + 3;
+/// Not in the features of the `windows` crate this uses (it is in Controls).
+const WM_MOUSELEAVE: u32 = 0x02A3;
+
+/// Where the guard is asked to be ([`EdgeStrips::set_guard`]): its rect, and
+/// the window it goes just under, a raw handle.
+static GUARD: Mutex<Option<(Rect, isize)>> = Mutex::new(None);
 
 /// What the strips saw.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -74,6 +101,12 @@ pub(crate) enum EdgeEvent {
     /// [`EdgeEvent::DragLeft`].
     DragEntered,
     DragLeft,
+    /// The pointer moved on the guard, or something carried moved over it.
+    GuardMoved,
+    /// The pointer left the guard, or a window above covers it now.
+    GuardLeft,
+    /// The guard could not be made.
+    GuardFailed,
 }
 
 /// The zone along the top of `monitor` (physical px): its middle third,
@@ -97,6 +130,7 @@ pub(crate) struct EdgeStrips {
     thread: Option<JoinHandle<()>>,
     thread_id: u32,
     enabled: bool,
+    guard: Option<Rect>,
 }
 
 impl EdgeStrips {
@@ -107,7 +141,7 @@ impl EdgeStrips {
         let thread =
             std::thread::Builder::new().name("tack-edge".into()).spawn(move || run(Box::new(on_event), ready))?;
         match started.recv() {
-            Ok(Ok(thread_id)) => Ok(EdgeStrips { thread: Some(thread), thread_id, enabled: false }),
+            Ok(Ok(thread_id)) => Ok(EdgeStrips { thread: Some(thread), thread_id, enabled: false, guard: None }),
             Ok(Err(e)) => Err(e),
             Err(_) => Err(io::Error::other("the edge thread ended at once")),
         }
@@ -123,6 +157,19 @@ impl EdgeStrips {
 
     pub(crate) fn enabled(&self) -> bool {
         self.enabled
+    }
+
+    /// The guard is at `zone` (physical px) just under the window `board` (a
+    /// raw handle), or gone (`None`). Asked again for the same zone it does
+    /// nothing, unless `listen`: the board's window just turned click-through,
+    /// so the guard is the one to hear the pointer from here, and it starts
+    /// listening for the pointer to leave afresh.
+    pub(crate) fn set_guard(&mut self, zone: Option<Rect>, board: isize, listen: bool) {
+        if zone != self.guard || (listen && zone.is_some()) {
+            self.guard = zone;
+            *GUARD.lock().unwrap_or_else(|e| e.into_inner()) = zone.map(|zone| (zone, board));
+            self.post(WM_GUARD, 0);
+        }
     }
 
     fn post(&self, msg: u32, wparam: usize) {
@@ -143,6 +190,10 @@ thread_local! {
     static ON_EVENT: OnceCell<Box<dyn Fn(EdgeEvent)>> = const { OnceCell::new() };
     /// The strip the pointer is on, and whether a button was down on arrival.
     static ARRIVED: Cell<Option<(HWND, bool)>> = const { Cell::new(None) };
+    /// The guard window, if there is one: it is not a strip.
+    static GUARD_WINDOW: Cell<HWND> = const { Cell::new(HWND(std::ptr::null_mut())) };
+    /// The guard is waiting to hear the pointer leave.
+    static LISTENING: Cell<bool> = const { Cell::new(false) };
 }
 
 fn emit(event: EdgeEvent) {
@@ -174,11 +225,16 @@ fn run(on_event: Box<dyn Fn(EdgeEvent) + Send>, ready: SyncSender<io::Result<u32
             match msg.message {
                 WM_ENABLE => enabled = msg.wParam.0 != 0,
                 WM_RELAYOUT => {}
+                WM_GUARD => {
+                    place_guard(*GUARD.lock().unwrap_or_else(|e| e.into_inner()), instance);
+                    continue;
+                }
                 _ => continue,
             }
             relayout(&mut strips, enabled, instance);
         }
         relayout(&mut strips, false, instance);
+        place_guard(None, instance);
         let _ = UnregisterClassW(class, Some(instance));
         OleUninitialize();
     }
@@ -225,14 +281,16 @@ unsafe fn relayout(strips: &mut Vec<(HWND, Rect)>, enabled: bool, instance: HINS
         emit(EdgeEvent::Left);
     }
     for zone in zones {
-        match create(zone, instance) {
+        match create(zone, HWND_TOPMOST, false, instance) {
             Ok(hwnd) => strips.push((hwnd, zone)),
             Err(e) => eprintln!("tack: cannot make an edge strip at {zone:?}: {e}"),
         }
     }
 }
 
-unsafe fn create(zone: Rect, instance: HINSTANCE) -> Result<HWND> {
+/// Makes a strip's window, or (`guard`) the guard's, which goes after `after`
+/// in the z-order.
+unsafe fn create(zone: Rect, after: HWND, guard: bool, instance: HINSTANCE) -> Result<HWND> {
     // Never activated, and not in Alt+Tab or the taskbar. Layered with a
     // constant alpha of 1: all but invisible, yet still hit-tested.
     let ex = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED;
@@ -252,10 +310,10 @@ unsafe fn create(zone: Rect, instance: HINSTANCE) -> Result<HWND> {
     )?;
     let made = (|| {
         SetLayeredWindowAttributes(hwnd, Default::default(), 1, LWA_ALPHA)?;
-        RegisterDragDrop(hwnd, &IDropTarget::from(DropTarget))?;
+        RegisterDragDrop(hwnd, &IDropTarget::from(DropTarget { guard }))?;
         // Again, in physical px: a window made on a monitor of another DPI
         // may not come out where it was asked.
-        SetWindowPos(hwnd, Some(HWND_TOPMOST), zone.x, zone.y, zone.w, zone.h, SWP_NOACTIVATE | SWP_SHOWWINDOW)
+        SetWindowPos(hwnd, Some(after), zone.x, zone.y, zone.w, zone.h, SWP_NOACTIVATE | SWP_SHOWWINDOW)
     })();
     if let Err(e) = made {
         let _ = DestroyWindow(hwnd);
@@ -264,9 +322,64 @@ unsafe fn create(zone: Rect, instance: HINSTANCE) -> Result<HWND> {
     Ok(hwnd)
 }
 
+/// Makes the guard match `wanted` (its rect, and the window it goes under):
+/// made, moved or sized, or taken down. Asked again for the same, it only
+/// listens for the pointer leaving afresh.
+unsafe fn place_guard(wanted: Option<(Rect, isize)>, instance: HINSTANCE) {
+    let hwnd = GUARD_WINDOW.get();
+    let Some((zone, board)) = wanted else {
+        if !hwnd.0.is_null() {
+            let _ = RevokeDragDrop(hwnd);
+            let _ = DestroyWindow(hwnd);
+            GUARD_WINDOW.set(HWND::default());
+        }
+        return;
+    };
+    if hwnd.0.is_null() {
+        // Just under the board's window, which is topmost too.
+        match create(zone, HWND(board as *mut _), true, instance) {
+            Ok(made) => GUARD_WINDOW.set(made),
+            Err(e) => {
+                eprintln!("tack: cannot make the guard at {zone:?}: {e}");
+                emit(EdgeEvent::GuardFailed);
+                return;
+            }
+        }
+    } else {
+        let mut at = RECT::default();
+        if GetWindowRect(hwnd, &mut at).is_ok() && rect_of(at) != zone {
+            let _ = SetWindowPos(hwnd, None, zone.x, zone.y, zone.w, zone.h, SWP_NOACTIVATE | SWP_NOZORDER);
+        }
+    }
+    listen(GUARD_WINDOW.get());
+}
+
+/// Windows says when the pointer leaves the window, once: ask again after
+/// each. If the pointer is not over the window now, it is said at once.
+fn listen(hwnd: HWND) {
+    LISTENING.set(true);
+    let mut track = TRACKMOUSEEVENT {
+        cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32,
+        dwFlags: TME_LEAVE,
+        hwndTrack: hwnd,
+        dwHoverTime: 0,
+    };
+    let _ = unsafe { TrackMouseEvent(&mut track) };
+}
+
 unsafe extern "system" fn window_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
         WM_MOUSEACTIVATE => return LRESULT(MA_NOACTIVATE as isize),
+        WM_MOUSEMOVE if hwnd == GUARD_WINDOW.get() => {
+            if !LISTENING.get() {
+                listen(hwnd);
+            }
+            emit(EdgeEvent::GuardMoved);
+        }
+        WM_MOUSELEAVE if hwnd == GUARD_WINDOW.get() => {
+            LISTENING.set(false);
+            emit(EdgeEvent::GuardLeft);
+        }
         WM_MOUSEMOVE => arrive(hwnd),
         WM_TIMER if wparam.0 == LEAVE_TIMER => check_leave(hwnd),
         // Not rebuilt from inside a strip's own message.
@@ -329,9 +442,22 @@ fn set_click_through(hwnd: HWND, on: bool) {
     }
 }
 
-/// Takes no drop: it only says a drag is over the strip.
+/// Takes no drop: it only says a drag is over the strip, or (`guard`) over the
+/// guard, where it counts as the pointer moving there.
 #[implement(IDropTarget)]
-struct DropTarget;
+struct DropTarget {
+    guard: bool,
+}
+
+impl DropTarget_Impl {
+    fn entered(&self) {
+        emit(if self.guard { EdgeEvent::GuardMoved } else { EdgeEvent::DragEntered });
+    }
+
+    fn left(&self) {
+        emit(if self.guard { EdgeEvent::GuardLeft } else { EdgeEvent::DragLeft });
+    }
+}
 
 #[allow(non_snake_case)]
 impl IDropTarget_Impl for DropTarget_Impl {
@@ -343,17 +469,20 @@ impl IDropTarget_Impl for DropTarget_Impl {
         effect: *mut DROPEFFECT,
     ) -> Result<()> {
         refuse(effect);
-        emit(EdgeEvent::DragEntered);
+        self.entered();
         Ok(())
     }
 
     fn DragOver(&self, _keys: MODIFIERKEYS_FLAGS, _pt: &POINTL, effect: *mut DROPEFFECT) -> Result<()> {
         refuse(effect);
+        if self.guard {
+            emit(EdgeEvent::GuardMoved);
+        }
         Ok(())
     }
 
     fn DragLeave(&self) -> Result<()> {
-        emit(EdgeEvent::DragLeft);
+        self.left();
         Ok(())
     }
 
@@ -365,7 +494,7 @@ impl IDropTarget_Impl for DropTarget_Impl {
         effect: *mut DROPEFFECT,
     ) -> Result<()> {
         refuse(effect);
-        emit(EdgeEvent::DragLeft);
+        self.left();
         Ok(())
     }
 }
@@ -379,6 +508,10 @@ fn refuse(effect: *mut DROPEFFECT) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The thread registers the window class and unregisters it at its end,
+    /// and a second thread cannot register it meanwhile.
+    static ONE_THREAD_AT_A_TIME: Mutex<()> = Mutex::new(());
 
     fn monitor(x: i32, y: i32, w: i32, h: i32) -> Rect {
         Rect { x, y, w, h }
@@ -431,11 +564,34 @@ mod tests {
 
     #[test]
     fn the_strips_start_and_stop_without_a_trace() {
+        let _one = ONE_THREAD_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
         let mut strips = EdgeStrips::start(|_| {}).expect("a message thread");
         assert!(!strips.enabled());
         strips.set_enabled(true);
         assert!(strips.enabled());
         strips.set_enabled(false);
+        drop(strips);
+    }
+
+    #[test]
+    fn a_guard_the_pointer_is_not_over_says_so_at_once_and_again_when_asked_to_listen() {
+        use std::time::Duration;
+        let _one = ONE_THREAD_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut strips = EdgeStrips::start(move |event| {
+            let _ = tx.send(event);
+        })
+        .expect("a message thread");
+        // Far off every monitor: the pointer is never over it.
+        let far = Rect { x: -20000, y: -20000, w: 200, h: 100 };
+        strips.set_guard(Some(far), 0, false);
+        assert_eq!(rx.recv_timeout(Duration::from_secs(2)), Ok(EdgeEvent::GuardLeft));
+        // The same again says nothing; asked to listen it is told afresh.
+        strips.set_guard(Some(far), 0, false);
+        assert!(rx.recv_timeout(Duration::from_millis(200)).is_err());
+        strips.set_guard(Some(far), 0, true);
+        assert_eq!(rx.recv_timeout(Duration::from_secs(2)), Ok(EdgeEvent::GuardLeft));
+        strips.set_guard(None, 0, false);
         drop(strips);
     }
 }

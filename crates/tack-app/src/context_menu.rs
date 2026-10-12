@@ -3,7 +3,7 @@
 //! print when the keyboard asked for it (Shift+F10, the Menu key).
 
 use tack_core::Origin;
-use tack_windows::shell;
+use tack_windows::{edge_reveal, shell};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::{AppHandle, Manager, PhysicalPosition};
 
@@ -72,6 +72,8 @@ pub fn show(app: &AppHandle, id: &str, at: Option<(f64, f64)>) -> Result<(), Str
         None => window.popup_menu(&menu),
     };
     lock(app).view.menu_open = false;
+    // The menu held the board down: the pointer may be away by now.
+    edge_reveal::wake();
     result.map_err(|e| e.to_string())
 }
 

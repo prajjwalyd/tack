@@ -100,11 +100,11 @@ pub struct View {
     pub generation: u64,
     pub reason: RevealReason,
     /// Revealed by the hotkey or the tray: the leave timer is ignored until
-    /// the pointer has been over the board once. A click outside or the
-    /// hotkey still tucks it.
+    /// the pointer has been over the board once. The board losing the
+    /// keyboard to another window or the hotkey still tucks it.
     pub stay_open: bool,
-    /// End of a new-screenshot peek; after it the board tucks unless the
-    /// pointer has come over it.
+    /// End of a new-screenshot or edge peek; after it the board tucks unless
+    /// the pointer has come over it.
     pub peek_until: Option<std::time::Instant>,
     /// The pointer has been over the board since it was revealed.
     pub entered: bool,
@@ -132,10 +132,10 @@ pub struct View {
     pub menu_open: bool,
     /// The Settings window has the keyboard focus and holds the board down,
     /// so changes to the colour, frame, paper and speed show live. The
-    /// pointer poller does not tuck a held board (not on leaving, not when
-    /// the peek ends, not on a click outside: Settings is "outside"); only a
-    /// full-screen app or an explicit tuck (the shortcut, the tray) ends the
-    /// hold, or Settings losing the focus. See [`View::hold_for_settings`].
+    /// pointer rules do not tuck a held board (not on leaving, not when the
+    /// peek ends); only a full-screen app or an explicit tuck (the shortcut,
+    /// the tray) ends the hold, or Settings losing the focus. See
+    /// [`View::hold_for_settings`].
     pub settings_held: bool,
     /// Whether the window currently lets clicks through.
     pub ignoring: bool,

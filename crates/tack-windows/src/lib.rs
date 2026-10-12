@@ -3,7 +3,7 @@
 //! so this crate never depends on Tauri: `tack-app` wires the callbacks to
 //! the board and the UI.
 //!
-//! Threads: the hotkeys, the pointer poller, the edge strips (for the poller)
+//! Threads: the hotkeys, the pointer poller, the edge strips and the guard (for the poller)
 //! and each folder watcher run on a thread of their own with their own
 //! message loop, timer or kernel wait, asleep between events; pinning the
 //! selection blocks for a moment and runs on a worker. Window operations
