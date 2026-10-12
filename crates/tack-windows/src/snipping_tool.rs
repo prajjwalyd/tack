@@ -117,8 +117,9 @@ fn read(sequence: u32) -> Result<DynamicImage, &'static str> {
 }
 
 /// The listener's window, to name Tack as the one holding the clipboard
-/// open while a capture is read.
-fn listener() -> Option<HWND> {
+/// open while a capture is read, and as its owner when pinning a selection
+/// puts the user's clipboard back.
+pub(crate) fn listener() -> Option<HWND> {
     let hwnd = LISTENER.load(Ordering::Relaxed);
     (hwnd != 0).then_some(HWND(hwnd as *mut _))
 }

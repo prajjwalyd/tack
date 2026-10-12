@@ -32,7 +32,7 @@
 }
 /* Pin-on: timed to land with the pin's squash (print.js lands it ~250 ms in). */
 .slot.arriving .pin::before {
-  animation: pin-dimple 300ms cubic-bezier(.2, .7, .3, 1) 330ms backwards;
+  animation: pin-dimple calc(300ms * var(--motion-scale)) cubic-bezier(.2, .7, .3, 1) calc(330ms * var(--motion-scale)) backwards;
 }
 @keyframes pin-dimple {
   0%   { opacity: .3; scale: .55; }
@@ -68,15 +68,13 @@
     0 var(--pin-u) var(--pin-u) var(--pin-cast),
     0 calc(var(--pin-u) * 2.2) calc(var(--pin-u) * 2.6) calc(var(--pin-u) * -.6) var(--pin-cast);
   opacity: 0;
-  transition: opacity 180ms ease;
+  transition: opacity var(--dur-soft) ease;
 }
 .slot.kept .pin-brass { opacity: 1; }
-/* Kept pins are larger in the row and on an unfolded note (whose brass note.js
-   shows inline). `scale` composes with the keep press's transform; it animates
-   only while the board is out. */
-.slot.kept > .pin,
-.sheet .pin:has(> .pin-brass[style*="opacity"]) { scale: var(--kept-pin-scale); }
-#board:not(.tucked) .slot > .pin { transition: scale 180ms ease; }
+/* Kept pins are larger. `scale` composes with the keep press's transform; it
+   animates only while the board is out. */
+.slot.kept > .pin { scale: var(--kept-pin-scale); }
+#board:not(.tucked) .slot > .pin { transition: scale var(--dur-soft) ease; }
 /* Glint: a band of light crossing the brass once. */
 .pin-brass::after {
   content: "";
@@ -87,7 +85,7 @@
   opacity: 0;
 }
 #board:not(.tucked) .slot.kept .pin-brass::after {
-  animation: brass-glint 520ms cubic-bezier(.4, 0, .3, 1) 260ms backwards;
+  animation: brass-glint calc(520ms * var(--motion-scale)) cubic-bezier(.4, 0, .3, 1) calc(260ms * var(--motion-scale)) backwards;
 }
 @keyframes brass-glint {
   0%   { transform: translateX(-75%); opacity: 1; }

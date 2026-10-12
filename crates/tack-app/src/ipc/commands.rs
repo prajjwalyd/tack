@@ -7,14 +7,17 @@
 //! the board keeps animating meanwhile.
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tack_core::{Print, Rect};
 use tauri::AppHandle;
 
 use crate::ipc::events::Removal;
 use crate::phone::{self, PhoneState};
-use crate::shortcuts::{self, DialogState, Pair};
+use crate::settings_apply::{self, SettingsView};
+use crate::shortcuts::{self, Pair, State as ShortcutsState};
 use crate::state::lock;
-use crate::{context_menu, drag, keyboard, notes, prints, reveal};
+use crate::updates::{self, UpdateStatus};
+use crate::{context_menu, drag, keyboard, notes, prints, reveal, settings_window};
 
 /// Runs `job` on the async runtime's blocking pool and waits for it there,
 /// so a slow body never ties up one of the few async workers.
@@ -31,16 +34,22 @@ async fn blocking<T: Send + 'static>(job: impl FnOnce() -> T + Send + 'static) -
 pub struct Ready {
     prints: Vec<Print>,
     sound: bool,
+    /// All the settings, so the board starts with its colour and motion.
+    settings: SettingsView,
 }
 
 /// The UI has loaded and listens for events. Returns the prints already
 /// pinned, in row order (restored ones may still be arriving as events).
 #[tauri::command]
 pub fn board_ready(app: AppHandle) -> Ready {
-    let mut s = lock(&app);
-    // From here on every change reaches the UI as an event.
-    s.ui_ready = true;
-    Ready { prints: s.board.prints().to_vec(), sound: s.settings.sound }
+    let (prints, sound) = {
+        let mut s = lock(&app);
+        // From here on every change reaches the UI as an event.
+        s.ui_ready = true;
+        (s.board.prints().to_vec(), s.settings.sound)
+    };
+    reveal::sleep_once_ready(&app);
+    Ready { prints, sound, settings: settings_apply::view(&app) }
 }
 
 /// Where the board is, in physical px relative to the window, for
@@ -126,12 +135,6 @@ pub fn set_tip(app: AppHandle, rect: Option<UiRect>) {
     reveal::set_tip(&app, rect);
 }
 
-/// Only a hint; the pointer poller is the authority on hovering.
-#[tauri::command]
-pub fn set_hovering(hovering: bool) {
-    let _ = hovering;
-}
-
 /// Text dropped on the board: pinned as a note (a link if it is one). Async:
 /// it saves a file and may wait to reveal.
 #[tauri::command]
@@ -171,38 +174,93 @@ pub fn hide_board(app: AppHandle) {
     keyboard::hide(&app);
 }
 
-/// The Shortcuts dialog opens: the shortcuts, how they registered, and the
+/// The Shortcuts section opens: the shortcuts, how they registered, and the
 /// defaults.
 #[tauri::command]
-pub fn shortcuts_state(app: AppHandle) -> DialogState {
-    shortcuts::dialog_state(&app)
+pub fn shortcuts_state(app: AppHandle) -> ShortcutsState {
+    shortcuts::state(&app)
 }
 
-/// The Shortcuts dialog's Save: saved only if both work. Async: it waits
-/// for the hotkey thread.
+/// A new chord in the Shortcuts section: applied and saved only if both work.
+/// Async: it waits for the hotkey thread.
 #[tauri::command]
 pub async fn set_shortcuts(app: AppHandle, toggle: String, pin: String) -> Pair {
     blocking(move || shortcuts::set(&app, &toggle, &pin)).await
 }
 
-/// The Shortcuts dialog listens for a chord (shortcuts paused) or is done.
+/// The Shortcuts section listens for a chord (shortcuts paused) or is done.
 #[tauri::command]
 pub async fn pause_shortcuts(paused: bool) {
     shortcuts::pause(paused);
 }
 
+/// The Settings window opens: every setting.
 #[tauri::command]
-pub async fn close_shortcuts(app: AppHandle) {
-    shortcuts::close_dialog(&app);
+pub fn settings_state(app: AppHandle) -> SettingsView {
+    settings_apply::view(&app)
 }
 
-/// The phone window opens. Async: it may ask NetBird how it is.
+/// One setting by its `SettingsView` name: "sound", "edgeReveal", "autostart"
+/// or "updatesCheck" (a boolean), "reveal", "felt", "frame" or "paper" (an id).
+/// It is saved, the tray is updated and `settings:changed` goes to every
+/// window; the answer is the new settings. An unknown name or a value of the
+/// wrong type is an error that changes nothing; an id that is not valid just
+/// changes nothing. A plain command: it is quick.
+#[tauri::command]
+pub fn set_setting(app: AppHandle, key: String, value: Value) -> Result<SettingsView, String> {
+    Ok(match (key.as_str(), &value) {
+        ("sound", Value::Bool(on)) => settings_apply::set_sound(&app, *on),
+        ("edgeReveal", Value::Bool(on)) => settings_apply::set_edge_reveal(&app, *on),
+        ("autostart", Value::Bool(on)) => settings_apply::set_autostart(&app, *on),
+        ("updatesCheck", Value::Bool(on)) => settings_apply::set_updates_check(&app, *on),
+        ("reveal", Value::String(id)) => settings_apply::set_reveal(&app, id),
+        ("felt", Value::String(id)) => settings_apply::set_felt(&app, id),
+        ("frame", Value::String(id)) => settings_apply::set_frame(&app, id),
+        ("paper", Value::String(id)) => settings_apply::set_paper(&app, id),
+        _ => return Err(format!("no setting {key:?} takes {value}")),
+    })
+}
+
+/// The board colour, frame and note paper back to their defaults.
+#[tauri::command]
+pub fn reset_appearance(app: AppHandle) -> SettingsView {
+    settings_apply::reset_appearance(&app)
+}
+
+/// Where updates stand. The window also hears `updates:status` on every change.
+#[tauri::command]
+pub fn update_status(app: AppHandle) -> UpdateStatus {
+    updates::status(&app)
+}
+
+/// "Check now": asks the update server and answers with the result. Async:
+/// it waits for the network.
+#[tauri::command]
+pub async fn check_for_updates(app: AppHandle) -> UpdateStatus {
+    blocking(move || updates::check(&app)).await
+}
+
+/// "Install": downloads and verifies the update found, then starts its
+/// installer, which restarts Tack. Answers with the status it ends in (and
+/// sends it as `updates:status`): after a failure, the error; after a success
+/// there is no answer, because Tack has quit.
+#[tauri::command]
+pub async fn install_update(app: AppHandle) -> UpdateStatus {
+    blocking(move || updates::install(&app)).await
+}
+
+#[tauri::command]
+pub async fn close_settings(app: AppHandle) {
+    settings_window::close(&app);
+}
+
+/// The phone card or page opens. Async: it may ask NetBird how it is.
 #[tauri::command]
 pub async fn phone_state(app: AppHandle) -> PhoneState {
     blocking(move || phone::state(&app)).await
 }
 
-/// The phone window's switch.
+/// The phone page's switch.
 #[tauri::command]
 pub async fn set_phone(app: AppHandle, on: bool) -> PhoneState {
     blocking(move || phone::set_on(&app, on)).await
@@ -224,9 +282,4 @@ pub async fn forget_device(app: AppHandle, key: String) -> PhoneState {
 #[tauri::command]
 pub fn open_netbird_download() {
     tack_windows::shell::open_url(phone::NETBIRD_INSTALL);
-}
-
-#[tauri::command]
-pub async fn close_phone_link(app: AppHandle) {
-    phone::window::close(&app);
 }

@@ -60,8 +60,9 @@ pub fn show(app: &AppHandle, id: &str, at: Option<(f64, f64)>) -> Result<(), Str
     if capture {
         menu.insert(&item("save", "Save to Pictures")?, 4).map_err(|e| e.to_string())?;
     }
-    // A link's text file is of little use; it opens in the browser instead.
-    if link {
+    // Edit would repeat Open for a note's text file (and a link opens in the
+    // browser instead).
+    if note {
         menu.remove_at(2).map_err(|e| e.to_string())?;
     }
     // Never tuck under an open menu.

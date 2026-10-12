@@ -10,6 +10,8 @@ use serde_json::json;
 use tack_core::{CssRect, Print, RevealReason};
 use tauri::{AppHandle, Emitter};
 
+use crate::state::lock;
+
 pub const PRINT_ADDED: &str = "board:print-added";
 pub const PRINT_REMOVED: &str = "board:print-removed";
 pub const PRINT_UPDATED: &str = "board:print-updated";
@@ -22,10 +24,12 @@ pub const TUCK: &str = "board:tuck";
 pub const WARM_UP: &str = "board:warm-up";
 // `board:gust` is in the contract but only the preview harness sends it; the
 // UI schedules its own gusts.
-pub const SETTINGS: &str = "board:settings";
+pub const SETTINGS_CHANGED: &str = "settings:changed";
+pub const SETTINGS_SECTION: &str = "settings:section";
 pub const POINTER_LEFT: &str = "board:pointer-left";
 pub const NOTICE: &str = "board:notice";
 pub const PHONE_STATE: &str = "phone:state";
+pub const UPDATES_STATUS: &str = "updates:status";
 
 /// How the UI animates an unpinned print.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
@@ -52,6 +56,12 @@ pub struct Flight {
     /// Show the one-time tip about Snipping Tool's notification after it
     /// lands (see the `set_tip` command).
     pub tip: bool,
+    /// The speed's motion scale as it is now, for the flight to play at: the
+    /// page may handle this event before the reveal that carries the scale
+    /// too (the print is pinned first, and a tucked page runs queued events
+    /// as it wakes).
+    #[serde(rename = "motionScale")]
+    pub motion_scale: f64,
 }
 
 /// A print was pinned. `animate`: a live arrival, pressed on with a pin
@@ -89,8 +99,13 @@ pub fn print_drag_ended(app: &AppHandle, id: &str) {
     let _ = app.emit(PRINT_DRAG_ENDED, json!({ "id": id }));
 }
 
+/// The board comes down. `motionScale` is the user's speed as it is now, so
+/// the page applies it before animating anything, whatever `settings:changed`
+/// events it has or has not run yet (it was asleep while tucked). Not called
+/// with the state lock held.
 pub fn reveal(app: &AppHandle, reason: RevealReason) {
-    let _ = app.emit(REVEAL, json!({ "reason": reason }));
+    let motion_scale = lock(app).settings.reveal.motion_scale();
+    let _ = app.emit(REVEAL, json!({ "reason": reason, "motionScale": motion_scale }));
 }
 
 pub fn tuck(app: &AppHandle) {
@@ -103,8 +118,10 @@ pub fn warm_up(app: &AppHandle) {
     let _ = app.emit(WARM_UP, ());
 }
 
-pub fn settings(app: &AppHandle, sound: bool) {
-    let _ = app.emit(SETTINGS, json!({ "sound": sound }));
+/// A setting changed, from the tray or the Settings window: every window
+/// gets all of them (see `settings_apply`).
+pub fn settings_changed(app: &AppHandle, view: &crate::settings_apply::SettingsView) {
+    let _ = app.emit(SETTINGS_CHANGED, view);
 }
 
 pub fn pointer_left(app: &AppHandle) {
@@ -117,7 +134,20 @@ pub fn notice(app: &AppHandle, text: &str) {
     let _ = app.emit(NOTICE, json!({ "text": text }));
 }
 
-/// The phone window's state changed (see `phone::PhoneState`).
+/// The update status changed (a check, a download's progress, an install):
+/// every window gets it whole.
+pub fn updates_status(app: &AppHandle, status: &crate::updates::UpdateStatus) {
+    let _ = app.emit(UPDATES_STATUS, status);
+}
+
+/// The Settings window is already open and is asked to show `section` (an id
+/// from `settings_window::SECTIONS`: the phone page, or a group of the list).
+pub fn settings_section(app: &AppHandle, section: &str) {
+    let _ = app.emit_to(crate::settings_window::LABEL, SETTINGS_SECTION, section);
+}
+
+/// The phone state changed (see `phone::PhoneState`): the phone card and the
+/// phone page of the Settings window show it.
 pub fn phone_state(app: &AppHandle, state: &crate::phone::PhoneState) {
-    let _ = app.emit_to(crate::phone::window::LABEL, PHONE_STATE, state);
+    let _ = app.emit_to(crate::settings_window::LABEL, PHONE_STATE, state);
 }

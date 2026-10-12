@@ -19,7 +19,6 @@ macro_rules! trace {
 
 mod captures;
 mod context_menu;
-mod dialogs;
 mod drag;
 mod ipc;
 mod keyboard;
@@ -28,6 +27,8 @@ mod phone;
 mod prints;
 mod reveal;
 mod screenshot_files;
+mod settings_apply;
+mod settings_window;
 mod shortcuts;
 mod state;
 #[cfg(debug_assertions)]
@@ -35,12 +36,12 @@ mod stress;
 #[cfg(debug_assertions)]
 mod trace;
 mod tray;
+mod updates;
 mod webview_power;
 mod webview_privacy;
 
 use std::sync::Mutex;
 
-use tack_core::{capture, note};
 use tack_windows::{autostart, edge_reveal, sandbox, screenshots, single_instance};
 use tauri::RunEvent;
 
@@ -77,7 +78,6 @@ fn main() {
                 commands::start_drag,
                 commands::discard_print,
                 commands::context_menu,
-                commands::set_hovering,
                 commands::set_kept,
                 commands::set_tip,
                 commands::pin_text,
@@ -85,21 +85,33 @@ fn main() {
                 commands::take_focus,
                 commands::release_focus,
                 commands::hide_board,
+                commands::settings_state,
+                commands::set_setting,
+                commands::reset_appearance,
+                commands::update_status,
+                commands::check_for_updates,
+                commands::install_update,
+                commands::close_settings,
                 commands::shortcuts_state,
                 commands::set_shortcuts,
                 commands::pause_shortcuts,
-                commands::close_shortcuts,
                 commands::phone_state,
                 commands::set_phone,
                 commands::answer_device,
                 commands::forget_device,
                 commands::open_netbird_download,
-                commands::close_phone_link,
                 $($extra),*
             ]
         };
     }
-    let builder = tauri::Builder::default().manage(Mutex::new(AppState::load()));
+    // The updater is driven from Rust only (see updates/plugin.rs): no web
+    // view is granted its commands in capabilities/default.json.
+    let builder = tauri::Builder::default()
+        // Nothing reads raw input, which would be sent for every pointer move
+        // while the board or Settings has the focus.
+        .device_event_filter(tauri::DeviceEventFilter::Always)
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(Mutex::new(AppState::load()));
     #[cfg(debug_assertions)]
     let builder = builder.invoke_handler(handler!(stress::debug_ack));
     #[cfg(not(debug_assertions))]
@@ -126,12 +138,10 @@ fn main() {
                 autostart::set(true);
             }
             screenshot_files::restore(handle.clone());
-            prints::age_out_hourly(handle.clone());
             screenshot_files::watch(handle.clone(), screenshots::folder());
-            screenshot_files::watch(handle.clone(), capture::captures_folder());
-            screenshot_files::watch(handle.clone(), note::notes_folder());
             captures::start(handle.clone());
             phone::start(handle.clone());
+            updates::start(&handle);
             edge_reveal::start(reveal::EdgeGlue(handle.clone()));
             #[cfg(debug_assertions)]
             notes::debug::start(&handle);

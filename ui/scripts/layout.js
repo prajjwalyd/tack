@@ -1,6 +1,5 @@
 // Board geometry: each print's size and place in the row, the board width,
-// pin colours, and the board rect the backend uses for click-through (grown
-// for an unfolded note, see note.js). CSS sizes in styles/tokens.css mirror
+// pin colours, and the board rect the backend uses for click-through. CSS sizes in styles/tokens.css mirror
 // the constants here.
 //
 // One row: kept prints, a wider gap, then the rest newest first. The board
@@ -9,7 +8,8 @@
 // change never shifts the ones already there.
 
 import * as ipc from "./ipc.js";
-import { LAYOUT_EASING, LAYOUT_MS } from "./motion/spring.js";
+import { fixed } from "./motion/scale.js";
+import { LAYOUT_EASING, layoutMs } from "./motion/spring.js";
 import { reveal as scrollIntoView, scrollPos, scrollTo, setExtent } from "./scroll.js";
 import { dom, state } from "./state.js";
 
@@ -37,10 +37,6 @@ const PALETTE = ["terracotta", "sage", "ink", "sand", "graphite"];
 
 let viewW = MIN_W;                // the row's visible width (= board width)
 let fits = true;                  // the whole row is visible, no scrolling
-const layoutHooks = new Set();
-
-/** Calls `fn` after every layout (note.js folds an unfolded note that moved). */
-export function onLayout(fn) { layoutHooks.add(fn); }
 
 /** The photo's size on the board for an image of w x h. */
 function photoSize(w, h) {
@@ -128,7 +124,7 @@ export function layout({ instant = false } = {}) {
     if (old && !instant && state.revealed && !state.reduced) {
       dom.cork.getAnimations().forEach((a) => a.cancel());
       dom.cork.animate([{ transform: `scaleX(${old / boardW})` }, { transform: "none" }],
-        { duration: LAYOUT_MS, easing: LAYOUT_EASING });
+        { duration: layoutMs(), easing: LAYOUT_EASING });
     }
   }
   if (dom.hint.classList.contains("show") !== (n === 0)) {
@@ -137,7 +133,6 @@ export function layout({ instant = false } = {}) {
     else dom.board.removeAttribute("aria-description");
   }
   sendRect(instant);
-  for (const fn of layoutHooks) fn();
 }
 
 /** True when some of the print shows in the row's visible window. */
@@ -167,7 +162,6 @@ export function restScroll() {
 // follows the width; while the cork animates it covers old and new.
 let rectTimer = 0, rectSettle = 0, lastRect = "";
 let rectPrevW = 0;
-let extraRect = null;             // an unfolded note's sheet, CSS px relative to the window
 export function sendRect(instant = false) {
   clearTimeout(rectTimer);
   rectTimer = setTimeout(() => {
@@ -175,14 +169,10 @@ export function sendRect(instant = false) {
     if (instant) rectPrevW = state.boardW;
     pushRect(Math.max(rectPrevW, state.boardW));
     clearTimeout(rectSettle);
-    rectSettle = setTimeout(() => { rectSettle = 0; rectPrevW = state.boardW; pushRect(state.boardW); }, LAYOUT_MS + 40);
-  }, 16);
-}
-
-/** Extends the click rect to something hanging below the board (an unfolded note): `r` in CSS px relative to the window, or null. */
-export function setExtraRect(r) {
-  extraRect = r;
-  pushRect(Math.max(rectPrevW, state.boardW));
+    // Once the cork's slide is over (layoutMs() follows the speed), the rect shrinks to the new width.
+    rectSettle = setTimeout(() => { rectSettle = 0; rectPrevW = state.boardW; pushRect(state.boardW); },
+      layoutMs() + fixed(40, "a margin of frames after the slide"));
+  }, fixed(16, "coalesces a burst of layouts into one message per frame"));
 }
 
 /** Forgets the last rect sent, so the next one goes out even if unchanged. */
@@ -193,19 +183,13 @@ export function forgetRect() {
 function pushRect(w) {
   const dpr = window.devicePixelRatio || 1;
   const winW = window.innerWidth;
-  let x = Math.max(0, (winW - w) / 2 - LIFT);
-  let right = Math.min(winW, (winW + w) / 2 + LIFT);
-  let bottom = BOARD_H + LIFT;
-  if (extraRect) {
-    x = Math.max(0, Math.min(x, extraRect.x - LIFT));
-    right = Math.min(winW, Math.max(right, extraRect.x + extraRect.w + LIFT));
-    bottom = Math.max(bottom, extraRect.y + extraRect.h + LIFT);
-  }
+  const x = Math.max(0, (winW - w) / 2 - LIFT);
+  const right = Math.min(winW, (winW + w) / 2 + LIFT);
   const r = {
     x: Math.round(x * dpr),
     y: 0,
     w: Math.round((right - x) * dpr),
-    h: Math.round(bottom * dpr),
+    h: Math.round((BOARD_H + LIFT) * dpr),
   };
   const key = `${r.x},${r.y},${r.w},${r.h}`;
   if (key === lastRect) return;

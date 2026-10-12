@@ -1,4 +1,5 @@
-/* The board: green felt in a slim aluminium frame, hinged at the top edge of
+/* The board: green felt in a slim metal frame (brushed aluminium unless the
+   Frame setting says otherwise), hinged at the top edge of
    the screen, plus the page itself (transparent, never selectable).
 
    #board          swings down on its hinge, sized by layout.js
@@ -74,13 +75,14 @@ img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
 }
 
 /* The material, top layer down: the corner caps (--cap-l/r, below); light from
-   above (a wash at the top, a vignette below); the felt (a 2 px weave check,
-   warp and weft noise, slow mottling, over --felt); the frame (side rails
+   above and the felt under it (felt.css: a wash, a vignette, three wool
+   textures over --felt, all one --felt-stack); the frame (side rails
    brushed down, bottom rail brushed across, lit from above). The frame is the
    element's border (none at the top); the felt is its padding box. All static
    images and gradients, rasterised once, so nothing repaints in motion. */
 .cork {
-  --weave-size: 128px;
+  /* The brushed grain of both side rails (the bottom rail's, below, is the same turned on its side). */
+  --grain-side: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='1024'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.45 0.0025' numOctaves='3' seed='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.6 0 0 0 -0.28'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.5 0.003' numOctaves='3' seed='9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.5 0 0 0 -0.24'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>");
   position: absolute;
   inset: 0;
   border: var(--frame-w) solid transparent;
@@ -89,15 +91,9 @@ img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
   background:
     var(--cap-l) left bottom / var(--cap-size) var(--cap-size) no-repeat border-box,
     var(--cap-r) right bottom / var(--cap-size) var(--cap-size) no-repeat border-box,
-    radial-gradient(120% 95% at 50% 0, var(--felt-light), transparent 72%) padding-box,
-    radial-gradient(140% 120% at 50% 15%, transparent 52%, var(--felt-vignette)) padding-box,
-    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4' shape-rendering='crispEdges'><path d='M0 0h2v2H0zM2 2h2v2H2z' fill='%23eafff2' fill-opacity='.035'/><path d='M2 0h2v2H2zM0 2h2v2H0z' fill='%23001a0c' fill-opacity='.07'/></svg>") 0 0 / 2px 2px padding-box,
-    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.36 0.07' numOctaves='2' seed='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0.03  0 0 0 0 0.015  0.75 0 0 0 -0.31'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/></svg>") 0 0 / var(--weave-size) var(--weave-size) padding-box,
-    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.07 0.36' numOctaves='2' seed='11' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.86  0 0 0 0 1  0 0 0 0 0.93  0.32 0 0 0 -0.14'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.07 0.36' numOctaves='2' seed='31' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0.03  0 0 0 0 0.015  0.62 0 0 0 -0.26'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>") 0 0 / var(--weave-size) var(--weave-size) padding-box,
-    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='3' seed='23' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0.02  0 0 0 0 0.01  0 0.6 0 0 -0.24'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/></svg>") 0 0 / 400px 400px padding-box,
-    linear-gradient(var(--felt), var(--felt)) padding-box,
-    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='1024'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.45 0.0025' numOctaves='3' seed='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.6 0 0 0 -0.28'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.5 0.003' numOctaves='3' seed='9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.5 0 0 0 -0.24'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>") left top / var(--frame-w) 512px repeat-y border-box,
-    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='1024'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.45 0.0025' numOctaves='3' seed='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.6 0 0 0 -0.28'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.5 0.003' numOctaves='3' seed='9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.5 0 0 0 -0.24'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>") right top / var(--frame-w) 512px repeat-y border-box,
+    var(--felt-stack),
+    var(--grain-side) left top / var(--frame-w) 512px repeat-y border-box,
+    var(--grain-side) right top / var(--frame-w) 512px repeat-y border-box,
     url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='1024' height='12'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.0025 0.45' numOctaves='3' seed='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.6 0 0 0 -0.28'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.003 0.5' numOctaves='3' seed='9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.5 0 0 0 -0.24'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>") left bottom / 512px var(--frame-w) repeat-x border-box,
     var(--rail-side-l) left top / var(--frame-w) 100% no-repeat border-box,
     var(--rail-side-r) right top / var(--frame-w) 100% no-repeat border-box,
@@ -108,13 +104,9 @@ img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
     var(--shadow-board);
   transform-origin: 50% 0;
 }
-/* Corner caps. A picture can't follow light-dark(), so the dark theme swaps them. */
-.cork {
-  --cap-l: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'><defs><linearGradient id='m' x1='0' y1='0' x2='.45' y2='1'><stop offset='0' stop-color='%23eef0f3'/><stop offset='1' stop-color='%23b3b9c0'/></linearGradient><filter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'><feGaussianBlur stdDeviation='.45'/></filter></defs><path d='M7 0V2A5 5 0 0 0 12 7H14' fill='none' stroke='%23001a0c' stroke-opacity='.45' stroke-width='1.1' transform='translate(0 .55)' filter='url(%23b)'/><path d='M0 0V2A12 12 0 0 0 12 14H14V7H12A5 5 0 0 1 7 2V0Z' fill='url(%23m)'/><path d='M6.75 0V2A5.25 5.25 0 0 0 12 7.25H14' fill='none' stroke='%23ffffff' stroke-width='.5'/><path d='M.25 0V2A11.75 11.75 0 0 0 12 13.75H14' fill='none' stroke='%23767c85' stroke-width='.5'/><path d='M0 .25H7M13.75 7V14' stroke='%23000' stroke-opacity='.2' stroke-width='.5'/></svg>");
-  --cap-r: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'><defs><linearGradient id='m' x1='0' y1='0' x2='.45' y2='1'><stop offset='0' stop-color='%23eef0f3'/><stop offset='1' stop-color='%23b3b9c0'/></linearGradient><filter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'><feGaussianBlur stdDeviation='.45'/></filter></defs><g transform='translate(14 0) scale(-1 1)'><path d='M7 0V2A5 5 0 0 0 12 7H14' fill='none' stroke='%23001a0c' stroke-opacity='.45' stroke-width='1.1' transform='translate(0 .55)' filter='url(%23b)'/><path d='M0 0V2A12 12 0 0 0 12 14H14V7H12A5 5 0 0 1 7 2V0Z' fill='url(%23m)'/><path d='M6.75 0V2A5.25 5.25 0 0 0 12 7.25H14' fill='none' stroke='%23ffffff' stroke-width='.5'/><path d='M.25 0V2A11.75 11.75 0 0 0 12 13.75H14' fill='none' stroke='%23767c85' stroke-width='.5'/><path d='M0 .25H7M13.75 7V14' stroke='%23000' stroke-opacity='.2' stroke-width='.5'/></g></svg>");
-  --cap-l-dark: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'><defs><linearGradient id='m' x1='0' y1='0' x2='.45' y2='1'><stop offset='0' stop-color='%23c6cbd0'/><stop offset='1' stop-color='%23858b93'/></linearGradient><filter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'><feGaussianBlur stdDeviation='.45'/></filter></defs><path d='M7 0V2A5 5 0 0 0 12 7H14' fill='none' stroke='%23000' stroke-opacity='.55' stroke-width='1.1' transform='translate(0 .55)' filter='url(%23b)'/><path d='M0 0V2A12 12 0 0 0 12 14H14V7H12A5 5 0 0 1 7 2V0Z' fill='url(%23m)'/><path d='M6.75 0V2A5.25 5.25 0 0 0 12 7.25H14' fill='none' stroke='%23eef0f2' stroke-width='.5'/><path d='M.25 0V2A11.75 11.75 0 0 0 12 13.75H14' fill='none' stroke='%234d5259' stroke-width='.5'/><path d='M0 .25H7M13.75 7V14' stroke='%23000' stroke-opacity='.28' stroke-width='.5'/></svg>");
-  --cap-r-dark: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'><defs><linearGradient id='m' x1='0' y1='0' x2='.45' y2='1'><stop offset='0' stop-color='%23c6cbd0'/><stop offset='1' stop-color='%23858b93'/></linearGradient><filter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'><feGaussianBlur stdDeviation='.45'/></filter></defs><g transform='translate(14 0) scale(-1 1)'><path d='M7 0V2A5 5 0 0 0 12 7H14' fill='none' stroke='%23000' stroke-opacity='.55' stroke-width='1.1' transform='translate(0 .55)' filter='url(%23b)'/><path d='M0 0V2A12 12 0 0 0 12 14H14V7H12A5 5 0 0 1 7 2V0Z' fill='url(%23m)'/><path d='M6.75 0V2A5.25 5.25 0 0 0 12 7.25H14' fill='none' stroke='%23eef0f2' stroke-width='.5'/><path d='M.25 0V2A11.75 11.75 0 0 0 12 13.75H14' fill='none' stroke='%234d5259' stroke-width='.5'/><path d='M0 .25H7M13.75 7V14' stroke='%23000' stroke-opacity='.28' stroke-width='.5'/></g></svg>");
-}
+/* Corner caps. A picture can't follow light-dark(), so the dark theme swaps
+   them. The pictures are the frame finish's (scripts/frame.js). */
+.cork { --cap-l: var(--cap-l-light); --cap-r: var(--cap-r-light); }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .cork { --cap-l: var(--cap-l-dark); --cap-r: var(--cap-r-dark); }
 }

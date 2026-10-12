@@ -2,20 +2,26 @@ name: Release
 
 # Pushing a tag like v0.1.1 builds the x64 and arm64 installers on a clean
 # machine and attaches them to a draft release, so every download comes from
-# the public code at that tag.
+# the public code at that tag. The installers are signed for the in-app
+# updater (see docs/development.md) and latest.json, which the updater reads
+# from the release marked "latest", is built along with them. Nothing is
+# published here: the draft becomes the latest release when a maintainer
+# publishes it.
 on:
   push:
     tags:
       - "v*"
 
-permissions:
-  contents: write
+# Each job asks for what it needs.
+permissions: {}
 
 jobs:
   # Both installer jobs upload to this one release. Creating it here, before
   # they start, keeps them from each creating their own draft.
   draft:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       release_id: ${{ steps.draft.outputs.release_id }}
     steps:
@@ -45,25 +51,34 @@ jobs:
   installer:
     needs: draft
     runs-on: windows-latest
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
+      # One at a time: the action adds each build to latest.json by reading
+      # the file, merging its own entry and replacing it, so two builds that
+      # finish together could each overwrite the other's entry.
+      max-parallel: 1
       matrix:
         target:
           - x86_64-pc-windows-msvc
           - aarch64-pc-windows-msvc
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable, 2026-10-09
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: ${{ matrix.target }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
@@ -71,11 +86,59 @@ jobs:
       - name: Install the Tauri CLI
         run: npm ci
 
+      # The signing key reaches this step only: it is not in the job's
+      # environment, so no other step (npm ci, the build scripts of crates)
+      # can read it. The Tauri CLI signs the installer with it.
       - name: Build the installer and add it to the draft release
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tauriScript: npx tauri
           releaseId: ${{ needs.draft.outputs.release_id }}
+          # With the release's id alone, the update URLs would say
+          # ".../latest/download/..."; with the tag they name this release.
+          tagName: ${{ github.ref_name }}
           args: --target ${{ matrix.target }}
+
+  # Checks latest.json before anyone publishes the draft: a release whose
+  # update file is wrong would hand every installed Tack a failing update.
+  verify:
+    needs: [draft, installer]
+    runs-on: ubuntu-latest
+    permissions:
+      # Reading a draft release needs the same access as writing it.
+      contents: write
+    steps:
+      - name: Check latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.draft.outputs.release_id }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          asset=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" \
+            --jq '.[] | select(.name == "latest.json") | .id')
+          [ -n "$asset" ] || { echo "::error::The release has no latest.json"; exit 1; }
+          gh api -H "Accept: application/octet-stream" \
+            "repos/$GITHUB_REPOSITORY/releases/assets/$asset" > latest.json
+          jq . latest.json
+
+          # The tag, the app's version and the update file agree; both
+          # builds are in it, from this repository's release for this tag,
+          # with a signature each.
+          jq -e --arg v "$version" --arg prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/" '
+            .version == $v
+            and (.platforms | has("windows-x86_64") and has("windows-aarch64"))
+            and ([.platforms[] | (.url | startswith($prefix)) and (.signature | length > 0)] | all)
+          ' latest.json
+
+          # Each signature says which version it was made for: the app
+          # refuses an update whose signature does not.
+          jq -r '.platforms[].signature' latest.json | while read -r signature; do
+            printf '%s' "$signature" | base64 -d | grep -qF "version:$version" \
+              || { echo "::error::A signature is not for version $version"; exit 1; }
+          done

@@ -1,6 +1,8 @@
 //! The notification area icon and its menu. A left click toggles the board.
-//! If a shortcut could not be registered (another app has it), the menu says
-//! so and offers to change it; the menu is rebuilt whenever that changes.
+//! The menu's switches are settings, changed through `settings_apply` like the
+//! Settings window's, so the two always agree. If a shortcut could not be
+//! registered (another app has it), the menu says so and offers to change it;
+//! the menu is rebuilt whenever that changes.
 //!
 //! The icon comes in a light-taskbar and a dark-taskbar version and follows
 //! `SystemUsesLightTheme` (the taskbar's theme, not the apps').
@@ -20,15 +22,18 @@ use windows::Win32::System::Registry::{
     REG_NOTIFY_CHANGE_LAST_SET, RRF_RT_REG_DWORD,
 };
 
-use crate::ipc::events;
 use crate::state::{self, lock};
-use crate::{phone, prints, reveal, shortcuts};
+use crate::updates::{self, Phase, UpdateStatus};
+use crate::{prints, reveal, settings_apply, settings_window, shortcuts};
 
-/// The check items, kept to read and set their state when clicked.
+/// The check items, kept to set their state when a setting changes.
+#[derive(Clone)]
 pub struct TrayItems {
     edge: CheckMenuItem<Wry>,
     sound: CheckMenuItem<Wry>,
     autostart: CheckMenuItem<Wry>,
+    /// "Check for updates…", or the version that is ready.
+    updates: MenuItem<Wry>,
 }
 
 /// The current menu's check items; replaced when the menu is rebuilt.
@@ -51,8 +56,10 @@ fn menu(app: &AppHandle) -> tauri::Result<(Menu<Wry>, TrayItems)> {
     let sound = CheckMenuItem::with_id(app, "tray:sound", "Sound", true, settings.sound, None::<&str>)?;
     let autostart =
         CheckMenuItem::with_id(app, "tray:autostart", "Start with Windows", true, autostart::enabled(), None::<&str>)?;
+    let settings_item = MenuItem::with_id(app, "tray:settings", "Settings\u{2026}", true, None::<&str>)?;
     let keys = MenuItem::with_id(app, "tray:shortcuts", "Shortcuts\u{2026}", true, None::<&str>)?;
     let phone = MenuItem::with_id(app, "tray:phone", "Use on your phone\u{2026}", true, None::<&str>)?;
+    let updates = MenuItem::with_id(app, "tray:updates", update_label(&updates::status(app)), true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "tray:quit", "Quit Tack", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
@@ -63,10 +70,12 @@ fn menu(app: &AppHandle) -> tauri::Result<(Menu<Wry>, TrayItems)> {
             &clear,
             &folder,
             &PredefinedMenuItem::separator(app)?,
+            &settings_item,
             &edge,
             &sound,
             &autostart,
             &keys,
+            &updates,
             &PredefinedMenuItem::separator(app)?,
             &quit,
         ],
@@ -77,7 +86,7 @@ fn menu(app: &AppHandle) -> tauri::Result<(Menu<Wry>, TrayItems)> {
         let warning = MenuItem::with_id(app, format!("tray:shortcuts-in-use-{n}"), text, true, None::<&str>)?;
         menu.insert(&warning, 5 + n)?;
     }
-    Ok((menu, TrayItems { edge, sound, autostart }))
+    Ok((menu, TrayItems { edge, sound, autostart, updates }))
 }
 
 pub fn build(app: &AppHandle) -> tauri::Result<()> {
@@ -109,6 +118,37 @@ pub fn refresh(app: &AppHandle) {
             *app.state::<Items>().lock().unwrap_or_else(|p| p.into_inner()) = Some(items);
         }
         Err(e) => eprintln!("tack: cannot rebuild the tray menu: {e}"),
+    }
+}
+
+/// Sets the check marks to the settings as they are now: after a change from
+/// the Settings window, or one that did not take (Start with Windows).
+pub fn sync_checks(app: &AppHandle) {
+    let settings = lock(app).settings.clone();
+    // A copy, so the items' lock is not held while they change: that waits for
+    // the UI thread, which may be rebuilding the menu and want the lock.
+    let Some(items) = app.state::<Items>().lock().unwrap_or_else(|p| p.into_inner()).clone() else { return };
+    let _ = items.edge.set_checked(settings.edge_reveal);
+    let _ = items.sound.set_checked(settings.sound);
+    let _ = items.autostart.set_checked(autostart::enabled());
+}
+
+/// The updates item's text: the new version once one is ready, else the
+/// way to look for one.
+pub fn update_label(status: &UpdateStatus) -> String {
+    match (&status.state, &status.version) {
+        (Phase::Available, Some(version)) => format!("Update available: v{version}"),
+        _ => "Check for updates\u{2026}".to_string(),
+    }
+}
+
+/// Shows `label` on the updates item (the update status changed).
+pub fn set_update_label(app: &AppHandle, label: &str) {
+    // The tray does not exist before setup has built it.
+    let Some(items) = app.try_state::<Items>() else { return };
+    let item = items.lock().unwrap_or_else(|p| p.into_inner()).as_ref().map(|items| items.updates.clone());
+    if let Some(item) = item {
+        let _ = item.set_text(label);
     }
 }
 
@@ -177,42 +217,53 @@ fn follow_taskbar_theme(app: AppHandle) {
     });
 }
 
-/// Menu clicks with a `tray:` id. The check state is set explicitly, so it is
-/// right whether or not the menu already flipped it.
+/// Menu clicks with a `tray:` id. A switch changes through `settings_apply`,
+/// which sets its check mark whether or not the menu already flipped it.
 pub fn handle(app: &AppHandle, id: &str) {
+    if id == "tray:settings" {
+        // Not from this handler, as for the windows below.
+        let app = app.clone();
+        std::thread::spawn(move || settings_window::open(&app, None));
+        return;
+    }
+    if id == "tray:updates" {
+        let app = app.clone();
+        std::thread::spawn(move || {
+            settings_window::open(&app, Some("updates"));
+            // With an update ready, Settings is where to install it; otherwise
+            // look now, and Settings shows the answer.
+            if updates::status(&app).state != Phase::Available {
+                updates::check(&app);
+            }
+        });
+        return;
+    }
     if id == "tray:phone" {
         let app = app.clone();
-        spawn("tack-phone-window", move || phone::window::open(&app));
+        std::thread::spawn(move || settings_window::open(&app, Some("phone")));
         return;
     }
     if id == "tray:shortcuts" || id.starts_with("tray:shortcuts-in-use") {
         // Not from this handler: building a window on the event loop's own
         // thread, inside one of its handlers, would wait on itself.
         let app = app.clone();
-        spawn("tack-shortcuts-window", move || shortcuts::open_dialog(&app));
+        std::thread::spawn(move || settings_window::open(&app, Some("shortcuts")));
         return;
     }
-    let state = app.state::<Items>();
-    let guard = state.lock().unwrap_or_else(|p| p.into_inner());
-    let Some(items) = guard.as_ref() else { return };
     match id {
         "tray:show" => reveal::reveal(app, RevealReason::Tray),
         "tray:clear" => prints::clear(app),
         "tray:folder" => shell::open_folder(&screenshots::folder()),
         "tray:edge" => {
             let on = !lock(app).settings.edge_reveal;
-            set_edge_reveal(app, on);
-            let _ = items.edge.set_checked(on);
+            settings_apply::set_edge_reveal(app, on);
         }
         "tray:sound" => {
             let on = !lock(app).settings.sound;
-            set_sound(app, on);
-            let _ = items.sound.set_checked(on);
+            settings_apply::set_sound(app, on);
         }
         "tray:autostart" => {
-            let on = !autostart::enabled();
-            autostart::set(on);
-            let _ = items.autostart.set_checked(autostart::enabled());
+            settings_apply::set_autostart(app, !autostart::enabled());
         }
         "tray:quit" => {
             // board.json is written off the lock, a moment after each
@@ -224,24 +275,18 @@ pub fn handle(app: &AppHandle, id: &str) {
     }
 }
 
-/// Runs `job` on a thread of its own; if none can start, logs and skips.
-fn spawn(name: &str, job: impl FnOnce() + Send + 'static) {
-    if let Err(e) = std::thread::Builder::new().name(name.into()).spawn(job) {
-        eprintln!("tack: cannot start {name}: {e}");
-    }
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-fn set_sound(app: &AppHandle, on: bool) {
-    {
-        let mut s = lock(app);
-        s.settings.sound = on;
-        s.save();
+    #[test]
+    fn the_updates_item_names_the_version_that_is_ready() {
+        let mut status = UpdateStatus::idle();
+        assert_eq!(update_label(&status), "Check for updates\u{2026}");
+        status.state = Phase::Available;
+        status.version = Some("0.2.0".into());
+        assert_eq!(update_label(&status), "Update available: v0.2.0");
+        status.state = Phase::Downloading;
+        assert_eq!(update_label(&status), "Check for updates\u{2026}");
     }
-    events::settings(app, on);
-}
-
-fn set_edge_reveal(app: &AppHandle, on: bool) {
-    let mut s = lock(app);
-    s.settings.edge_reveal = on;
-    s.save();
 }

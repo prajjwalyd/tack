@@ -24,11 +24,6 @@ pub fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
-/// A file time as ms since the Unix epoch.
-pub(crate) fn epoch_ms(time: SystemTime) -> Option<u64> {
-    time.duration_since(UNIX_EPOCH).ok().map(|d| d.as_millis() as u64)
-}
-
 /// Where a print sorts in the row: kept prints first, by when they were
 /// kept; then unkept prints, newest first. Sort with a stable sort, so prints
 /// that tie keep their relative order.

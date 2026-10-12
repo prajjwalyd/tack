@@ -11,7 +11,7 @@
 use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::time::{Duration, Instant};
 
-use tack_core::{Rect, RevealReason, Settings, View};
+use tack_core::{Rect, RevealReason, RevealSpeed, Settings, View};
 use tack_windows::edge_reveal::{self, EdgeHost};
 use tack_windows::{overlay, pointer, snipping_tool, HWND};
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
@@ -19,22 +19,23 @@ use windows::Win32::Foundation::POINT;
 
 use crate::ipc::events;
 use crate::state::lock;
-use crate::{webview_power, webview_privacy};
+use crate::{keyboard, prints, screenshot_files, webview_power, webview_privacy};
 
 /// The board window's label in tauri.conf.json.
 pub const WINDOW_LABEL: &str = "board";
-/// How long a new screenshot keeps the board down on its own.
-const PEEK: Duration = Duration::from_secs(3);
-/// The same for a capture that flies in. The flight and the pin's landing
-/// use the first part of it, and the poller's leave delay comes on top.
-pub const FLIGHT_PEEK: Duration = Duration::from_millis(1750);
+// How long a new screenshot, a capture that flies in or a notice keeps the
+// board down on its own, how long the poller waits after the pointer leaves
+// and how long the window waits to hide after a tuck all follow the user's
+// speed: see `RevealSpeed` (peek, flight_peek, notice_peek, leave_delay,
+// tuck_hide_delay), which also says which timers never scale. The ones below
+// are class C or D.
 /// How long the one-time tip under the board keeps it down for reading,
-/// unless the pointer comes over it (and then leaves) first.
+/// unless the pointer comes over it (and then leaves) first. Class D: text
+/// to read, so it is the same at every speed.
 const TIP_PEEK: Duration = Duration::from_secs(9);
-/// The UI's tuck slide; the window hides once it is over.
-const TUCK_HIDE_DELAY: Duration = Duration::from_millis(300);
 /// After the UI first says it is ready, how long the hidden board's web view
-/// stays awake to finish laying out and decoding the restored prints.
+/// stays awake to finish laying out and decoding the restored prints. Class C
+/// (invisible startup work), like [`WARM_UP`] and the full-screen waits.
 const FIRST_SLEEP_DELAY: Duration = Duration::from_millis(1500);
 /// How long the window is shown once at startup, the board drawn unseen
 /// (see [`sleep_once_ready`]).
@@ -82,8 +83,26 @@ impl Placement {
 
     /// On the monitor under the pointer.
     pub fn under_pointer() -> Placement {
-        let pt = pointer::cursor_pos();
+        let pt = pointer::cursor_pos().unwrap_or_default();
         Placement::at((pt.x, pt.y))
+    }
+}
+
+/// The user's speed setting, as it is now (a short look at the state).
+pub fn speed(app: &AppHandle) -> RevealSpeed {
+    lock(app).settings.reveal
+}
+
+/// The monitor the board is down on, or will come down on (under the
+/// pointer, as a reveal picks it).
+pub fn board_placement(app: &AppHandle) -> Placement {
+    let down_at = {
+        let s = lock(app);
+        s.view.shown.then_some(s.view.window_pos)
+    };
+    match down_at {
+        Some(pos) => Placement::at(pos),
+        None => Placement::under_pointer(),
     }
 }
 
@@ -96,8 +115,7 @@ pub fn board_hwnd(app: &AppHandle) -> Option<HWND> {
 }
 
 /// Once at startup, on the main thread: creates the board window, makes sure
-/// it never takes focus and never shows up in Alt+Tab or the taskbar, and
-/// puts its web view to sleep once the UI is ready.
+/// it never takes focus and never shows up in Alt+Tab or the taskbar.
 pub fn init_window(app: &AppHandle) {
     if app.get_webview_window(WINDOW_LABEL).is_none() {
         if let Err(e) = create_window(app) {
@@ -112,7 +130,6 @@ pub fn init_window(app: &AppHandle) {
     }
     webview_privacy::apply(app);
     webview_power::attach(app);
-    sleep_once_ready(app);
     #[cfg(debug_assertions)]
     webview_power::debug::start_control(app);
 }
@@ -139,25 +156,30 @@ pub fn webview_data_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
     app.path().local_data_dir().ok().map(|local| local.join("Tack").join("WebView2"))
 }
 
-/// The window starts hidden, so its web view can sleep as soon as the UI has
-/// loaded the board. Polls only until then.
+/// Runs `job` once `delay` has passed, on the runtime's blocking pool, whose
+/// threads are reused rather than started for each delay.
+pub fn after(delay: Duration, job: impl FnOnce() + Send + 'static) {
+    tauri::async_runtime::spawn_blocking(move || {
+        std::thread::sleep(delay);
+        job();
+    });
+}
+
+/// Puts the hidden board's web view to sleep, once the UI has loaded the
+/// board (`board_ready`); later calls do nothing.
 ///
 /// Before it sleeps, the window is shown once, click-through, and the page
 /// draws the board unseen (`board:warm-up`): the first show of a WebView2
 /// window sets up its GPU surfaces and the first drawing of the board is
 /// slow, with no frame reaching the screen meanwhile. Paid here, the first
 /// reveal (or flight) is seen from its first frame.
-fn sleep_once_ready(app: &AppHandle) {
+pub fn sleep_once_ready(app: &AppHandle) {
+    static STARTED: AtomicBool = AtomicBool::new(false);
+    if STARTED.swap(true, Ordering::AcqRel) {
+        return;
+    }
     let app = app.clone();
-    std::thread::spawn(move || {
-        let give_up = Instant::now() + Duration::from_secs(60);
-        while !lock(&app).ui_ready {
-            if Instant::now() > give_up {
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(250));
-        }
-        std::thread::sleep(FIRST_SLEEP_DELAY);
+    after(FIRST_SLEEP_DELAY, move || {
         let generation = lock(&app).view.generation;
         // Still tucked, and not revealed and tucked again meanwhile.
         let untouched = move |app: &AppHandle| {
@@ -174,16 +196,18 @@ fn sleep_once_ready(app: &AppHandle) {
             overlay::show_at(hwnd, place.pos, place.size);
             events::warm_up(&handle);
         });
-        std::thread::sleep(WARM_UP);
         let handle = app.clone();
-        let _ = app.run_on_main_thread(move || {
-            if !untouched(&handle) {
-                return;
-            }
-            if let Some(hwnd) = board_hwnd(&handle) {
-                overlay::hide(hwnd);
-            }
-            webview_power::sleep();
+        after(WARM_UP, move || {
+            let inner = handle.clone();
+            let _ = handle.run_on_main_thread(move || {
+                if !untouched(&inner) {
+                    return;
+                }
+                if let Some(hwnd) = board_hwnd(&inner) {
+                    overlay::hide(hwnd);
+                }
+                webview_power::sleep();
+            });
         });
     });
 }
@@ -227,7 +251,7 @@ pub fn reveal(app: &AppHandle, reason: RevealReason) {
         // The print is pinned all the same, and shows at the next reveal.
         return;
     }
-    show(app, reason, Placement::under_pointer(), PEEK);
+    show(app, reason, Placement::under_pointer(), speed(app).peek());
 }
 
 /// Whether a new screenshot may bring the board down now, i.e. nothing full
@@ -238,8 +262,9 @@ pub fn new_may_reveal(app: &AppHandle) -> bool {
 }
 
 /// Slides the board down at `place`, with no full-screen check. For a new
-/// screenshot, `peek` is how long it stays down on its own. A board already
-/// down on another monitor moves to `place`.
+/// screenshot, `peek` is how long it stays down on its own (the speed's
+/// `peek`, `flight_peek` or `notice_peek`). A board already down on another
+/// monitor moves to `place`.
 pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Duration) {
     let now = Instant::now();
     let (generation, pos, size) = {
@@ -254,6 +279,8 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
         if !s.ui_ready {
             return;
         }
+        #[cfg(debug_assertions)]
+        let scale = s.settings.reveal.motion_scale();
         let v = &mut s.view;
         // Explicit requests always win; the edge does not interrupt a full
         // screen app (the poller has only just looked), and a new capture
@@ -265,8 +292,11 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
         match reason {
             RevealReason::Hotkey | RevealReason::Tray => v.stay_open = true,
             // Never cut short a longer peek (the tip's) already running.
-            RevealReason::New => v.peek_until = v.peek_until.max(Some(now + peek)),
-            RevealReason::Edge => {}
+            RevealReason::New => {
+                v.peek_until = v.peek_until.max(Some(now + peek));
+                trace!("reveal {reason:?}: peek {peek:?} at scale {scale}");
+            }
+            RevealReason::Edge | RevealReason::Settings => {}
         }
         if v.shown {
             if reason == RevealReason::New && (v.window_pos != place.pos || v.window_size != place.size) {
@@ -306,8 +336,9 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
         IGNORING.store(true, Ordering::Release);
         (v.generation, v.window_pos, v.window_size)
     };
-    // It may be idling (edge reveal off); the board needs it from now on.
+    // It may be asleep (tucked); the board needs it from now on.
     edge_reveal::wake();
+    catch_up(app);
 
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
@@ -336,6 +367,17 @@ pub fn show(app: &AppHandle, reason: RevealReason, place: Placement, peek: Durat
             #[cfg(debug_assertions)]
             webview_power::debug::probe_reveal(&app, started);
         });
+    });
+}
+
+/// What may have changed while the board was tucked, looked at as it comes
+/// down (so nothing runs while it is away): prints that grew too old, and
+/// Tack's own files edited or deleted elsewhere.
+fn catch_up(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        prints::age_out(&app);
+        screenshot_files::check_owned(&app);
     });
 }
 
@@ -386,27 +428,27 @@ fn forced_fullscreen() -> bool {
     false
 }
 
-/// Slides the board up, and hides the window once the slide is over.
+/// Slides the board up, and hides the window once the slide is over (the
+/// speed's `tuck_hide_delay`, read when the tuck starts).
+///
+/// Any tuck ends the Settings hold ([`hold_for_settings`]): it is the user's
+/// own say (the shortcut, the tray, Esc) or a full-screen app's, and neither
+/// is overruled by a Settings window that has the focus. Settings holds the
+/// board again when it regains the focus.
 pub fn tuck(app: &AppHandle) {
-    let generation = {
+    let (generation, hide_after) = {
         let mut s = lock(app);
-        let v = &mut s.view;
-        if !v.shown {
-            return;
-        }
-        v.shown = false;
-        v.generation += 1;
-        v.stay_open = false;
-        v.peek_until = None;
-        v.edge_armed = false;
-        v.tip = None;
-        v.generation
+        let hide_after = s.settings.reveal.tuck_hide_delay();
+        let Some(generation) = s.view.tuck() else { return };
+        (generation, hide_after)
     };
     events::tuck(app);
-    trace!("tuck gen={generation}: board:tuck sent");
+    // The keyboard goes back to the window that had it, if the board had it.
     let handle = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(TUCK_HIDE_DELAY);
+    let _ = app.run_on_main_thread(move || keyboard::release(&handle));
+    trace!("tuck gen={generation}: board:tuck sent, the window hides in {hide_after:?}");
+    let handle = app.clone();
+    after(hide_after, move || {
         let inner = handle.clone();
         let _ = handle.run_on_main_thread(move || {
             {
@@ -423,6 +465,37 @@ pub fn tuck(app: &AppHandle) {
             }
         });
     });
+}
+
+/// Sets whether the Settings window holds the board down: it holds it while
+/// it has the keyboard focus (`settings_window` passes the window's focus
+/// events on), so a change of colour, frame, paper or speed shows live.
+///
+/// Holding brings the board down if it is up, unless a full-screen app is in
+/// front; it never takes the keyboard from Settings (the reason is
+/// [`RevealReason::Settings`], which only the shortcut's reveal differs from).
+/// A board already down is just kept: no new swing. While held, the pointer
+/// poller does not tuck it (leaving, the peek ending, a click in Settings; the
+/// board is never activated by a click, so using it keeps Settings focused),
+/// a full-screen app still does, and so does an explicit tuck; both end the
+/// hold. Letting go tucks nothing itself: the poller's usual rules take over,
+/// so a board the shortcut or the tray opened, or one the pointer is on,
+/// stays, and any other goes after the leave delay.
+///
+/// Asking twice for the same thing does nothing. From the main thread (the
+/// window's events).
+pub fn hold_for_settings(app: &AppHandle, on: bool) {
+    if !lock(app).view.hold_for_settings(on) {
+        return;
+    }
+    // Asked afresh, not the poller's last reading, which may be stale while
+    // the board is tucked. Snipping Tool's own overlay does not count.
+    if overlay::fullscreen_app_in_front() && !snipping_tool::in_front() {
+        lock(app).view.settings_held = false;
+        trace!("settings focused: full screen in front, the board stays up");
+        return;
+    }
+    show(app, RevealReason::Settings, Placement::under_pointer(), Duration::ZERO);
 }
 
 /// The one-time tip under the board: showing at `rect` (physical px,
@@ -456,6 +529,7 @@ pub fn set_tip(app: &AppHandle, rect: Option<Rect>) {
 /// The hotkey and the tray icon: down if it is up, up if it is down.
 pub fn toggle(app: &AppHandle, reason: RevealReason) {
     if lock(app).view.shown {
+        trace!("tuck requested: {reason:?} toggle");
         tuck(app);
     } else {
         reveal(app, reason);
@@ -485,6 +559,7 @@ impl EdgeHost for EdgeGlue {
         if crate::stress::running() {
             return;
         }
+        trace!("tuck requested: the pointer poller (peek over, pointer left, click outside or full screen)");
         tuck(&self.0);
     }
 

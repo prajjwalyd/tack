@@ -123,7 +123,7 @@ fn snips(app: &AppHandle, spec: &str, fly: bool) {
     let words: Vec<&str> = spec.split_whitespace().collect();
     let nums: Vec<i32> = words.iter().filter_map(|w| w.parse().ok()).collect();
     let corner = words.iter().find_map(|w| corner_of(w));
-    let mon = tack_windows::overlay::monitor_at(tack_windows::pointer::cursor_pos());
+    let mon = tack_windows::overlay::monitor_at(tack_windows::pointer::cursor_pos().unwrap_or_default());
     let (mw, mh) = (mon.monitor.right - mon.monitor.left, mon.monitor.bottom - mon.monitor.top);
     let rects: Vec<Rect> = if let [x, y, w, h, ..] = nums[..] {
         vec![Rect { x, y, w, h }]

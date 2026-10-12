@@ -1,6 +1,6 @@
 //! Tack's global shortcuts: show or hide the board (Win+Alt+S by default) and
 //! pin the selection (Win+Alt+C). Either can be changed, turned off, or
-//! paused while the Shortcuts dialog listens for a new chord.
+//! paused while the Settings page listens for a new chord.
 //!
 //! `RegisterHotKey` binds a shortcut to the thread that registers it, so one
 //! thread owns them all: it registers, unregisters and hears `WM_HOTKEY` in
@@ -96,7 +96,7 @@ impl Hotkeys {
         self.ask(|reply| Request::Set([toggle, pin], reply))
     }
 
-    /// Unregisters the shortcuts while `paused` (so the Shortcuts dialog can
+    /// Unregisters the shortcuts while `paused` (so the Settings page can
     /// hear any chord, Tack's own included), and registers them again after.
     pub fn pause(&self, paused: bool) -> [Status; 2] {
         self.ask(|reply| Request::Pause(paused, reply))

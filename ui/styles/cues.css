@@ -47,14 +47,14 @@
   place-items: center;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 160ms ease, visibility 0s linear 160ms;
+  transition: opacity var(--dur-short) ease, visibility 0s linear var(--dur-short);
   pointer-events: none;
   z-index: 35;
 }
 #board.drop-over .drop-cue {
   opacity: 1;
   visibility: visible;
-  transition: opacity 160ms ease, visibility 0s;
+  transition: opacity var(--dur-short) ease, visibility 0s;
 }
 .drop-label {
   display: inline-flex;
@@ -68,12 +68,12 @@
   font: 600 12.5px/16px var(--font-ui);
   letter-spacing: .1px;
   transform: translateY(3px) scale(.97);
-  transition: transform 200ms var(--ease-out);
+  transition: transform var(--dur-cue) var(--ease-out);
 }
 .drop-label svg { width: 12px; height: 12px; }
 #board.drop-over .drop-label { transform: none; }
 /* Prints step back so the wash reads as "here". */
-#prints { transition: opacity 160ms ease; }
+#prints { transition: opacity var(--dur-short) ease; }
 #board.drop-over #prints { opacity: .8; }
 
 @media (prefers-reduced-motion: reduce) {

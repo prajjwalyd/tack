@@ -1,9 +1,12 @@
 // Pendulum motion for prints on their pins. One damped oscillator drives every
 // swing: the nudge after a copy, the settle after pin-on, and the breeze, a
-// rare faint ripple along the row while the board is out.
+// rare faint ripple along the row while the board is out. The oscillator runs
+// in its own time, which the Speed setting stretches: a swing at Instant is
+// the same swing, played quicker (class A, motion/scale.js).
 
 import { inView } from "../layout.js";
 import { later, rand, state } from "../state.js";
+import { fixed, motionScale, scaled } from "./scale.js";
 
 const SW_W = (2 * Math.PI) / 1.3;   // ~1.3 s period: paper on a pin, not a pendulum clock
 const SW_A = 1.7;                   // decay rate (1/s)
@@ -13,8 +16,9 @@ const BREEZE_MAX_MS = 25000;
 const BREEZE_MAX_DEG = 0.8;
 const RIPPLE_MS = 55;               // delay from one print to the next
 
+/** The swing `sw` at wall-clock `now`, in the oscillator's own time (`sw.k` wall seconds per second of it). */
 function swingAngle(sw, now) {
-  const t = (now - sw.t0) / 1000;
+  const t = (now - sw.t0) / 1000 / sw.k;
   if (t >= sw.dur) return { th: 0, v: 0 };
   const e = Math.exp(-SW_A * t), c = Math.cos(SW_W * t), s = Math.sin(SW_W * t);
   return {
@@ -33,16 +37,17 @@ export function swing(print, amp) {
   const c1 = th, c2 = (v + SW_A * th) / SW_W;
   const peak = Math.max(Math.abs(c1), Math.abs(c2), 0.01);
   const dur = Math.min(3.5, Math.max(0.6, Math.log(peak / 0.03) / SW_A));
-  const sw = { t0: now, c1, c2, dur };
+  const k = motionScale();
+  const sw = { t0: now, c1, c2, dur, k };
   const n = Math.ceil(dur * 30);
   const frames = [];
   for (let i = 0; i <= n; i++) {
-    const deg = i === n ? 0 : swingAngle(sw, now + (i / n) * dur * 1000).th;
+    const deg = i === n ? 0 : swingAngle(sw, now + (i / n) * dur * 1000 * k).th;
     frames.push({ transform: `rotate(${deg.toFixed(3)}deg)` });
   }
   print.swAnim?.cancel();
   print.sw = sw;
-  print.swAnim = print.swingLayer.animate(frames, { duration: dur * 1000, easing: "linear" });
+  print.swAnim = print.swingLayer.animate(frames, { duration: scaled(dur * 1000), easing: "linear" });
   print.swAnim.onfinish = () => { if (print.sw === sw) { print.sw = null; print.swAnim = null; } };
 }
 
@@ -51,7 +56,8 @@ export function scheduleGust() {
   clearTimeout(state.gustTimer);
   state.gustTimer = 0;
   if (!state.revealed || state.reduced) return;
-  state.gustTimer = setTimeout(() => { gust(); scheduleGust(); }, rand(BREEZE_MIN_MS, BREEZE_MAX_MS));
+  state.gustTimer = setTimeout(() => { gust(); scheduleGust(); },
+    fixed(rand(BREEZE_MIN_MS, BREEZE_MAX_MS), "the breeze is ambient: its cadence is not a response to anything"));
 }
 
 export function stopGusts() { clearTimeout(state.gustTimer); state.gustTimer = 0; }
@@ -70,6 +76,6 @@ export function gust() {
     later(() => {
       if (state.press || state.draggingId || c === state.hovered) return;
       swing(c, dir * BREEZE_MAX_DEG * strength * rand(0.75, 1));
-    }, i * RIPPLE_MS + rand(0, 30));
+    }, scaled(i * RIPPLE_MS + rand(0, 30)));
   });
 }

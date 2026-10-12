@@ -23,6 +23,9 @@ pub enum RevealReason {
     New,
     /// The tray icon or its menu.
     Tray,
+    /// The Settings window took the keyboard focus: it holds the board down
+    /// (see [`View::hold_for_settings`]), never the keyboard or `stay_open`.
+    Settings,
 }
 
 /// A rectangle in physical pixels.
@@ -89,7 +92,8 @@ pub struct CssRect {
 #[derive(Debug)]
 pub struct View {
     /// Revealed (or about to be). Cleared the moment a tuck starts, even
-    /// though the window stays visible for the 300 ms slide.
+    /// though the window stays visible for the slide
+    /// ([`RevealSpeed::tuck_hide_delay`](crate::RevealSpeed::tuck_hide_delay)).
     pub shown: bool,
     /// Bumped on every reveal and tuck, so a late hide never hides a board
     /// that was revealed again in the meantime.
@@ -126,6 +130,13 @@ pub struct View {
     /// button is held over the top strip, so it can be dropped on.
     pub drag_in: bool,
     pub menu_open: bool,
+    /// The Settings window has the keyboard focus and holds the board down,
+    /// so changes to the colour, frame, paper and speed show live. The
+    /// pointer poller does not tuck a held board (not on leaving, not when
+    /// the peek ends, not on a click outside: Settings is "outside"); only a
+    /// full-screen app or an explicit tuck (the shortcut, the tray) ends the
+    /// hold, or Settings losing the focus. See [`View::hold_for_settings`].
+    pub settings_held: bool,
     /// Whether the window currently lets clicks through.
     pub ignoring: bool,
     /// A full screen app is in front.
@@ -155,6 +166,7 @@ impl Default for View {
             dragging: None,
             drag_in: false,
             menu_open: false,
+            settings_held: false,
             ignoring: true,
             fullscreen: false,
             snipping: false,
@@ -163,6 +175,42 @@ impl Default for View {
 }
 
 impl View {
+    /// Starts a tuck: the new generation (the window hides later only if it
+    /// is still current), or `None` if the board is not shown. The board
+    /// stops counting as shown at once (the window stays up for the slide),
+    /// the generation moves on, and everything that kept it open is
+    /// forgotten, the Settings hold too: a tuck is the user's say (the
+    /// shortcut, the tray) or a full-screen app's, and neither is overruled
+    /// by Settings. The board does not come back by itself until the next
+    /// reveal.
+    pub fn tuck(&mut self) -> Option<u64> {
+        if !self.shown {
+            return None;
+        }
+        self.shown = false;
+        self.generation += 1;
+        self.stay_open = false;
+        self.peek_until = None;
+        self.edge_armed = false;
+        self.tip = None;
+        self.settings_held = false;
+        Some(self.generation)
+    }
+
+    /// Settings gains (`on`) or loses the keyboard focus. Returns whether
+    /// the board has to be revealed for it: held, but tucked. A board that is
+    /// down is just kept, so asking again changes nothing (no new swing, no
+    /// new generation).
+    ///
+    /// Letting go tucks nothing here: the poller's usual rules decide, so a
+    /// board that something else keeps down (the shortcut's `stay_open`, a
+    /// peek, the pointer on it) stays, and one only Settings held goes when
+    /// the pointer is not on it, after the leave delay.
+    pub fn hold_for_settings(&mut self, on: bool) -> bool {
+        self.settings_held = on;
+        on && !self.shown
+    }
+
     /// The board rect in screen coordinates.
     pub fn board_on_screen(&self) -> Option<Rect> {
         self.rect.map(|r| self.on_screen(r))
@@ -195,6 +243,74 @@ impl View {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn shown() -> View {
+        View {
+            shown: true,
+            generation: 4,
+            stay_open: true,
+            peek_until: Some(std::time::Instant::now()),
+            ..View::default()
+        }
+    }
+
+    #[test]
+    fn a_tuck_clears_what_kept_the_board_open() {
+        let mut view = shown();
+        view.tip = Some(Rect { x: 1, y: 2, w: 3, h: 4 });
+        view.edge_armed = true;
+        view.settings_held = true;
+        assert_eq!(view.tuck(), Some(5));
+        assert!(!view.shown && !view.stay_open && !view.edge_armed && !view.settings_held);
+        assert!(view.peek_until.is_none() && view.tip.is_none());
+        // Already tucked: nothing happens, and the generation holds still.
+        assert_eq!(view.tuck(), None);
+        assert_eq!(view.generation, 5);
+    }
+
+    #[test]
+    fn holding_a_board_that_is_down_only_sets_the_flag() {
+        let mut view = shown();
+        assert!(!view.hold_for_settings(true), "no reveal needed");
+        assert!(view.settings_held);
+        // Nothing replays: still the same reveal, and the same again.
+        assert!(!view.hold_for_settings(true));
+        assert!(view.shown && view.stay_open && view.generation == 4);
+    }
+
+    #[test]
+    fn holding_a_tucked_board_asks_for_a_reveal_once() {
+        let mut view = View::default();
+        assert!(view.hold_for_settings(true));
+        assert!(view.settings_held);
+        // The reveal came down: asking again (the focus event twice) is not another.
+        view.shown = true;
+        assert!(!view.hold_for_settings(true));
+    }
+
+    #[test]
+    fn letting_go_changes_only_the_flag() {
+        // Whatever else keeps the board down stays as it was: the poller's rules decide.
+        let mut view = shown();
+        view.hold_for_settings(true);
+        assert!(!view.hold_for_settings(false));
+        assert!(!view.settings_held);
+        assert!(view.shown && view.stay_open && view.peek_until.is_some() && view.generation == 4);
+        // Again: nothing.
+        assert!(!view.hold_for_settings(false));
+        assert!(view.shown && view.generation == 4);
+    }
+
+    #[test]
+    fn a_tuck_while_held_ends_the_hold_until_the_focus_comes_back() {
+        let mut view = shown();
+        view.hold_for_settings(true);
+        view.tuck();
+        assert!(!view.settings_held);
+        // Letting go afterwards does nothing; gaining the focus again holds and reveals.
+        assert!(!view.hold_for_settings(false));
+        assert!(view.hold_for_settings(true) && view.settings_held);
+    }
 
     #[test]
     fn the_board_rect_follows_the_window() {

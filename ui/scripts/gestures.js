@@ -11,11 +11,13 @@
 // toward the pointer and its sheen (print.css), once per frame while hovered.
 
 import * as ipc from "./ipc.js";
+import { fixed } from "./motion/scale.js";
 import { openItem } from "./note.js";
 import { hideCaption, showCaption, toggleKeep } from "./print.js";
 import { isScrolling, onScrollState } from "./scroll.js";
 import { dom, state } from "./state.js";
 
+// Physical gesture times (class C, motion/scale.js): the speed never changes them.
 const HOLD_MS = 520;     // keep in step with --dur-press in tokens.css
 const DBL_MS = 260;
 const DRAG_PX = 4;
@@ -48,23 +50,13 @@ export function clearHover() {
   resetTilt(p);
 }
 
-let tiltPrint = null, tiltX = 0, tiltY = 0, tiltRaf = 0;
-
-/** The pointer moved over `print` (client px): lean it next frame. */
+/** The pointer moved over `print` (client px): lean it toward the pointer. */
 function trackTilt(print, x, y) {
   if (state.reduced || state.hovered !== print || state.press || print.leaving) return;
   // The lean is on the card, so the slot's box is a steady frame; read once per hover.
-  print.tiltRect ||= print.slot.getBoundingClientRect();
-  tiltPrint = print; tiltX = x; tiltY = y;
-  if (!tiltRaf) tiltRaf = requestAnimationFrame(applyTilt);
-}
-
-function applyTilt() {
-  tiltRaf = 0;
-  const print = tiltPrint, r = print?.tiltRect;
-  if (!print || !r || state.hovered !== print || state.press) return;
-  const nx = clamp(((tiltX - r.left) / r.width) * 2 - 1);
-  const ny = clamp(((tiltY - r.top) / r.height) * 2 - 1);
+  const r = (print.tiltRect ||= print.slot.getBoundingClientRect());
+  const nx = clamp(((x - r.left) / r.width) * 2 - 1);
+  const ny = clamp(((y - r.top) / r.height) * 2 - 1);
   // The free end swings toward the pointer, more the lower it is.
   const lean = -nx * LEAN_DEG * (0.35 + 0.65 * (ny + 1) / 2);
   const style = print.el.style;
@@ -75,7 +67,6 @@ function applyTilt() {
 
 function resetTilt(print) {
   print.tiltRect = null;
-  if (tiltPrint === print) { tiltPrint = null; cancelAnimationFrame(tiltRaf); tiltRaf = 0; }
   const style = print.el.style;
   style.removeProperty("--lean");
   style.removeProperty("--sheen-x");
@@ -153,7 +144,7 @@ export function wireGestures(print) {
     e.preventDefault();
     const now = performance.now();
     const pc = state.pendingClick;
-    if (pc && pc.id === id && now - pc.t < DBL_MS) {
+    if (pc && pc.id === id && now - pc.t < fixed(DBL_MS, "the double-click window is a physical gesture time")) {
       // Second click: open instead of copying twice.
       clearTimeout(pc.timer);
       state.pendingClick = null;
@@ -173,7 +164,7 @@ export function wireGestures(print) {
       p.long = true;
       slot.classList.remove("pressing");
       onHold(print);
-    }, HOLD_MS);
+    }, fixed(HOLD_MS, "press-and-hold is a physical gesture time"));
     state.press = p;
     slot.classList.add("pressing");
     setHover(print, true);
@@ -202,7 +193,7 @@ export function wireGestures(print) {
     pc.timer = setTimeout(() => {
       if (state.pendingClick === pc) state.pendingClick = null;
       ipc.copyPrint(id);
-    }, DBL_MS);
+    }, fixed(DBL_MS, "the double-click window is a physical gesture time"));
     if (state.pendingClick) { // a different print was clicked just before: let it copy now
       clearTimeout(state.pendingClick.timer);
       ipc.copyPrint(state.pendingClick.id);

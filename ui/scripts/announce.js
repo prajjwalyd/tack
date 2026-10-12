@@ -12,6 +12,9 @@ region.setAttribute("aria-live", "polite");
 region.setAttribute("aria-atomic", "true");
 document.body.appendChild(region);
 
+import { ago } from "./age.js";
+import { fixed } from "./motion/scale.js";
+
 let clearTimer = 0;
 
 /** Says `text` politely. The same text twice in a row is said twice. */
@@ -23,8 +26,9 @@ export function announce(text) {
   clearTimer = setTimeout(() => {
     region.textContent = text;
     // Cleared later so a stale "Copied" is never read out by browsing.
-    clearTimer = setTimeout(() => { clearTimer = 0; region.textContent = ""; }, 4000);
-  }, 40);
+    clearTimer = setTimeout(() => { clearTimer = 0; region.textContent = ""; },
+      fixed(4000, "a screen reader needs the time to read it out"));
+  }, fixed(40, "a live region speaks only on a change after a task of its own"));
 }
 
 /** The board tucked: clear the region and its timer. */
@@ -34,23 +38,8 @@ export function hush() {
   region.textContent = "";
 }
 
-const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: "long" });
-const dateFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "long" });
-const yearFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "long", year: "numeric" });
-
 /** "just now", "1 minute ago", "3 hours ago", "yesterday", "on Tuesday", "on 12 September". */
-export function spokenAge(t, now = Date.now()) {
-  const s = Math.max(0, (now - t) / 1000);
-  if (s < 45) return "just now";
-  const min = Math.max(1, Math.round(s / 60));
-  if (min < 60) return min === 1 ? "1 minute ago" : `${min} minutes ago`;
-  const a = new Date(t), b = new Date(now);
-  const days = Math.round((new Date(b.getFullYear(), b.getMonth(), b.getDate()) - new Date(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
-  if (days <= 0) { const h = Math.floor(min / 60); return h === 1 ? "1 hour ago" : `${h} hours ago`; }
-  if (days === 1) return "yesterday";
-  if (days < 7) return `on ${dayFmt.format(a)}`;
-  return `on ${(a.getFullYear() === b.getFullYear() ? dateFmt : yearFmt).format(a)}`;
-}
+const spokenAge = (t) => ago(t, { on: "on ", month: "long" });
 
 /** The first `n` words of a note, on one line. */
 function firstWords(text, n = 8) {

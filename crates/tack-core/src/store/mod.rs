@@ -3,11 +3,9 @@
 //! or a note's text; on startup each file is read again, and files that are
 //! gone by then are skipped.
 //!
-//! The file carries a schema [`VERSION`]. Older layouts (version 2, without
-//! notes, and the unversioned `prints` and `paths`/`captures` layouts) still
-//! load. A file from a newer Tack, or one that lists no prints at all, is
-//! read as far as it goes but never trusted for cleanup, and is backed up
-//! before this build writes over it.
+//! The file carries a schema [`VERSION`]. A file from a newer Tack, or one
+//! that lists no prints at all, is read as far as it goes but never trusted
+//! for cleanup, and is backed up before this build writes over it.
 //!
 //! Saves are snapshots ([`Snapshot`]) taken under the app's lock and written
 //! by one [`Saver`] thread outside it.
@@ -36,15 +34,8 @@ const VERSION: u32 = 3;
 #[derive(Serialize, Deserialize, Default, Debug)]
 #[serde(default, rename_all = "camelCase")]
 struct Stored {
-    /// Absent before versions were written; such files are layout 1 or older.
     version: Option<u32>,
     prints: Option<Vec<StoredPrint>>,
-    /// The older layout: the pinned paths, oldest first. Read, never written.
-    #[serde(skip_serializing)]
-    paths: Option<Vec<PathBuf>>,
-    /// The older layout: which of `paths` are captures.
-    #[serde(skip_serializing)]
-    captures: Vec<PathBuf>,
     #[serde(flatten)]
     settings: Settings,
 }
@@ -54,9 +45,8 @@ struct Stored {
 #[serde(rename_all = "camelCase")]
 struct StoredPrint {
     path: PathBuf,
-    /// "note" for a note; absent (before version 3, and for screenshots)
-    /// means a screenshot. Read as text, so a kind from a newer Tack skips
-    /// that print instead of failing the whole file.
+    /// "note" for a note; absent means a screenshot. Read as text, so a kind
+    /// from a newer Tack skips that print instead of failing the whole file.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     kind: Option<String>,
     #[serde(default)]
@@ -102,18 +92,13 @@ pub enum Loaded {
     /// board.json that was deleted, so they are left alone.
     Missing,
     /// board.json exists but could not be read, did not parse, comes from a
-    /// newer Tack, or lists no prints at all (no `prints`, no older `paths`).
+    /// newer Tack, or lists no prints at all (no `prints`).
     /// `backup` is where a copy of it was put, if one could be made; without
     /// one, nothing may write over the original.
     Unreadable { reason: String, backup: Option<PathBuf> },
 }
 
 impl Loaded {
-    /// Whether leftover captures may be swept.
-    pub fn may_sweep(&self) -> bool {
-        matches!(self, Loaded::Ok)
-    }
-
     /// Whether saving would overwrite a board.json that was never backed up.
     pub fn must_not_save(&self) -> bool {
         matches!(self, Loaded::Unreadable { backup: None, .. })
@@ -151,9 +136,9 @@ fn temp_file(file: &Path) -> PathBuf {
 /// whatever prints could be made out. A board.json that cannot be used as is
 /// gets copied to `board.json.bad-<now_ms>` first, so no save can lose it.
 ///
-/// Prints saved without a pin time get their file's modification time, or
-/// `now_ms` if that cannot be read. A `.tmp` left by an interrupted save is
-/// removed: it never replaced the real file, so it holds nothing needed.
+/// Prints saved without a pin time count as pinned at `now_ms`. A `.tmp` left
+/// by an interrupted save is removed: it never replaced the real file, so it
+/// holds nothing needed.
 pub fn load(file: &Path, now_ms: u64) -> (Saved, Loaded) {
     let _ = std::fs::remove_file(temp_file(file));
     let bytes = match std::fs::read(file) {
@@ -164,8 +149,7 @@ pub fn load(file: &Path, now_ms: u64) -> (Saved, Loaded) {
             return (Saved::default(), Loaded::Unreadable { reason, backup: back_up(file, now_ms) });
         }
     };
-    let modified = |path: &Path| std::fs::metadata(path).and_then(|m| m.modified()).ok().and_then(history::epoch_ms);
-    match parse(&bytes, now_ms, modified) {
+    match parse(&bytes, now_ms) {
         (saved, Loaded::Unreadable { reason, .. }) => {
             (saved, Loaded::Unreadable { reason, backup: back_up(file, now_ms) })
         }
@@ -185,15 +169,14 @@ fn back_up(file: &Path, now_ms: u64) -> Option<PathBuf> {
     }
 }
 
-/// Parses the contents of a board.json. `modified` gives a file's
-/// modification time in ms since the Unix epoch, for prints saved without a
-/// pin time; failing that they count as pinned at `now_ms`.
+/// Parses the contents of a board.json. Prints saved without a pin time count
+/// as pinned at `now_ms`.
 ///
 /// Contents that do not parse are an empty board. A newer schema is read as
 /// far as this build understands it, but reported as
 /// [`Loaded::Unreadable`]. The `backup` of an unreadable result is always
 /// `None` here; [`load`] makes the copy.
-fn parse(bytes: &[u8], now_ms: u64, modified: impl Fn(&Path) -> Option<u64>) -> (Saved, Loaded) {
+fn parse(bytes: &[u8], now_ms: u64) -> (Saved, Loaded) {
     let stored: Stored = match serde_json::from_slice(bytes) {
         Ok(stored) => stored,
         Err(e) => {
@@ -208,27 +191,23 @@ fn parse(bytes: &[u8], now_ms: u64, modified: impl Fn(&Path) -> Option<u64>) -> 
         },
         // Every Tack writes a print list, even an empty one. A file without
         // one says nothing about which captures are pinned.
-        _ if stored.prints.is_none() && stored.paths.is_none() => {
-            Loaded::Unreadable { reason: "it lists no prints at all".into(), backup: None }
-        }
+        _ if stored.prints.is_none() => Loaded::Unreadable { reason: "it lists no prints at all".into(), backup: None },
         _ => Loaded::Ok,
     };
-    let entries = match stored.prints {
-        Some(prints) => prints,
-        None => legacy_prints(stored.paths.unwrap_or_default(), &stored.captures),
-    };
-    let mut prints: Vec<SavedPrint> = entries
+    let mut prints: Vec<SavedPrint> = stored
+        .prints
+        .unwrap_or_default()
         .into_iter()
         .filter_map(|p| {
             let kind = match p.kind.as_deref() {
-                None | Some("image") => Kind::Image,
+                None => Kind::Image,
                 Some("note") => Kind::Note,
                 Some(other) => {
                     eprintln!("tack: skipping a pinned {other:?}, a kind of print this build does not know");
                     return None;
                 }
             };
-            let pinned_at = p.pinned_at.or_else(|| modified(&p.path)).unwrap_or(now_ms);
+            let pinned_at = p.pinned_at.unwrap_or(now_ms);
             // A kept print saved without its time counts as kept when pinned.
             let kept_at = p.kept.then(|| p.kept_at.unwrap_or(pinned_at));
             // A note's file is always Tack's own.
@@ -237,27 +216,7 @@ fn parse(bytes: &[u8], now_ms: u64, modified: impl Fn(&Path) -> Option<u64>) -> 
         })
         .collect();
     prints.sort_by_key(|p| history::row_key(p.kept_at, p.pinned_at));
-    let mut settings = stored.settings;
-    settings.retire_old_defaults();
-    (Saved { settings, prints }, loaded)
-}
-
-/// The older layout as prints: unkept, with no pin time of their own.
-fn legacy_prints(paths: Vec<PathBuf>, captures: &[PathBuf]) -> Vec<StoredPrint> {
-    let captures: HashSet<String> = captures.iter().map(|p| path_key(p)).collect();
-    // Oldest first there; newest first here, so ties keep the right order.
-    paths
-        .into_iter()
-        .rev()
-        .map(|path| StoredPrint {
-            kind: None,
-            capture: captures.contains(&path_key(&path)),
-            path,
-            pinned_at: None,
-            kept: false,
-            kept_at: None,
-        })
-        .collect()
+    (Saved { settings: stored.settings, prints }, loaded)
 }
 
 /// What one save writes: taken under the app's lock (cheap, a few paths),
@@ -296,23 +255,10 @@ impl Snapshot {
 
 /// Writes board.json from a snapshot, replacing the file in one step.
 pub fn write(file: &Path, snapshot: &Snapshot) -> std::io::Result<()> {
-    let stored = Stored {
-        version: Some(VERSION),
-        prints: Some(snapshot.prints.clone()),
-        settings: snapshot.settings.clone(),
-        ..Stored::default()
-    };
+    let stored =
+        Stored { version: Some(VERSION), prints: Some(snapshot.prints.clone()), settings: snapshot.settings.clone() };
     let bytes = serde_json::to_vec_pretty(&stored).map_err(std::io::Error::other)?;
     replace(file, &bytes)
-}
-
-/// Writes board.json, the prints in the order given (row order), at once.
-/// Failures are logged, never fatal: the board still works, it just will
-/// not remember.
-pub fn save(file: &Path, prints: &[Print], settings: &Settings) {
-    if let Err(e) = write(file, &Snapshot::new(prints, &[], settings)) {
-        eprintln!("tack: cannot save {}: {e}", file.display());
-    }
 }
 
 /// Every path that board.json and its `board.json.bad-*` backups mention,

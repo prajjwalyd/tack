@@ -7,8 +7,11 @@
 //! thread; from another thread the cross-thread SendMessage calls can
 //! deadlock against the board lock.
 
-use windows::Win32::Foundation::{HWND, POINT, RECT};
-use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTONEAREST};
+use windows::core::BOOL;
+use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
+use windows::Win32::Graphics::Gdi::{
+    EnumDisplayMonitors, GetMonitorInfoW, MonitorFromPoint, HDC, HMONITOR, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+};
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::Shell::{
     SHQueryUserNotificationState, QUNS_BUSY, QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN,
@@ -28,11 +31,41 @@ pub struct Monitor {
     pub scale: f64,
 }
 
+/// The monitor holding `pt`, or the nearest one.
+fn monitor_of(pt: POINT) -> HMONITOR {
+    unsafe { MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST) }
+}
+
+fn monitor_info(hmon: HMONITOR) -> MONITORINFO {
+    let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+    unsafe {
+        let _ = GetMonitorInfoW(hmon, &mut info);
+    }
+    info
+}
+
+/// The whole of the monitor holding `pt` (not the work area), physical px.
+pub(crate) fn monitor_rect_at(pt: POINT) -> RECT {
+    monitor_info(monitor_of(pt)).rcMonitor
+}
+
+/// Every monitor, whole, physical px.
+pub(crate) fn monitor_rects() -> Vec<RECT> {
+    unsafe extern "system" fn each(hmon: HMONITOR, _: HDC, _: *mut RECT, rects: LPARAM) -> BOOL {
+        unsafe { (*(rects.0 as *mut Vec<RECT>)).push(monitor_info(hmon).rcMonitor) };
+        true.into()
+    }
+    let mut rects = Vec::new();
+    unsafe {
+        let _ = EnumDisplayMonitors(None, None, Some(each), LPARAM(&mut rects as *mut _ as isize));
+    }
+    rects
+}
+
 pub fn monitor_at(pt: POINT) -> Monitor {
     unsafe {
-        let hmon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
-        let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
-        let _ = GetMonitorInfoW(hmon, &mut info);
+        let hmon = monitor_of(pt);
+        let info = monitor_info(hmon);
         let (mut dx, mut dy) = (96u32, 96u32);
         let scale = if GetDpiForMonitor(hmon, MDT_EFFECTIVE_DPI, &mut dx, &mut dy).is_ok() && dx > 0 {
             dx as f64 / 96.0

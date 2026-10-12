@@ -19,12 +19,11 @@
 mod http;
 mod routes;
 pub mod server;
-pub mod window;
 
 use std::collections::hash_map::RandomState;
 use std::hash::BuildHasher;
 use std::sync::{Condvar, Mutex, MutexGuard};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use serde::Serialize;
 use tack_core::history;
@@ -34,6 +33,7 @@ use tack_windows::netbird;
 use tauri::AppHandle;
 
 use crate::ipc::events;
+use crate::settings_window;
 use crate::state::lock;
 
 /// The port the board is served on, on the NetBird address.
@@ -42,13 +42,7 @@ pub const PORT: u16 = 7717;
 /// Where "Get NetBird" goes: NetBird's own install page, for every platform.
 pub const NETBIRD_INSTALL: &str = "https://docs.netbird.io/get-started/install";
 
-/// How often NetBird is looked at while the switch is on: it may have
-/// connected, disconnected or given this PC another address. Less often once
-/// serving, since requests look up the peers they need themselves.
-const WATCH_WAITING: Duration = Duration::from_secs(15);
-const WATCH_SERVING: Duration = Duration::from_secs(60);
-
-/// NetBird on this PC, as the window describes it.
+/// NetBird on this PC, as the page describes it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum NetBirdState {
@@ -57,7 +51,7 @@ pub enum NetBirdState {
     Connected,
 }
 
-/// What the "Tack on your phone" window shows.
+/// What the phone card and the phone page of Settings show.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PhoneState {
@@ -82,7 +76,7 @@ struct Phone {
 static PHONE: Mutex<Phone> =
     Mutex::new(Phone { gate: Gate::new(), running: None, netbird: NetBirdState::Missing, error: None });
 
-/// Wakes the watcher early (the switch was flipped).
+/// Wakes the watcher early (the switch was flipped, or the network changed).
 static NUDGE: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
 /// One reconcile at a time, so two cannot both start a server.
 static RECONCILING: Mutex<()> = Mutex::new(());
@@ -92,19 +86,23 @@ fn phone() -> MutexGuard<'static, Phone> {
 }
 
 /// Starts watching NetBird, so the board is served whenever the switch is on
-/// and NetBird is connected (from startup, if it was left on).
+/// and NetBird is connected (from startup, if it was left on). NetBird is
+/// looked at when the switch is flipped and when the network changes (it
+/// connected, disconnected or gave this PC another address); peers are looked
+/// up by the requests that need them. Nothing runs on a timer.
 pub fn start(app: AppHandle) {
-    let spawned = std::thread::Builder::new().name("tack-phone-watch".into()).spawn(move || loop {
-        reconcile(&app);
-        let every = if phone().running.is_some() { WATCH_SERVING } else { WATCH_WAITING };
-        let (lock, wake) = &NUDGE;
-        let nudged = lock.lock().unwrap_or_else(|p| p.into_inner());
-        let (mut nudged, _) = wake.wait_timeout_while(nudged, every, |n| !*n).unwrap_or_else(|p| p.into_inner());
-        *nudged = false;
+    let _ = std::thread::Builder::new().name("tack-phone-watch".into()).spawn(move || {
+        // Held while the switch is on.
+        let mut network = None;
+        loop {
+            reconcile(&app);
+            let on = lock(&app).settings.phone.on;
+            network = if on { network.or_else(|| netbird::NetworkWatch::start(nudge)) } else { None };
+            let (flag, wake) = &NUDGE;
+            let nudged = flag.lock().unwrap_or_else(|p| p.into_inner());
+            *wake.wait_while(nudged, |n| !*n).unwrap_or_else(|p| p.into_inner()) = false;
+        }
     });
-    if let Err(e) = spawned {
-        eprintln!("tack: cannot watch NetBird for the phone board: {e}");
-    }
 }
 
 fn nudge() {
@@ -165,8 +163,8 @@ fn reconcile(app: &AppHandle) {
     }
 }
 
-/// The window's state. Looks NetBird up when the switch is off, so the
-/// window can say what turning it on would need.
+/// The page's state. Looks NetBird up when the switch is off, so the page can
+/// say what turning it on would need.
 pub fn state(app: &AppHandle) -> PhoneState {
     if !lock(app).settings.phone.on {
         phone().netbird = netbird_state(netbird::status().as_ref());
@@ -242,11 +240,6 @@ pub fn forget(app: &AppHandle, key: &str) -> PhoneState {
     state
 }
 
-/// Whether the device with `key` is allowed, without asking anybody.
-pub(crate) fn allowed(app: &AppHandle, key: &str) -> bool {
-    Gate::allowed(&lock(app).settings.phone, key)
-}
-
 /// Whether `peer` may use the board; a device asking for the first time
 /// puts the question to the user.
 pub(crate) fn admit(app: &AppHandle, peer: &Peer) -> Verdict {
@@ -272,7 +265,7 @@ fn decide(app: &AppHandle, peer: &Peer, rule: Rule) -> Verdict {
     if matches!(verdict, Verdict::Waiting { asked: true, .. }) {
         trace!("phone: a device asks to use the board");
         events::phone_state(app, &state_now(app));
-        window::ask(app);
+        settings_window::device_asks(app);
     }
     verdict
 }
@@ -284,7 +277,7 @@ fn fresh_code() -> String {
     format!("{:04}", RandomState::new().hash_one(SystemTime::now()) % 10_000)
 }
 
-/// A QR code for `address`, as SVG markup for the window.
+/// A QR code for `address`, as SVG markup for the page.
 fn qr_svg(address: &str) -> Option<String> {
     let code = qrcode::QrCode::new(address.as_bytes()).ok()?;
     Some(

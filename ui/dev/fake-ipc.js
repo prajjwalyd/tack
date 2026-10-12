@@ -5,7 +5,8 @@
 // buttons in preview.html (also window.preview). Uses the app's own command and
 // event names (../scripts/ipc.js).
 
-import { COMMANDS, EVENTS } from "../scripts/ipc.js";
+import { EVENTS } from "../scripts/ipc.js";
+import { DEFAULT_APPEARANCE, FRAME_PRESETS, PAPER_PRESETS, PRESETS, SCALES, validFelt, validFrame, validPaper } from "./appearance-presets.js";
 
 const handlers = new Map();
 const log = (msg) => {
@@ -195,24 +196,33 @@ const arrange = () => prints.sort((a, b) =>
 const emitOrder = () => emit(EVENTS.ORDER_CHANGED, { ids: prints.map((x) => x.id) });
 arrange();
 let sound = true;
+// ?felt=navy|accent|%23aabbcc, ?finish=graphite, ?paper=blush and ?speed=instant|normal|slow start with that
+// board colour, frame finish, note paper and speed.
+const settings = {
+  sound, felt: validFelt(params.get("felt")) ? params.get("felt") : DEFAULT_APPEARANCE.felt, feltPresets: PRESETS,
+  frame: validFrame(params.get("finish")) ? params.get("finish") : DEFAULT_APPEARANCE.frame, framePresets: FRAME_PRESETS,
+  paper: validPaper(params.get("paper")) ? params.get("paper") : DEFAULT_APPEARANCE.paper, paperPresets: PAPER_PRESETS,
+  reveal: params.get("speed") in SCALES ? params.get("speed") : "normal",
+};
+const view = () => ({ ...settings, sound, motionScale: SCALES[settings.reveal] });
 
 const commands = {
-  [COMMANDS.BOARD_READY]: () => {
+  board_ready: () => {
     // Reveal shortly after the page is listening, like the backend would.
     setTimeout(() => preview.reveal(), 350);
-    return { prints: prints.slice(), sound };
+    return { prints: prints.slice(), sound, settings: view() };
   },
-  [COMMANDS.SET_BOARD_RECT]: ({ x, y, w, h }) => {
+  set_board_rect: ({ x, y, w, h }) => {
     const dpr = window.devicePixelRatio || 1;
     const r = document.getElementById("rect");
     if (r) Object.assign(r.style, { left: x / dpr + "px", top: y / dpr + "px", width: w / dpr + "px", height: h / dpr + "px" });
     if (r) r.querySelector("span").textContent = `board rect ${x},${y} ${w}×${h} phys px`;
   },
-  [COMMANDS.COPY_PRINT]: ({ id }) => setTimeout(() => emit(EVENTS.PRINT_COPIED, { id }), 40),
-  [COMMANDS.OPEN_PRINT]: ({ id }) => log(`(would open ${prints.find((x) => x.id === id)?.note?.link || id})`),
-  [COMMANDS.EDIT_PRINT]: ({ id }) => log(`(would edit ${prints.find((x) => x.id === id)?.name || id})`),
-  [COMMANDS.PIN_TEXT]: ({ text }) => { if (String(text || "").trim()) pin(makeNote(text)); },
-  [COMMANDS.PIN_IMAGE]: async ({ name, data }) => {
+  copy_print: ({ id }) => setTimeout(() => emit(EVENTS.PRINT_COPIED, { id }), 40),
+  open_print: ({ id }) => log(`(would open ${prints.find((x) => x.id === id)?.note?.link || id})`),
+  edit_print: ({ id }) => log(`(would edit ${prints.find((x) => x.id === id)?.name || id})`),
+  pin_text: ({ text }) => { if (String(text || "").trim()) pin(makeNote(text)); },
+  pin_image: async ({ name, data }) => {
     const type = /\.jpe?g$/i.test(name || "") ? "image/jpeg" : "image/png";
     const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
     let bmp;
@@ -229,19 +239,18 @@ const commands = {
     });
     return null;
   },
-  [COMMANDS.TAKE_FOCUS]: () => {},
-  [COMMANDS.RELEASE_FOCUS]: () => {},
-  [COMMANDS.HIDE_BOARD]: () => { setTimeout(() => emit(EVENTS.TUCK), 10); },
-  [COMMANDS.START_DRAG]: ({ id }) => {
+  take_focus: () => {},
+  release_focus: () => {},
+  hide_board: () => { setTimeout(() => emit(EVENTS.TUCK), 10); },
+  start_drag: ({ id }) => {
     setTimeout(() => emit(EVENTS.PRINT_DRAGGING, { id }), 30);
     setTimeout(() => emit(EVENTS.PRINT_DRAG_ENDED, { id }), 1600);
   },
-  [COMMANDS.DISCARD_PRINT]: ({ id }) => remove(id, "fall"),
-  [COMMANDS.CONTEXT_MENU]: ({ id, at }) => {
+  discard_print: ({ id }) => remove(id, "fall"),
+  context_menu: ({ id, at }) => {
     if (at) console.info(`[fake-ipc] context_menu ${id} at ${at.x},${at.y} physical px`);
   },
-  [COMMANDS.SET_HOVERING]: () => {},
-  [COMMANDS.SET_KEPT]: ({ id, kept }) => {
+  set_kept: ({ id, kept }) => {
     const it = prints.find((x) => x.id === id);
     if (!it) return;
     const before = prints.map((x) => x.id).join();
@@ -276,7 +285,7 @@ function pin(print, animate = true) {
 window.__TAURI__ = {
   core: {
     invoke: (cmd, args = {}) => {
-      if (cmd !== COMMANDS.SET_BOARD_RECT) log(`invoke ${cmd} ${JSON.stringify(args).slice(0, 120)}`);
+      if (cmd !== "set_board_rect") log(`invoke ${cmd} ${JSON.stringify(args).slice(0, 120)}`);
       const fn = commands[cmd];
       if (!fn) return Promise.reject(new Error(`unknown command ${cmd}`));
       return Promise.resolve(fn(args) ?? null);
@@ -296,19 +305,19 @@ const anyPrint = () => prints[Math.floor(Math.random() * prints.length)];
 const preview = {
   emit, add, remove, prints, pin, makeNote,
   // A tray reveal: no focus. The hotkey is a keyboard open (keyboard.js).
-  reveal: () => emit(EVENTS.REVEAL, { reason: "tray" }),
-  revealKeyboard: () => emit(EVENTS.REVEAL, { reason: "hotkey" }),
+  reveal: () => emit(EVENTS.REVEAL, { reason: "tray", motionScale: SCALES[settings.reveal] }),
+  revealKeyboard: () => emit(EVENTS.REVEAL, { reason: "hotkey", motionScale: SCALES[settings.reveal] }),
   addNote: () => pin(makeNote(SAMPLE_ADDS[noteCounter % SAMPLE_ADDS.length])),
   addLink: () => pin(makeNote(SAMPLE_LINKS[noteCounter % SAMPLE_LINKS.length])),
   nothingSelected: () => emit(EVENTS.NOTICE, { text: "Nothing selected" }),
   tuck: () => emit(EVENTS.TUCK),
   addQuiet: () => add(false),
-  fall: () => prints.length && commands[COMMANDS.DISCARD_PRINT]({ id: anyPrint().id }),
-  keep: () => { if (!prints.length) return; const it = anyPrint(); commands[COMMANDS.SET_KEPT]({ id: it.id, kept: !it.kept }); },
+  fall: () => prints.length && commands.discard_print({ id: anyPrint().id }),
+  keep: () => { if (!prints.length) return; const it = anyPrint(); commands.set_kept({ id: it.id, kept: !it.kept }); },
   quiet: () => prints.length && remove(anyPrint().id, "quiet"),
   copied: () => prints.length && emit(EVENTS.PRINT_COPIED, { id: anyPrint().id }),
   gust: () => emit(EVENTS.GUST),
-  drag: () => prints.length && commands[COMMANDS.START_DRAG]({ id: prints[prints.length - 1].id }),
+  drag: () => prints.length && commands.start_drag({ id: prints[prints.length - 1].id }),
   update: () => {
     if (!prints.length) return;
     const it = anyPrint();
@@ -335,6 +344,11 @@ const preview = {
   },
   pointerLeft: () => emit(EVENTS.POINTER_LEFT),
   sound: () => { sound = !sound; emit(EVENTS.SETTINGS, { sound }); return sound; },
+  // The Settings window's changes, as the board hears them (settings:changed carries it all).
+  felt: (value) => { settings.felt = value; emit(EVENTS.SETTINGS, view()); },
+  frame: (value) => { settings.frame = value; emit(EVENTS.SETTINGS, view()); },
+  paper: (value) => { settings.paper = value; emit(EVENTS.SETTINGS, view()); },
+  speed: (name) => { settings.reveal = name; emit(EVENTS.SETTINGS, view()); },
 };
 window.preview = preview;
 
@@ -349,6 +363,36 @@ const toggles = {
     return !!next;
   },
   "show-rect": () => document.body.classList.toggle("show-rect"),
+  // Board colour: each preset, the Windows accent, a light custom colour (clamped darker) and a near-black one.
+  felt: (button) => {
+    const all = [...PRESETS.map((p) => p.id), "accent", "#f2e3a8", "#050508"];
+    const next = all[(all.indexOf(settings.felt) + 1) % all.length];
+    preview.felt(next);
+    button.textContent = `Felt: ${next}`;
+    return next !== "green";
+  },
+  // Frame finish and note paper: each in turn.
+  frame: (button) => {
+    const all = FRAME_PRESETS.map((p) => p.id);
+    const next = all[(all.indexOf(settings.frame) + 1) % all.length];
+    preview.frame(next);
+    button.textContent = `Frame: ${next}`;
+    return next !== DEFAULT_APPEARANCE.frame;
+  },
+  paper: (button) => {
+    const all = PAPER_PRESETS.map((p) => p.id);
+    const next = all[(all.indexOf(settings.paper) + 1) % all.length];
+    preview.paper(next);
+    button.textContent = `Paper: ${next}`;
+    return next !== DEFAULT_APPEARANCE.paper;
+  },
+  speed: (button) => {
+    const all = Object.keys(SCALES);
+    const next = all[(all.indexOf(settings.reveal) + 1) % all.length];
+    preview.speed(next);
+    button.textContent = `Speed: ${next}`;
+    return next !== "normal";
+  },
 };
 for (const button of document.querySelectorAll("#controls button")) {
   const { action, toggle } = button.dataset;

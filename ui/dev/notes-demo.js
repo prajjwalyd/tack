@@ -9,7 +9,6 @@
 //
 // ?demo= sets a scene up once the board is down (for headless renders):
 //   keyboard      a keyboard open, then → twice: the focus ring
-//   unfold        a text note unfolded (&note=<n>: which note, from 0)
 //   drop          a drag held over the board: the drop affordance
 //   notice        the "Nothing selected" notice
 //   hover         the link note hovered: its full address and age
@@ -98,17 +97,6 @@ const atRest = (fn) => setTimeout(fn, 1100);
 if (demo === "keyboard") {
   preview.reveal = preview.revealKeyboard;
   atRest(() => { key("ArrowRight"); setTimeout(() => key("ArrowRight"), 120); });
-} else if (demo === "unfold") {
-  let n = +params.get("note") || 0;
-  atRest(() => {
-    const slot = slotOf((p) => p.kind === "note" && !p.note.link && n-- === 0);
-    if (!slot) return;
-    // Two quick presses: a double click (gestures.js).
-    for (let i = 0; i < 2; i++) {
-      slot.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1, isPrimary: true }));
-      slot.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, pointerId: 1, isPrimary: true }));
-    }
-  });
 } else if (demo === "drop") {
   atRest(() => dragOver(textTransfer(), -1));
 } else if (demo === "notice") {
@@ -123,7 +111,7 @@ if (demo === "keyboard") {
     "tuck", () => preview.emit("board:notice", { text: "Already pinned" }), "revealKeyboard",
     ...["ArrowRight", "ArrowRight", "End", "Home", "k", "Delete", "ArrowRight", "Tab"].map((k) => () => key(k)),
     () => key("Enter"), () => key("Enter", { ctrlKey: true }), () => key("F10", { shiftKey: true }),
-    () => key("ContextMenu"), () => key("Escape"), () => key("Escape"),
+    () => key("ContextMenu"), () => key("Escape"),
     "reveal", () => preview.fly?.(true), "clear", "tuck", "revealKeyboard", () => key("Escape"),
   ];
   let i = 0;

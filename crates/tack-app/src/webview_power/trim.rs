@@ -14,6 +14,8 @@ use windows::Win32::System::Threading::{
     GetCurrentProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_QUOTA,
 };
 
+use crate::reveal::after;
+
 /// How long after the suspend the WebView2 processes are trimmed again.
 const SECOND_TRIM: Duration = Duration::from_secs(4);
 
@@ -42,8 +44,7 @@ pub(super) fn web_view_processes(webview: &ICoreWebView2) {
         p.trim();
     }
     let wakes = WAKES.load(Ordering::SeqCst);
-    std::thread::spawn(move || {
-        std::thread::sleep(SECOND_TRIM);
+    after(SECOND_TRIM, move || {
         if WAKES.load(Ordering::SeqCst) == wakes {
             for p in &processes {
                 p.trim();

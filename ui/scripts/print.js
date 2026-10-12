@@ -13,20 +13,24 @@
 // (announce.js); its layers are hidden from screen readers.
 
 import * as ipc from "./ipc.js";
+import { ago } from "./age.js";
 import { announce, labelFor } from "./announce.js";
 import { abortFlight, launch, prepareFlight, restingBox, showTip } from "./flight.js";
 import { clearHover, endPress, forgetPendingClick, rehover, wireGestures } from "./gestures.js";
 import { itemRemoved } from "./keyboard.js";
 import { colorFor, layout, measure, showPrint } from "./layout.js";
-import { LAYOUT_MS } from "./motion/spring.js";
+import { fixed, scaled, scaledMin } from "./motion/scale.js";
+import { layoutMs } from "./motion/spring.js";
 import { swing } from "./motion/swing.js";
-import { fillNote, fold, isNote, isUnfolded } from "./note.js";
+import { fillNote, isNote } from "./note.js";
 import { playPop, playTock } from "./sound.js";
 import { cancel, dom, later, rand, state } from "./state.js";
 
 const MAX_TILT = 1.5;          // degrees, either way
-const COPIED_MS = 1000;        // the check stays this long
+const COPIED_MS = 1000;        // the check stays this long (a hold: it keeps COPIED_FLOOR_MS however fast the speed)
+const COPIED_FLOOR_MS = 600;
 const KEEP_PRESS_MS = 360;     // the pin's press when kept; the row waits for it
+// Everything below is at Slow (scale 1); scaled() plays it at the current one (motion/scale.js).
 
 const X_SVG = `<svg viewBox="0 0 18 18" aria-hidden="true"><path d="M6.4 6.4l5.2 5.2M11.6 6.4l-5.2 5.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>`;
 const KEEP_SVG = `<svg viewBox="0 0 18 18" aria-hidden="true"><path class="fill" d="M6.6 5.1h4.8a.8.8 0 0 1 .8.8v7.2L9 11l-3.2 2.1V5.9a.8.8 0 0 1 .8-.8z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
@@ -131,7 +135,7 @@ export function addPrint(data, animate, append = false, flight = null) {
   if (print.flight) { flyIn(print); return; }
   if ((state.boardW > widthBefore || moved) && !state.reduced) {
     print.slot.classList.add("awaiting");
-    later(() => { if (print.leaving) return; print.slot.classList.remove("awaiting"); pinOn(print); }, LAYOUT_MS * 0.4);
+    later(() => { if (print.leaving) return; print.slot.classList.remove("awaiting"); pinOn(print); }, layoutMs() * 0.4);
   } else {
     pinOn(print);
   }
@@ -150,11 +154,10 @@ export function removePrint(id, how) {
   abortFlight(print);
   forgetPendingClick(id);
   if (state.draggingId === id) state.draggingId = null;
-  if (isUnfolded(print)) fold(true);
   itemRemoved(print, index);
   detach(print, how);
   // Let the print start to go before the row closes the gap.
-  if (state.revealed && !state.reduced && how === "fall") later(layout, 120);
+  if (state.revealed && !state.reduced && how === "fall") later(layout, scaled(120));
   else layout();
 }
 
@@ -167,16 +170,15 @@ export function updatePrint(data) {
   if (isNote(print.data)) {
     // Text edited externally (e.g. in Notepad).
     if (data.note && JSON.stringify(data.note) !== JSON.stringify(before.note)) {
-      if (isUnfolded(print)) fold(true);
       fillNote(print);
       if (state.revealed && !state.reduced) {
-        print.paper.animate([{ opacity: 0.4 }, { opacity: 1 }], { duration: 360, easing: "ease-out" });
+        print.paper.animate([{ opacity: 0.4 }, { opacity: 1 }], { duration: scaled(360), easing: "ease-out" });
       }
     }
   } else if (print.img && data.thumb && data.thumb !== before.thumb) {
     print.img.src = data.thumb;
     if (state.revealed && !state.reduced) {
-      print.img.animate([{ opacity: 0.3 }, { opacity: 1 }], { duration: 360, easing: "ease-out" });
+      print.img.animate([{ opacity: 0.3 }, { opacity: 1 }], { duration: scaled(360), easing: "ease-out" });
     }
   }
   if (typeof data.kept === "boolean" && data.kept !== print.slot.classList.contains("kept")) {
@@ -194,7 +196,7 @@ export function flyIn(print, rest = null) {
   if (!flight || state.reduced) {
     print.slot.classList.remove("awaiting");
     pinOn(print);
-    if (flight?.tip) later(showTip, 500);
+    if (flight?.tip) later(showTip, scaled(500));
     return;
   }
   print.slot.classList.add("awaiting");
@@ -213,9 +215,9 @@ export function pinOn(print) {
   ipc.debugAck("pin-on", { id: print.id });
   const tock = () => { playTock(); ipc.debugAck("tock", { id: print.id }); };
   if (state.reduced) {
-    print.drop.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: "ease-out" });
-    print.pin.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay: 120, fill: "backwards" });
-    later(tock, 140);
+    print.drop.animate([{ opacity: 0 }, { opacity: 1 }], { duration: scaled(180), easing: "ease-out" });
+    print.pin.animate([{ opacity: 0 }, { opacity: 1 }], { duration: scaled(160), delay: scaled(120), fill: "backwards" });
+    later(tock, scaled(140));
     return;
   }
   slot.classList.add("arriving");
@@ -225,20 +227,20 @@ export function pinOn(print) {
     { offset: 0, opacity: 0, transform: `translateY(-7px) scale(1.06) rotate(${lean}deg)` },
     { offset: 0.2, opacity: 1, transform: `translateY(-6px) scale(1.06) rotate(${lean}deg)`, easing: "cubic-bezier(.45, 0, .25, 1)" },
     { offset: 1, opacity: 1, transform: "none" },
-  ], { duration: 330 });
+  ], { duration: scaled(330) });
   print.shade.animate([
     { opacity: 1, transform: "translateY(4px) scale(1.03)" },
     { offset: 0.2, opacity: 1, transform: "translateY(4px) scale(1.03)", easing: "cubic-bezier(.45, 0, .25, 1)" },
     { opacity: 0, transform: "none" },
-  ], { duration: 330 });
-  const pinAt = 250;
+  ], { duration: scaled(330) });
+  const pinAt = scaled(250);
   print.pin.animate([
     { opacity: 0, transform: "translateY(-4px) scale(1.7)" },
     { offset: 0.6, opacity: 1, transform: "scale(.9)", easing: "cubic-bezier(.3, 1.4, .5, 1)" },
     { opacity: 1, transform: "none" },
-  ], { duration: 170, delay: pinAt, easing: "cubic-bezier(.5, 0, .9, .4)", fill: "backwards" });
-  later(tock, pinAt + 95);
-  later(() => { slot.classList.remove("arriving"); swing(print, -Math.sign(print.tilt || 1) * 0.6); }, pinAt + 150);
+  ], { duration: scaled(170), delay: pinAt, easing: "cubic-bezier(.5, 0, .9, .4)", fill: "backwards" });
+  later(tock, pinAt + scaled(95));
+  later(() => { slot.classList.remove("arriving"); swing(print, -Math.sign(print.tilt || 1) * 0.6); }, pinAt + scaled(150));
 }
 
 function setKeptClass(print, kept) {
@@ -255,19 +257,20 @@ function setKept(print, kept, animate) {
   if (state.revealed) announce(kept ? "Kept" : "No longer kept");
   if (!animate || state.reduced || !state.revealed) { setKeptClass(print, kept); return; }
   // The pin turns brass at the bottom of the press and springs back.
+  const press = scaled(KEEP_PRESS_MS);
   print.pin.animate([
     { transform: "none" },
     { offset: 0.32, transform: "scale(.7)", easing: "cubic-bezier(.2, .9, .3, 1.5)" },
     { offset: 0.7, transform: "scale(1.1)" },
     { transform: "none" },
-  ], { duration: KEEP_PRESS_MS, easing: "cubic-bezier(.4, 0, .6, 1)" });
+  ], { duration: press, easing: "cubic-bezier(.4, 0, .6, 1)" });
   print.drop.animate([
     { transform: "none" },
     { offset: 0.32, transform: "scale(.985)" },
     { transform: "none" },
-  ], { duration: KEEP_PRESS_MS - 40, easing: "ease-out" });
-  later(() => setKeptClass(print, print.data.kept), KEEP_PRESS_MS * 0.3);
-  holdOrder(KEEP_PRESS_MS);
+  ], { duration: press - scaled(40), easing: "ease-out" });
+  later(() => setKeptClass(print, print.data.kept), press * 0.3);
+  holdOrder(press);
 }
 
 /** Toggles keeping. */
@@ -275,8 +278,7 @@ export function toggleKeep(print) {
   if (print.leaving) return;
   const kept = !print.data.kept;
   setKept(print, kept, true);
-  ipc.setKept(print.id, kept);
-  applyOrder(localOrder());   // the backend confirms with board:order-changed
+  ipc.setKept(print.id, kept);   // the backend answers with board:order-changed
 }
 
 let orderHoldUntil = 0;
@@ -293,23 +295,7 @@ export function flushOrder() {
   if (pendingOrder) { const o = pendingOrder; pendingOrder = null; applyOrder(o); }
 }
 
-/** The display order the backend would give: kept by keptAt, then newest first. */
-function localOrder() {
-  const idx = new Map(state.order.map((id, i) => [id, i]));
-  return state.order.map((id) => state.prints.get(id)).filter(Boolean).sort((a, b) => {
-    const ka = a.data.kept ? 0 : 1, kb = b.data.kept ? 0 : 1;
-    if (ka !== kb) return ka - kb;
-    if (!ka) {
-      const d = (a.data.keptAt ?? 0) - (b.data.keptAt ?? 0);
-      if (d) return d;
-    } else if (a.data.pinnedAt != null && b.data.pinnedAt != null && a.data.pinnedAt !== b.data.pinnedAt) {
-      return b.data.pinnedAt - a.data.pinnedAt;
-    }
-    return idx.get(a.id) - idx.get(b.id);
-  }).map((p) => p.id);
-}
-
-/** A new row order (board:order-changed, or a local keep). Prints that travel further than a step lift on the way. */
+/** A new row order (board:order-changed). Prints that travel further than a step lift on the way. */
 export function applyOrder(ids) {
   const wait = orderHoldUntil - performance.now();
   if (wait > 0 && state.revealed) {
@@ -333,7 +319,7 @@ export function applyOrder(ids) {
   layout();
   if (!state.revealed) return;
   // The hovered print may have moved out from under the pointer.
-  if (state.hovered && state.hovered.x !== before.get(state.hovered.id)) { clearHover(); later(rehover, LAYOUT_MS); }
+  if (state.hovered && state.hovered.x !== before.get(state.hovered.id)) { clearHover(); later(rehover, layoutMs()); }
   if (state.reduced) return;
   for (const id of next) {
     const p = state.prints.get(id);
@@ -344,8 +330,8 @@ export function applyOrder(ids) {
       { transform: "none" },
       { offset: 0.45, transform: "translateY(-5px) scale(1.03)" },
       { transform: "none" },
-    ], { duration: LAYOUT_MS, easing: "ease-in-out" });
-    later(() => p.slot.classList.remove("moving"), LAYOUT_MS);
+    ], { duration: layoutMs(), easing: "ease-in-out" });
+    later(() => p.slot.classList.remove("moving"), layoutMs());
   }
 }
 
@@ -365,8 +351,8 @@ function detach(print, how) {
   if (how !== "fall" || state.reduced) {
     const a = print.drop.animate(
       [{ opacity: 1, transform: "none" }, { opacity: 0, transform: how === "fall" ? "translateY(10px)" : "scale(.96)" }],
-      { duration: how === "fall" ? 220 : 170, easing: "ease-in", fill: "forwards" });
-    print.pin.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, fill: "forwards" });
+      { duration: scaled(how === "fall" ? 220 : 170), easing: "ease-in", fill: "forwards" });
+    print.pin.animate([{ opacity: 1 }, { opacity: 0 }], { duration: scaled(140), fill: "forwards" });
     a.onfinish = done;
     if (how === "fall") playPop();
     return;
@@ -377,14 +363,14 @@ function detach(print, how) {
     { opacity: 1, transform: "none" },
     { offset: 0.4, opacity: 1, transform: `translate(${dir * 1}px, -5px) scale(1.12)` },
     { opacity: 0, transform: `translate(${dir * 3}px, -9px) scale(1)` },
-  ], { duration: 200, easing: "cubic-bezier(.2, .7, .4, 1)", fill: "forwards" });
+  ], { duration: scaled(200), easing: "cubic-bezier(.2, .7, .4, 1)", fill: "forwards" });
   playPop();
   const a = print.drop.animate([
     { offset: 0, transform: "none", opacity: 1 },
     { offset: 0.12, transform: `translateY(-2px) rotate(${dir * 0.6}deg)`, opacity: 1, easing: "cubic-bezier(.5, 0, .9, .55)" },
     { offset: 0.5, opacity: 0.85 },
     { offset: 1, transform: `translate(${dir * 6}px, 64px) rotate(${dir * rand(6, 10)}deg)`, opacity: 0 },
-  ], { duration: 450, delay: 50, fill: "forwards" });
+  ], { duration: scaled(450), delay: scaled(50), fill: "forwards" });
   a.onfinish = done;
 }
 
@@ -396,31 +382,16 @@ export function showCopied(print) {
     { opacity: 0, transform: "scale(1.4)" },
     { offset: 0.6, opacity: 1, transform: "scale(.95)" },
     { opacity: 1, transform: "none" },
-  ], { duration: state.reduced ? 1 : 230, easing: "cubic-bezier(.3, .8, .4, 1)", fill: "forwards" });
+  ], { duration: state.reduced ? 1 : scaled(230), easing: "cubic-bezier(.3, .8, .4, 1)", fill: "forwards" });
   print.badgeTimer = later(() => {
     print.badge.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.92)" }],
-      { duration: 200, easing: "ease-in", fill: "forwards" });
-  }, COPIED_MS);
+      { duration: scaled(200), easing: "ease-in", fill: "forwards" });
+  }, scaledMin(COPIED_MS, COPIED_FLOOR_MS));
   swing(print, Math.sign(print.tilt || 1) * 1.2);
 }
 
-const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: "long" });
-const dateFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
-const yearFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
-
-/** "Just now", "2 min ago", "3 hours ago", "Yesterday", "Tuesday", "12 Sep". */
-export function ageText(t, now = Date.now()) {
-  const s = Math.max(0, (now - t) / 1000);
-  if (s < 45) return "Just now";
-  const min = Math.max(1, Math.round(s / 60));
-  if (min < 60) return `${min} min ago`;
-  const a = new Date(t), b = new Date(now);
-  const days = Math.round((new Date(b.getFullYear(), b.getMonth(), b.getDate()) - new Date(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
-  if (days <= 0) { const h = Math.floor(min / 60); return h === 1 ? "1 hour ago" : `${h} hours ago`; }
-  if (days === 1) return "Yesterday";
-  if (days < 7) return dayFmt.format(a);
-  return (a.getFullYear() === b.getFullYear() ? dateFmt : yearFmt).format(a);
-}
+/** "Just now", "2 minutes ago", "3 hours ago", "Yesterday", "Tuesday", "12 Sep". */
+const ageText = (t) => { const s = ago(t); return s[0].toUpperCase() + s.slice(1); };
 
 /** Fills the hovered print's caption and keeps it current while it shows. */
 export function showCaption(print) {
@@ -432,7 +403,8 @@ export function showCaption(print) {
   refreshLabel(print);   // spoken age
   const age = Date.now() - t;
   const next = age < 3600e3 ? 60e3 - (age % 60e3) + 50 : 5 * 60e3;
-  print.captionTimer = later(() => { if (state.hovered === print) showCaption(print); }, next);
+  print.captionTimer = later(() => { if (state.hovered === print) showCaption(print); },
+    fixed(next, "the age text refreshes on the clock, not on motion"));
 }
 
 /** The print's label for screen readers: what it is, its age, kept. */

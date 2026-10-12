@@ -9,18 +9,18 @@
 // drives (#board.kbd); the pointer drops the ring. Keys:
 //   Left Right Home End  move (the row scrolls to show the print)
 //   Enter                copy
-//   Ctrl+Enter           open (a text note unfolds)
+//   Ctrl+Enter           open (the default app: viewer, browser or text editor)
 //   K                    keep, or stop keeping
 //   Delete               unpin
 //   Shift+F10, menu key  context menu, at the print
-//   Esc                  fold an unfolded note, else tuck the board
+//   Esc                  tuck the board
 //   Tab                  stays in the row
 
 import * as ipc from "./ipc.js";
 import { clearHover, setHover } from "./gestures.js";
 import { PRINT_TOP, showPrint } from "./layout.js";
-import { REVEAL_MS } from "./motion/spring.js";
-import { fold, isUnfolded, openItem, sheetElement } from "./note.js";
+import { restMs } from "./motion/spring.js";
+import { openItem } from "./note.js";
 import { toggleKeep } from "./print.js";
 import { onScrollState, scrollPos } from "./scroll.js";
 import { dom, later, state } from "./state.js";
@@ -32,7 +32,7 @@ const items = () => state.order.map((id) => state.prints.get(id)).filter((p) => 
 const focused = () => (focusId ? state.prints.get(focusId) || null : null);
 
 /** A keyboard open (board:reveal with reason "hotkey"). `settleMs`: until the board is at rest. */
-export function keyboardOpen(settleMs = REVEAL_MS) {
+export function keyboardOpen(settleMs = restMs()) {
   took = true;
   dom.board.classList.add("kbd");
   const first = focused() && !focused().leaving ? focused() : items()[0] || null;
@@ -123,14 +123,13 @@ function menu(print) {
 document.addEventListener("keydown", (e) => {
   if (!state.revealed || e.defaultPrevented) return;
   if (!took && !dom.board.contains(document.activeElement)) return;
-  const inSheet = !!sheetElement()?.contains(document.activeElement);
   const key = e.key;
   const plain = !e.ctrlKey && !e.altKey && !e.metaKey;
   const list = items();
   let p = focused();
   if (p && p.leaving) p = null;
   const i = p ? list.indexOf(p) : -1;
-  const go = (target) => { e.preventDefault(); dom.board.classList.add("kbd"); if (isUnfolded()) fold(); focusOn(target); };
+  const go = (target) => { e.preventDefault(); dom.board.classList.add("kbd"); focusOn(target); };
 
   switch (key) {
     case "ArrowRight":
@@ -142,8 +141,7 @@ document.addEventListener("keydown", (e) => {
     }
     case "Home":
     case "End":
-      // These scroll an unfolded note.
-      if (inSheet || !plain || !list.length) return;
+      if (!plain || !list.length) return;
       go(key === "Home" ? list[0] : list[list.length - 1]);
       return;
     case "Tab":
@@ -153,14 +151,13 @@ document.addEventListener("keydown", (e) => {
       return;
     case "Escape":
       e.preventDefault();
-      if (isUnfolded()) { fold(); return; }
       ipc.hideBoard();
       return;
     case "Enter":
       if (!p || e.altKey || e.metaKey) return;
       e.preventDefault();
       dom.board.classList.add("kbd");
-      if (e.ctrlKey) openItem(p, { focus: true });
+      if (e.ctrlKey) openItem(p);
       else ipc.copyPrint(p.id);
       return;
     case "Delete":

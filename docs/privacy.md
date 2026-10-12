@@ -2,21 +2,64 @@
 
 ## Tack itself
 
-Nothing goes out. Tack has no HTTP client, no update check and no analytics,
-and it never connects anywhere. The board is a local page whose content
-security policy only allows Tack's own files, `data:` images and the local
-IPC channel, so even a bug in the page could not reach the internet. Your
-board lives in `%APPDATA%\Tack\board.json`, unsaved captures in
+Tack makes one kind of outgoing connection: looking for a new version of
+itself, and downloading it when you choose to install it ([Updates](#updates),
+below, and you can turn the check at start off). It has no analytics and
+sends nothing about you or your board anywhere. The board is a local page
+whose content security policy only allows Tack's own files, `data:` images
+and the local IPC channel, so even a bug in the page could not reach the
+internet; the update check is made by Tack's program itself, not by the page.
+Your board lives in `%APPDATA%\Tack\board.json`, unsaved captures in
 `%LOCALAPPDATA%\Tack\Captures` and notes in `%LOCALAPPDATA%\Tack\Notes`.
 
 Out of the box Tack does not listen for connections either. The one thing
 that does is yours to switch on: **Use on your phone** (below).
 
+## Updates
+
+Tack can update itself. By default it looks for a new version once, about 45
+seconds after it starts, and never again on its own. Settings has a switch
+for that check at start and a button to check now (the tray menu's "Check for
+updates" does the same). With the switch off Tack makes no request until you
+ask for one.
+
+What a check sends: one HTTPS request to
+`github.com/prajjwalyd/tack/releases/latest/download/latest.json`, a small
+file that names the newest release, its notes and the address and signature
+of its installer. GitHub answers by passing the request on to its download
+servers (`githubusercontent.com`); Tack follows that only over HTTPS. The
+request carries what any HTTPS request does: your IP address, the time, and
+a `User-Agent` of `tauri-plugin-updater/2.13.2`, the update library's name
+and version. It does not carry Tack's version, your Windows version, an
+identifier, a cookie, or anything from your board. Nothing is sent to anyone
+but GitHub, and Tack keeps no record of when it checked beyond that run.
+GitHub, as any web host, can see the requests it receives.
+
+The installer is downloaded only when you press **Install** on a new
+version, from the same release, and Tack does not install it unless all of
+this holds:
+
+- the address is HTTPS, and so is every redirect it goes through;
+- the version is newer than the one you run (an older release is never
+  offered, so an update cannot be turned into a downgrade);
+- the installer's signature verifies against the public key built into Tack,
+  and was made for that very version. Only whoever holds the matching
+  private key, kept as a secret of the repository's release workflow, can
+  sign an update. A download that fails the check is thrown away and Tack
+  says so.
+
+The installer then runs for your user alone (no administrator prompt),
+shows a progress bar and starts Tack again. It keeps your board, your
+captures and notes and your settings, including Start with Windows; it
+never touches your Screenshots folder. Tack follows Windows' proxy settings
+for these requests (its web view does not; see below).
+
 ## Your board on your phone
 
 With **Use on your phone** on, Tack serves the board to your own devices
 over [NetBird](https://netbird.io), a private network built on WireGuard.
-Tack still makes no outgoing connections; your phone connects to your PC.
+For this feature Tack makes no outgoing connections; your phone connects to
+your PC.
 Who gets in, layer by layer:
 
 1. **NetBird decides who can reach this PC at all.** Only devices in your
@@ -184,7 +227,10 @@ With all of these, Tack and its web view processes opened **no connections and
 no sockets at all** in 3 minutes, nor in 150 s of a first launch with a new
 profile, nor while the board was revealed and tucked. Before, every launch opened 3 to
 6 TCP connections (to Microsoft and to Google's DNS) and a UDP socket (QUIC to
-Google's DNS).
+Google's DNS). That was measured before Tack could check for updates: the
+check is made by `tack.exe` itself, so it shows up as connections of
+`tack.exe` to GitHub (see [Updates](#updates)), never of the web view
+processes.
 
 The arguments are in `crates/tack-app/tauri.conf.json`
 (`additionalBrowserArgs`), the settings in
@@ -241,11 +287,15 @@ policies needs administrator rights.
 
 A firewall rule cannot block Tack's web view on its own: the connections come
 from `msedgewebview2.exe`, the same program every other WebView2 app runs.
+Tack's own update check comes from `tack.exe`, so a rule for it blocks that
+(or switch the check off in Settings).
 
 ## Re-measuring
 
 With Tack running (the only `tack.exe`), this lists its web view processes'
-connections once a second for 3 minutes:
+connections once a second for 3 minutes. Turn off the update check in
+Settings first, or the list also shows `tack.exe`'s check of GitHub (443)
+about 45 seconds in:
 
 ```powershell
 $tack = (Get-Process tack).Id

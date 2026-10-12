@@ -1,0 +1,438 @@
+/* The Settings window (settings.html, scripts/settings/): a scrolling page of
+   titled groups, each one card of rows. Shared look (palette, buttons, focus
+   ring): dialog.css; the switch: switch.css. */
+
+:root {
+  --trough: light-dark(rgba(0, 0, 0, .045), rgba(255, 255, 255, .06));
+  --swatch-edge: light-dark(rgba(0, 0, 0, .22), rgba(255, 255, 255, .28));
+  --ink-3: light-dark(#8a8a8a, #9a9a9a);
+  --cap: light-dark(#ffffff, #3a3a3a);
+  --cap-edge: light-dark(rgba(0, 0, 0, .10), rgba(255, 255, 255, .09));
+  --cap-base: light-dark(rgba(0, 0, 0, .22), rgba(0, 0, 0, .45));
+  --field: light-dark(rgba(0, 0, 0, .04), rgba(255, 255, 255, .055));
+  --field-hover: light-dark(rgba(0, 0, 0, .07), rgba(255, 255, 255, .09));
+  --field-edge: light-dark(rgba(0, 0, 0, .07), rgba(255, 255, 255, .09));
+}
+
+[hidden] { display: none !important; }
+
+/* The window is 520 wide and 420 to 640 tall: the title stays, the page scrolls under it. */
+.head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 14px 20px 8px;
+  transition: box-shadow 80ms ease;
+}
+.head.scrolled { box-shadow: 0 1px 0 var(--divider); }
+/* On the phone page the title reads "Settings > Use on your phone", the first part the way back. */
+.back {
+  height: 28px;
+  margin-left: -4px;
+  padding: 0 6px;
+  color: var(--ink-2);
+  font: 600 20px/28px var(--font-display);
+}
+.back:hover { color: var(--ink); }
+.crumb { padding: 0 6px; color: var(--ink-2); font: 600 20px/28px var(--font-display); }
+.page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 4px 20px 24px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: light-dark(rgba(0, 0, 0, .3), rgba(255, 255, 255, .3)) transparent;
+}
+.page > * { flex: none; }
+h1, h2, p { margin: 0; }
+h1 { padding: 0 2px; font: 600 20px/28px var(--font-display); }
+.group-title { margin: 0 0 8px 2px; font: 600 14px/20px var(--font); }
+/* A link to a section ("#shortcuts") or the phone page moves the focus to its heading; no ring, the scroll shows it. */
+h1:focus, .group-title:focus, .hero-title:focus { outline: none; }
+[data-section] { scroll-margin-top: 4px; }
+.quiet { padding: 0 2px; font: 400 13px/18px var(--font); color: var(--ink-2); }
+
+/* ---- the phone card: the one thing at the top ---- */
+.hero-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 12px;
+  padding: 14px 16px;
+}
+/* The phone icon's tile, on the phone page. */
+.tile {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+.tile svg { display: block; width: 30px; height: 30px; }
+.hero-text { display: grid; min-width: 0; }
+.hero-title { font: 600 16px/22px var(--font-display); }
+/* The status line: a dot that says at a glance whether it is on. */
+.hero-text .row-desc { display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 18px; }
+.hero-text .row-desc::before {
+  content: "";
+  flex: none;
+  display: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.hero-text .row-desc[data-tone="ok"]::before { display: block; color: var(--ok); }
+.hero-text .row-desc[data-tone="attn"]::before { display: block; color: var(--accent); }
+.hero-text .row-desc[data-tone="warn"]::before { display: block; color: var(--warn); }
+
+/* ---- cards and rows ---- */
+.card:not(.block, .hero-card) > * + * { border-top: 1px solid var(--divider); }
+.card > .switch { border-radius: 0; }
+.card:not(.hero-card) > :first-child { border-radius: 6px 6px 0 0; }
+.card:not(.hero-card) > :last-child { border-radius: 0 0 6px 6px; }
+.card > .switch:only-child { border-radius: 6px; }
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 12px;
+  min-height: 52px;
+  padding: 8px 16px;
+}
+.row-text { display: grid; min-width: 0; }
+.row-title { font: 400 14px/20px var(--font); overflow-wrap: anywhere; }
+.row-desc { font: 400 12px/16px var(--font-small); color: var(--ink-2); overflow-wrap: anywhere; }
+.row-value { font: 400 13px/18px var(--font-small); color: var(--ink-2); }
+
+/* A card that is one block (a description and its control). */
+.block { padding: 12px 16px 16px; }
+.block > * + * { margin-top: 12px; }
+.block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+
+/* Rows sit flush in their card, so a switch's ring is drawn inside. */
+.card > .switch:focus-visible {
+  outline: 2px solid var(--focus-outer);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px var(--focus-inner);
+}
+
+/* ---- shortcuts: a keycap field in each row ---- */
+.group-desc { margin: -2px 2px 8px; font: 400 13px/18px var(--font); color: var(--ink-2); }
+.row.shortcut { padding-right: 12px; }
+
+/* The field is one rounded box with its keycaps inset in it. Its radius is
+   the keycaps' (4) plus the space round them (border 1 + padding 3), so the
+   two curves are concentric and the box looks the same at rest, hovered,
+   pressed, focused and listening. */
+.field {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 184px;
+  height: 36px;
+  padding: 0 3px;
+  border: 1px solid var(--field-edge);
+  border-radius: 8px;
+  background: var(--field);
+  color: inherit;
+  font: inherit;
+  cursor: default;
+  outline: none;
+  transition: background-color 80ms ease, border-color 80ms ease;
+}
+.field:hover { background: var(--field-hover); }
+.field:active { background: var(--field); }
+.field .wait { color: var(--ink-2); font: 400 13px/18px var(--font); padding: 0 4px; }
+.field .off { color: var(--ink-3); padding: 0 6px; }
+/* Listening: lifted onto a keycap-coloured surface and ringed in the accent colour (2 px, drawn inside, so nothing is wider than the box). */
+.field.capturing {
+  background: var(--cap);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+/* The ring is the standard two-tone one; the listening field has its own. */
+.field:focus-visible:not(.capturing) {
+  outline: 2px solid var(--focus-outer);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px var(--focus-inner);
+}
+
+/* Keycaps, like a physical key seen from above: a lighter top, a firmer base. */
+kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 4px;
+  background: var(--cap);
+  box-shadow: inset 0 0 0 1px var(--cap-edge), inset 0 -1.5px 0 var(--cap-base), 0 1px 1.5px light-dark(rgba(0, 0, 0, .05), rgba(0, 0, 0, .25));
+  color: var(--ink);
+  font: 600 12px/1 var(--font-small);
+  letter-spacing: .2px;
+}
+
+/* Under its row, only when there is something to say (the text is announced). */
+.status {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font: 400 12px/16px var(--font-small);
+  color: var(--ink-2);
+}
+.status.warn { margin: 2px 0 4px; }
+.status svg { flex: none; width: 14px; height: 14px; margin-top: 1px; color: var(--warn); }
+
+/* ---- speed: a segmented control ---- */
+.seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--trough);
+  box-shadow: inset 0 0 0 1px var(--card-edge);
+}
+.seg-item {
+  height: 32px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: default;
+  outline: none;
+  transition: background-color 80ms ease;
+}
+.seg-item:hover { background: var(--hover); }
+.seg-item[aria-checked="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.seg-item[aria-checked="true"]:hover { background: var(--accent-hover); }
+.seg-item:focus-visible {
+  outline: 2px solid var(--focus-outer);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px var(--focus-inner);
+}
+
+/* ---- appearance: board colour, frame and note paper swatches ---- */
+/* The cards of one group sit a little apart. */
+.group > .card + .card { margin-top: 8px; }
+/* One grid for every row of swatches: nine columns, the most the board colours
+   need, so a swatch of the frame or the paper sits exactly under the colour
+   of the same place. A column is the swatch with the room for its selection
+   ring (32 + 2 x 4), spread over the block's text width: the first ring starts
+   where the title starts, the last ends where the name of the choice ends. */
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(9, 40px);
+  justify-content: space-between;
+}
+.swatch-cell { position: relative; }
+/* The button is wider than its column, so the names (Burgundy, Graphite) fit and the hover reaches past the ring. */
+.swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% + 10px);
+  margin-inline: -5px;
+  padding: 6px 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  font: 400 10.5px/14px var(--font-small);
+  letter-spacing: -.1px;
+  white-space: nowrap;
+  cursor: default;
+  outline: none;
+  transition: background-color 80ms ease;
+}
+.swatch:hover { background: var(--hover); }
+.swatch:active { background: var(--press); }
+.swatch[aria-checked="true"] { color: var(--ink); }
+.swatch:focus-visible {
+  outline: 2px solid var(--focus-outer);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px var(--focus-inner);
+}
+.dot {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--swatch, transparent);
+  box-shadow: 0 0 0 1px var(--swatch-edge);
+  color: #ffffff;
+}
+/* The frame's picture: a round piece of the finish's metal (finish.js draws it
+   into --swatch), lit from above: a bright hairline along the top edge, a
+   darker one along the bottom. */
+.metal {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--swatch, transparent);
+  box-shadow:
+    0 0 0 1px var(--swatch-edge),
+    inset 0 1px 0 light-dark(rgba(255, 255, 255, .7), rgba(255, 255, 255, .4)),
+    inset 0 -1px 0 rgba(0, 0, 0, .22);
+  color: var(--swatch-ink, #ffffff);
+}
+.metal .check { filter: drop-shadow(0 0 1px var(--swatch-glow, rgba(0, 0, 0, .5))); }
+/* The note paper's picture: a little note, ruled like the board's. */
+.note-chip {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg,
+      transparent 7px, rgba(222, 72, 72, .62) 7px, rgba(222, 72, 72, .62) 8px, transparent 8px,
+      transparent 15px, rgba(84, 140, 214, .3) 15px, rgba(84, 140, 214, .3) 16px, transparent 16px,
+      transparent 22px, rgba(84, 140, 214, .3) 22px, rgba(84, 140, 214, .3) 23px, transparent 23px),
+    var(--swatch, transparent);
+  box-shadow: 0 0 0 1px var(--swatch-edge);
+  color: rgba(28, 32, 42, .86);
+}
+.note-chip .check { filter: drop-shadow(0 0 1px rgba(255, 255, 255, .7)); }
+.swatch[aria-checked="true"] :is(.dot, .metal, .note-chip) { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* Custom, until it is chosen: a colour wheel. */
+.swatch[data-value="custom"][aria-checked="false"] .dot {
+  background: conic-gradient(#f2493a, #f7b731, #7ed321, #2bc4d8, #4a6cf7, #b34ae0, #f2493a);
+}
+.check { width: 16px; height: 16px; opacity: 0; filter: drop-shadow(0 0 1px rgba(0, 0, 0, .5)); }
+.swatch[aria-checked="true"] .check { opacity: 1; }
+/* The system colour picker anchors to this, over the custom swatch's colour. */
+.picker {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 32px;
+  height: 32px;
+  margin: 0 0 0 -16px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Reset appearance: a text button under the cards, quiet once there is nothing to reset. */
+.reset { display: flex; margin: 8px 0 0 -8px; }
+.reset .text[aria-disabled="true"] { opacity: .55; pointer-events: none; }
+
+/* ---- updates ---- */
+.update .std { grid-row: 1; grid-column: 2; }
+.update .std[aria-disabled="true"] { opacity: .55; pointer-events: none; }
+.meter, .notes { grid-column: 1 / -1; }
+.meter {
+  height: 4px;
+  margin-top: 12px;
+  border-radius: 2px;
+  background: var(--trough);
+  overflow: hidden;
+}
+.meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transform-origin: left;
+  transform: scaleX(var(--progress, 0));
+  transition: transform 200ms ease;
+}
+/* No size to show: a bar that slides along. */
+.meter.unknown .meter-fill { width: 35%; transform: none; animation: meter-slide 1.4s ease-in-out infinite; }
+@keyframes meter-slide {
+  from { translate: -100% 0; }
+  to { translate: 290% 0; }
+}
+
+.notes { margin-top: 12px; }
+.notes summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin-left: -4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: var(--accent);
+  font: 400 13px/18px var(--font);
+  cursor: default;
+  outline: none;
+}
+.notes summary::-webkit-details-marker { display: none; }
+/* A chevron that turns down when open. */
+.notes summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(-45deg);
+  transition: transform 100ms ease;
+}
+.notes[open] summary::before { transform: rotate(45deg); }
+.notes summary:hover { background: var(--hover); }
+.notes-body {
+  max-height: 132px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: var(--trough);
+  font: 400 12px/16px var(--font-small);
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-y: auto;
+  user-select: text;
+  outline: none;
+}
+.notes summary:focus-visible,
+.notes-body:focus-visible {
+  outline: 2px solid var(--focus-outer);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px var(--focus-inner);
+}
+
+/* Short windows: a little less air between the groups. */
+@media (max-height: 520px) {
+  .page { gap: 16px; }
+  .hero-card { padding-block: 10px; }
+}
+
+/* ---- High Contrast ---- */
+@media (forced-colors: active) {
+  .field { border-color: ButtonText; background: ButtonFace; }
+  .field.capturing { border: 2px solid Highlight; box-shadow: none; }
+  .field:focus-visible:not(.capturing) { outline: 2px solid Highlight; box-shadow: none; }
+  kbd { border: 1px solid CanvasText; box-shadow: none; background: ButtonFace; color: ButtonText; }
+  .status svg { color: CanvasText; }
+  .seg { box-shadow: none; border: 1px solid CanvasText; }
+  .seg-item[aria-checked="true"] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .seg-item:focus-visible, .swatch:focus-visible, .card > .switch:focus-visible,
+  .notes summary:focus-visible, .notes-body:focus-visible { outline: 2px solid Highlight; box-shadow: none; }
+  :is(.dot, .note-chip) { forced-color-adjust: none; border: 1px solid CanvasText; box-shadow: none; }
+  .metal { forced-color-adjust: none; box-shadow: none; border: 1px solid CanvasText; }
+  .swatch[aria-checked="true"] :is(.dot, .metal, .note-chip) { outline: 2px solid Highlight; }
+  .notes summary { color: LinkText; }
+  .tile { background: Canvas; color: CanvasText; border: 1px solid CanvasText; }
+  .hero-text .row-desc::before { forced-color-adjust: none; background: CanvasText; }
+  .meter { border: 1px solid CanvasText; background: Canvas; }
+  .meter-fill { forced-color-adjust: none; background: Highlight; }
+  .notes-body { border: 1px solid CanvasText; }
+}

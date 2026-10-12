@@ -9,7 +9,6 @@
 
 use std::path::{Component, Path, PathBuf, Prefix};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
 
 use base64::Engine;
 use tack_core::{capture, files, note, thumbnail, Origin, RevealReason};
@@ -23,8 +22,6 @@ use crate::prints::{self, Pin};
 use crate::reveal::{self, Placement};
 use crate::state::lock;
 
-/// How long the board stays down for a notice alone.
-const NOTICE_PEEK: Duration = Duration::from_millis(1600);
 /// The largest picture accepted from a drop.
 const MAX_DROP_BYTES: usize = 40 * 1024 * 1024;
 
@@ -54,7 +51,7 @@ pub fn notice(app: &AppHandle, text: &str) {
         if !reveal::new_may_reveal(app) {
             return;
         }
-        reveal::show(app, RevealReason::New, Placement::under_pointer(), NOTICE_PEEK);
+        reveal::show(app, RevealReason::New, Placement::under_pointer(), reveal::speed(app).notice_peek());
     }
     events::notice(app, text);
 }

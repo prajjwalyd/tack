@@ -64,7 +64,7 @@
 
 /* .landing is set as the pin starts to drive in, ~100 ms before the print
    touches the cork; delays the board's knock until the touch. */
-#board:has(.slot.arriving.landing) > :is(.cork, #rail) { animation-delay: 100ms; }
+#board:has(.slot.arriving.landing) > :is(.cork, #rail) { animation-delay: calc(100ms * var(--motion-scale)); }
 
 /* The tip: a paper slip pinned to the bottom edge of the board, once, after the first flight. */
 

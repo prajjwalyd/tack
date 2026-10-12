@@ -2,7 +2,7 @@
 //! the board model, saved, told to the UI (once it is ready) and, for a
 //! capture or a note leaving the board, followed by moving its file to the
 //! Recycle Bin. Also the history's upkeep: unkept prints age out (checked
-//! after the restore at startup, then hourly).
+//! after the restore at startup, then each time the board comes down).
 //!
 //! A save here only hands a snapshot to the board saver (`state`), so
 //! none of this waits for the disk.
@@ -19,8 +19,8 @@ use crate::captures;
 use crate::ipc::events::{self, Flight, Removal};
 use crate::state::{lock, AppState};
 
-/// How often the history is checked for prints that have grown too old.
-const AGEING_INTERVAL: Duration = Duration::from_secs(60 * 60);
+/// The beat between pins popping out in Clear's ripple, at Slow.
+const RIPPLE_GAP: Duration = Duration::from_millis(45);
 
 /// How a pin went.
 pub enum Pin {
@@ -83,7 +83,7 @@ fn discard_files(prints: &[Print]) {
 }
 
 /// Sends capture and note files Tack no longer needs to the Recycle Bin,
-/// never deleting them outright. Runs on a thread of its own, since the
+/// never deleting them outright. Runs on the blocking pool, since the
 /// shell can take a moment; a file that cannot be recycled is logged and
 /// left alone. A capture still being written goes once it is written.
 pub fn discard_captures(paths: Vec<PathBuf>) {
@@ -95,14 +95,11 @@ pub fn discard_captures(paths: Vec<PathBuf>) {
     if paths.is_empty() {
         return;
     }
-    let spawned = std::thread::Builder::new().name("tack-recycle".into()).spawn(move || {
+    tauri::async_runtime::spawn_blocking(move || {
         for path in &paths {
             capture::discard_owned(path, &RecycleBin);
         }
     });
-    if let Err(e) = spawned {
-        eprintln!("tack: cannot start recycling, the files stay: {e}");
-    }
 }
 
 /// The file behind a print.
@@ -227,17 +224,6 @@ pub fn age_out(app: &AppHandle) {
     }
 }
 
-/// Checks the history every hour for as long as the app runs.
-pub fn age_out_hourly(app: AppHandle) {
-    let spawned = std::thread::Builder::new().name("tack-history".into()).spawn(move || loop {
-        std::thread::sleep(AGEING_INTERVAL);
-        age_out(&app);
-    });
-    if let Err(e) = spawned {
-        eprintln!("tack: cannot start the history timer: {e}");
-    }
-}
-
 /// Unpins a print and, if it was a capture, recycles its file.
 pub fn remove(app: &AppHandle, id: &str, how: Removal) -> Option<Print> {
     let print = unpin(app, id, how)?;
@@ -270,19 +256,21 @@ pub fn remove_path(app: &AppHandle, path: &Path, how: Removal) {
 /// Unpins every print that is not kept, one after another so the pins pop
 /// out in a ripple. Kept prints were kept on purpose; only Unpin removes them.
 pub fn clear(app: &AppHandle) {
-    let ids: Vec<String> = lock(app).board.prints().iter().filter(|p| !p.kept).map(|p| p.id.clone()).collect();
+    let (ids, ripple) = {
+        let s = lock(app);
+        // Class A: the pins pop at the speed's pace, so the ripple's beat does too.
+        let ids: Vec<String> = s.board.prints().iter().filter(|p| !p.kept).map(|p| p.id.clone()).collect();
+        (ids, s.settings.reveal.scaled(RIPPLE_GAP))
+    };
     let app = app.clone();
-    let spawned = std::thread::Builder::new().name("tack-clear".into()).spawn(move || {
+    tauri::async_runtime::spawn_blocking(move || {
         for (n, id) in ids.iter().enumerate() {
             if n > 0 {
-                std::thread::sleep(Duration::from_millis(45));
+                std::thread::sleep(ripple);
             }
             remove(&app, id, Removal::Fall);
         }
     });
-    if let Err(e) = spawned {
-        eprintln!("tack: cannot clear the board: {e}");
-    }
 }
 
 /// Points a print at its file's new place. Returns the old path, so a move

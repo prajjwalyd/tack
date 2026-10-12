@@ -7,10 +7,6 @@ use crate::recycle::testing::NotingBin;
 
 const NOW: u64 = 1_800_000_000_000;
 
-fn no_files(_: &Path) -> Option<u64> {
-    None
-}
-
 fn saved(path: &str, origin: Origin, pinned_at: u64, kept_at: Option<u64>) -> SavedPrint {
     SavedPrint { path: PathBuf::from(path), kind: Kind::Image, origin, pinned_at, kept_at }
 }
@@ -21,6 +17,11 @@ fn scratch(name: &str) -> PathBuf {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
+}
+
+/// Writes board.json as the app's saver does.
+fn save(file: &Path, prints: &[Print], settings: &Settings) {
+    write(file, &Snapshot::new(prints, &[], settings)).unwrap();
 }
 
 fn print(dir: &Path, id: &str, name: &str, origin: Origin, pinned_at: u64, kept_at: Option<u64>) -> Print {
@@ -45,29 +46,91 @@ fn print(dir: &Path, id: &str, name: &str, origin: Origin, pinned_at: u64, kept_
 }
 
 #[test]
-fn a_board_json_from_before_the_history_loads() {
-    let old = br#"{
-        "paths": ["C:\\Pics\\one.png", "C:\\Pics\\two.png", "C:\\Cap\\Three.png"],
-        "captures": ["c:\\cap\\three.PNG"],
-        "sound": false,
-        "edgeReveal": true
-    }"#;
-    // Pin times come from the files, or now when a file has none.
-    let modified = |p: &Path| match p.to_str() {
-        Some(r"C:\Pics\one.png") => Some(NOW - 2000),
-        Some(r"C:\Pics\two.png") => Some(NOW - 1000),
-        _ => None,
-    };
-    let (saved_board, loaded) = parse(old, NOW, modified);
+fn a_board_json_as_v0_1_1_writes_it_loads_unchanged() {
+    // Byte for byte what v0.1.1's `store::write` produced (pretty JSON, a
+    // note carrying a kind, nulls for what is absent), with a shortcut the
+    // user chose themselves.
+    let v0_1_1 = br#"{
+  "version": 3,
+  "prints": [
+    {
+      "path": "C:\\Users\\me\\AppData\\Local\\Tack\\Captures\\Note 1.txt",
+      "kind": "note",
+      "capture": true,
+      "pinnedAt": 1790000003000,
+      "kept": false,
+      "keptAt": null
+    },
+    {
+      "path": "C:\\Users\\me\\Pictures\\Screenshots\\kept.png",
+      "capture": false,
+      "pinnedAt": 1790000001000,
+      "kept": true,
+      "keptAt": 1790000002000
+    },
+    {
+      "path": "C:\\Users\\me\\AppData\\Local\\Tack\\Captures\\Screenshot 2026-10-08 023223.png",
+      "capture": true,
+      "pinnedAt": 1790000000000,
+      "kept": false,
+      "keptAt": null
+    }
+  ],
+  "sound": false,
+  "edgeReveal": true,
+  "snipTipShown": true,
+  "toggleShortcut": "Win+Alt+T",
+  "pinShortcut": "Win+Alt+C",
+  "phone": {
+    "on": true,
+    "devices": [
+      {
+        "key": "cGl4ZWw=",
+        "name": "pixel",
+        "approvedAt": 1790000004000
+      }
+    ]
+  }
+}"#;
+    let (saved_board, loaded) = parse(v0_1_1, NOW);
     assert_eq!(loaded, Loaded::Ok);
-    assert_eq!(saved_board.settings, Settings { sound: false, edge_reveal: true, ..Settings::default() });
+    let settings = Settings {
+        sound: false,
+        edge_reveal: true,
+        snip_tip_shown: true,
+        toggle_shortcut: "Win+Alt+T".into(),
+        pin_shortcut: "Win+Alt+C".into(),
+        phone: crate::phone::PhoneSettings {
+            on: true,
+            devices: vec![crate::phone::Device {
+                key: "cGl4ZWw=".into(),
+                name: "pixel".into(),
+                approved_at: 1_790_000_004_000,
+            }],
+        },
+        ..Settings::default()
+    };
+    assert_eq!(saved_board.settings, settings);
+    let captures = r"C:\Users\me\AppData\Local\Tack\Captures";
+    let note = SavedPrint {
+        path: PathBuf::from(format!(r"{captures}\Note 1.txt")),
+        kind: Kind::Note,
+        origin: Origin::Capture,
+        pinned_at: 1_790_000_003_000,
+        kept_at: None,
+    };
     assert_eq!(
         saved_board.prints,
         vec![
-            // Captures were matched ignoring case; newest first.
-            saved(r"C:\Cap\Three.png", Origin::Capture, NOW, None),
-            saved(r"C:\Pics\two.png", Origin::Folder, NOW - 1000, None),
-            saved(r"C:\Pics\one.png", Origin::Folder, NOW - 2000, None),
+            // Kept prints come first, then the rest newest first.
+            saved(
+                r"C:\Users\me\Pictures\Screenshots\kept.png",
+                Origin::Folder,
+                1_790_000_001_000,
+                Some(1_790_000_002_000)
+            ),
+            note,
+            saved(&format!(r"{captures}\Screenshot 2026-10-08 023223.png"), Origin::Capture, 1_790_000_000_000, None),
         ]
     );
 }
@@ -79,8 +142,8 @@ fn missing_fields_take_their_defaults() {
         { "path": "C:\\Pics\\b.png", "kept": true, "pinnedAt": 5 },
         { "path": "C:\\Pics\\c.png", "kept": false, "keptAt": 9, "pinnedAt": 7 }
     ] }"#;
-    let (saved_board, loaded) = parse(json, NOW, no_files);
-    assert_eq!(loaded, Loaded::Ok, "a file without a version is the first prints layout");
+    let (saved_board, loaded) = parse(json, NOW);
+    assert_eq!(loaded, Loaded::Ok, "a file without a version is not a newer one");
     assert_eq!(saved_board.settings, Settings::default());
     assert_eq!(
         saved_board.prints,
@@ -98,34 +161,18 @@ fn missing_fields_take_their_defaults() {
 fn known_versions_are_understood() {
     for v in 1..=VERSION {
         let json = format!(r#"{{ "version": {v}, "prints": [] }}"#);
-        assert_eq!(parse(json.as_bytes(), NOW, no_files).1, Loaded::Ok);
+        assert_eq!(parse(json.as_bytes(), NOW).1, Loaded::Ok);
     }
-}
-
-#[test]
-fn a_version_2_board_migrates_to_screenshots_and_default_shortcuts() {
-    let v2 = br#"{ "version": 2, "prints": [
-        { "path": "C:\\Cap\\a.png", "capture": true, "pinnedAt": 9, "kept": false },
-        { "path": "C:\\Pics\\b.png", "pinnedAt": 8 }
-    ], "sound": true, "edgeReveal": false, "snipTipShown": true }"#;
-    let (saved_board, loaded) = parse(v2, NOW, no_files);
-    assert_eq!(loaded, Loaded::Ok);
-    assert!(saved_board.prints.iter().all(|p| p.kind == Kind::Image));
-    assert_eq!(saved_board.prints[0], saved(r"C:\Cap\a.png", Origin::Capture, 9, None));
-    // Ctrl+Alt+T is gone: a board from before shortcuts gets the new ones.
-    assert_eq!(saved_board.settings.toggle_shortcut, "Win+Alt+S");
-    assert_eq!(saved_board.settings.pin_shortcut, "Win+Alt+C");
-    assert!(!saved_board.settings.edge_reveal);
 }
 
 #[test]
 fn notes_load_as_tacks_own_files_and_unknown_kinds_are_skipped() {
     let v3 = br#"{ "version": 3, "prints": [
         { "path": "C:\\Notes\\Note 1.txt", "kind": "note", "pinnedAt": 9 },
-        { "path": "C:\\Pics\\b.png", "kind": "image", "pinnedAt": 8 },
+        { "path": "C:\\Pics\\b.png", "pinnedAt": 8 },
         { "path": "C:\\Else\\c.ink", "kind": "sketch", "pinnedAt": 7 }
     ], "togglePinShortcut": "ignored", "pinShortcut": "" }"#;
-    let (saved_board, loaded) = parse(v3, NOW, no_files);
+    let (saved_board, loaded) = parse(v3, NOW);
     assert_eq!(loaded, Loaded::Ok);
     assert_eq!(saved_board.prints.len(), 2);
     let note = &saved_board.prints[0];
@@ -155,11 +202,10 @@ fn only_notes_are_saved_with_a_kind() {
 fn damaged_contents_are_an_empty_board_that_cannot_be_trusted() {
     // Garbage, an empty file, and a save cut short.
     for bytes in [&b"not json"[..], b"", br#"{ "version": 2, "prints": [ { "path": "C:\\a"#] {
-        let (saved_board, loaded) = parse(bytes, NOW, no_files);
+        let (saved_board, loaded) = parse(bytes, NOW);
         assert!(saved_board.prints.is_empty());
         assert_eq!(saved_board.settings, Settings::default());
         assert!(matches!(loaded, Loaded::Unreadable { .. }));
-        assert!(!loaded.may_sweep());
     }
 }
 
@@ -167,10 +213,9 @@ fn damaged_contents_are_an_empty_board_that_cannot_be_trusted() {
 fn a_newer_schema_is_read_but_not_trusted() {
     let json = br#"{ "version": 99, "prints": [ { "path": "C:\\Cap\\a.png", "capture": true, "pinnedAt": 5 } ],
         "somethingNew": [1, 2, 3] }"#;
-    let (saved_board, loaded) = parse(json, NOW, no_files);
+    let (saved_board, loaded) = parse(json, NOW);
     assert_eq!(saved_board.prints, vec![saved(r"C:\Cap\a.png", Origin::Capture, 5, None)]);
     assert!(matches!(loaded, Loaded::Unreadable { .. }));
-    assert!(!loaded.may_sweep());
 }
 
 #[test]
@@ -200,6 +245,13 @@ fn save_then_load_round_trips_without_leaving_a_temp_file() {
     let settings = Settings {
         sound: false,
         edge_reveal: false,
+        reveal: crate::RevealSpeed::Normal,
+        appearance: crate::settings::Appearance {
+            felt: crate::Felt::parse("#a1b2c3"),
+            frame: crate::Frame::parse("graphite"),
+            paper: crate::NotePaper::parse("sky"),
+        },
+        updates: crate::settings::UpdateSettings { check: false },
         snip_tip_shown: true,
         toggle_shortcut: "Ctrl+Alt+F9".into(),
         pin_shortcut: String::new(),
@@ -268,7 +320,6 @@ fn no_board_json_is_missing() {
     let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(loaded, Loaded::Missing);
     assert!(saved_board.prints.is_empty());
-    assert!(!loaded.may_sweep());
     assert!(!loaded.must_not_save());
 }
 
@@ -322,7 +373,7 @@ fn only_an_understood_board_json_lets_the_sweep_run() {
         let (saved_board, loaded) = load(&file, NOW);
         let pinned: Vec<PathBuf> = saved_board.prints.iter().map(|p| p.path.clone()).collect();
         let bin = NotingBin::default();
-        if loaded.may_sweep() {
+        if loaded == Loaded::Ok {
             capture::sweep(&captures, &pinned, later, &bin);
         }
         let taken = bin.taken.borrow().clone();
@@ -338,17 +389,14 @@ fn only_an_understood_board_json_lets_the_sweep_run() {
 
 #[test]
 fn a_board_json_without_a_print_list_is_not_trusted() {
-    for json in [&b"{}"[..], br#"{ "version": 3, "sound": false }"#, br#"{ "captures": ["C:\\a.png"] }"#] {
-        let (saved_board, loaded) = parse(json, NOW, no_files);
+    for json in [&b"{}"[..], br#"{ "version": 3, "sound": false }"#, br#"{ "paths": ["C:\\a.png"] }"#] {
+        let (saved_board, loaded) = parse(json, NOW);
         assert!(saved_board.prints.is_empty());
         assert!(matches!(loaded, Loaded::Unreadable { .. }), "{}", String::from_utf8_lossy(json));
-        assert!(!loaded.may_sweep());
     }
     // An empty list is a list: this build's own file with nothing pinned.
-    for json in [&br#"{ "version": 3, "prints": [] }"#[..], br#"{ "paths": [] }"#] {
-        let (_, loaded) = parse(json, NOW, no_files);
-        assert_eq!(loaded, Loaded::Ok, "{}", String::from_utf8_lossy(json));
-    }
+    let (_, loaded) = parse(br#"{ "version": 3, "prints": [] }"#, NOW);
+    assert_eq!(loaded, Loaded::Ok);
 }
 
 #[test]

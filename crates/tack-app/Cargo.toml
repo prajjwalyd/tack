@@ -22,6 +22,7 @@ image.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tauri.workspace = true
+tauri-plugin-updater.workspace = true
 qrcode.workspace = true
 webview2-com.workspace = true
 

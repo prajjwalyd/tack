@@ -1,8 +1,8 @@
-/* What the small dialog windows share (shortcuts.html, phone-link.html), in a
+/* What the Settings window shares with its pages (settings.html), in a
    Windows 11 style: solid system-themed background, Fluent cards, 32 px
    buttons, two-tone focus ring. Link it before the dialog's own stylesheet,
-   which adds its colours and layout. <html data-theme="light|dark"> forces
-   a theme (dev preview). */
+   which adds its colours and layout.
+   <html data-theme="light|dark"> forces a theme (dev preview). */
 
 :root {
   color-scheme: light dark;
@@ -22,13 +22,15 @@
   --accent: light-dark(#005fb8, #60cdff);
   --accent-hover: light-dark(#1a6dc0, #5bbbe8);
   --accent-press: light-dark(#3d82c8, #56a8d1);
+  --accent-wash: light-dark(rgba(0, 95, 184, .10), rgba(96, 205, 255, .14));
   --on-accent: light-dark(#ffffff, #000000);
   --warn: light-dark(#9d5d00, #fce100);
-  --footer: light-dark(rgba(0, 0, 0, .022), rgba(0, 0, 0, .16));
+  --ok: light-dark(#0f7b0f, #6ccb5f);
   --focus-outer: light-dark(rgba(0, 0, 0, .9), #ffffff);
   --focus-inner: light-dark(#ffffff, rgba(0, 0, 0, .7));
   --font: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-small: "Segoe UI Variable Small", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
 }
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"] { color-scheme: dark; }
@@ -52,14 +54,6 @@ body {
   border-radius: 6px;
   background: var(--card);
   box-shadow: 0 0 0 1px var(--card-edge);
-}
-
-/* ---- footer ---- */
-footer {
-  display: flex;
-  align-items: center;
-  background: var(--footer);
-  border-top: 1px solid var(--divider);
 }
 
 /* ---- buttons ---- */
@@ -106,6 +100,23 @@ button { font: inherit; }
   box-shadow: 0 0 0 1px var(--focus-inner);
 }
 
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
 /* ---- High Contrast ---- */
 @media (forced-colors: active) {
   .card { border: 1px solid CanvasText; box-shadow: none; }
@@ -115,5 +126,4 @@ button { font: inherit; }
   .std.accent { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; }
   .text { color: LinkText; }
   .std:focus-visible, .text:focus-visible { outline: 2px solid Highlight; box-shadow: none; }
-  footer { border-top: 1px solid CanvasText; }
 }

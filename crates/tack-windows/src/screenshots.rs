@@ -5,10 +5,10 @@
 
 use std::path::PathBuf;
 
-use notify::event::{ModifyKind, RenameMode};
-use notify::{Event, EventKind, RecursiveMode, Watcher};
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::UI::Shell::{FOLDERID_Screenshots, SHGetKnownFolderPath, KF_FLAG_CREATE};
+
+use crate::dir_watch::{Change, DirWatcher};
 
 /// The Screenshots known folder (where Win + Shift + S and Print Screen
 /// save), created if it does not exist yet.
@@ -44,46 +44,16 @@ pub enum FolderEvent {
 /// `on_event` on the watcher's thread.
 pub fn watch(folder: PathBuf, on_event: impl Fn(FolderEvent) + Send + 'static) {
     let _ = std::fs::create_dir_all(&folder);
-    let watcher = notify::recommended_watcher(move |res: notify::Result<Event>| match res {
-        Ok(event) => translate(event, &on_event),
-        Err(e) => eprintln!("tack: watcher error: {e}"),
+    let watcher = DirWatcher::start(&folder, move |change, path| {
+        on_event(match change {
+            Change::Added | Change::RenamedTo => FolderEvent::Arrived(path),
+            Change::Removed | Change::RenamedFrom => FolderEvent::Gone(path),
+            Change::Modified => FolderEvent::Changed(path),
+        })
     });
     match watcher {
-        Ok(mut watcher) => {
-            if let Err(e) = watcher.watch(&folder, RecursiveMode::NonRecursive) {
-                eprintln!("tack: cannot watch {}: {e}", folder.display());
-                return;
-            }
-            // Lives as long as the app.
-            Box::leak(Box::new(watcher));
-        }
-        Err(e) => eprintln!("tack: cannot create watcher: {e}"),
-    }
-}
-
-fn translate(event: Event, on_event: &impl Fn(FolderEvent)) {
-    match event.kind {
-        EventKind::Create(_) | EventKind::Modify(ModifyKind::Name(RenameMode::To)) => {
-            for path in event.paths {
-                on_event(FolderEvent::Arrived(path));
-            }
-        }
-        EventKind::Modify(ModifyKind::Name(RenameMode::Both)) => {
-            if let [from, to] = event.paths.as_slice() {
-                on_event(FolderEvent::Gone(from.clone()));
-                on_event(FolderEvent::Arrived(to.clone()));
-            }
-        }
-        EventKind::Remove(_) | EventKind::Modify(ModifyKind::Name(RenameMode::From)) => {
-            for path in event.paths {
-                on_event(FolderEvent::Gone(path));
-            }
-        }
-        EventKind::Modify(_) => {
-            for path in event.paths {
-                on_event(FolderEvent::Changed(path));
-            }
-        }
-        _ => {}
+        // Lives as long as the app.
+        Ok(watcher) => std::mem::forget(watcher),
+        Err(e) => eprintln!("tack: cannot watch {}: {e}", folder.display()),
     }
 }

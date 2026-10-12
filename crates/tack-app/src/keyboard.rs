@@ -7,8 +7,7 @@
 //! takes focus: the page does not ask, and the window stays
 //! `WS_EX_NOACTIVATE` as always.
 
-use std::sync::atomic::{AtomicIsize, AtomicU64, Ordering};
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 
 use tack_core::RevealReason;
 use tack_windows::focus;
@@ -22,22 +21,18 @@ use crate::state::lock;
 /// The window that had the foreground before the board took it (a raw
 /// handle; 0 when the board does not have the keyboard).
 static PREVIOUS: AtomicIsize = AtomicIsize::new(0);
-/// Counts the times the board took the keyboard, so a watch left over from
-/// an earlier time never gives back a later one.
-static SESSION: AtomicU64 = AtomicU64::new(0);
-/// How often the watch below looks whether the board went.
-const WATCH: Duration = Duration::from_millis(100);
+/// The board has the keyboard and has not given it back yet.
+static TAKEN: AtomicBool = AtomicBool::new(false);
 
 /// Gives the board keyboard focus, if it is down because of the shortcut.
 /// On the main thread.
 pub fn take(app: &AppHandle) -> bool {
-    let generation = {
+    {
         let s = lock(app);
         if !s.view.shown || s.view.reason != RevealReason::Hotkey {
             return false;
         }
-        s.view.generation
-    };
+    }
     let Some(hwnd) = board_hwnd(app) else { return false };
     let Some(previous) = focus::take(hwnd) else {
         eprintln!("tack: the board could not take the keyboard focus");
@@ -52,14 +47,18 @@ pub fn take(app: &AppHandle) -> bool {
         });
     }
     trace!("keyboard: the board took focus (foreground process {:?})", focus::foreground_process());
-    let session = SESSION.fetch_add(1, Ordering::SeqCst) + 1;
-    watch(app, generation, session);
+    TAKEN.store(true, Ordering::SeqCst);
     true
 }
 
 /// Gives the keyboard back to the window that had it, if the board still
-/// has it. On the main thread.
+/// has it. Whatever ends the reveal (Esc, the shortcut, a click elsewhere)
+/// ends in `reveal::tuck`, which calls this even if the page never asks.
+/// On the main thread.
 pub fn release(app: &AppHandle) {
+    if !TAKEN.swap(false, Ordering::SeqCst) {
+        return;
+    }
     let previous = PREVIOUS.swap(0, Ordering::SeqCst);
     if let Some(hwnd) = board_hwnd(app) {
         let previous = (previous != 0).then_some(HWND(previous as *mut _));
@@ -70,27 +69,6 @@ pub fn release(app: &AppHandle) {
 
 /// Esc: the board goes back up.
 pub fn hide(app: &AppHandle) {
+    trace!("tuck requested: Esc on the board");
     reveal::tuck(app);
-}
-
-/// Whatever ends the reveal (Esc, the shortcut, a click elsewhere), the
-/// keyboard goes back and the window is unfocusable again, even if the page
-/// never asks.
-fn watch(app: &AppHandle, generation: u64, session: u64) {
-    let app = app.clone();
-    let _ = std::thread::Builder::new().name("tack-keyboard".into()).spawn(move || loop {
-        std::thread::sleep(WATCH);
-        if SESSION.load(Ordering::SeqCst) != session {
-            return;
-        }
-        if lock(&app).view.generation != generation {
-            let handle = app.clone();
-            let _ = app.run_on_main_thread(move || {
-                if SESSION.load(Ordering::SeqCst) == session {
-                    release(&handle);
-                }
-            });
-            return;
-        }
-    });
 }

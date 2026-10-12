@@ -22,11 +22,10 @@
   .cork::before, .cork::after, #board::after { display: none; }
 
   .paper,
-  .sheet .paper,
   .hint-card,
   .tip { border: 1px solid CanvasText; background: Canvas; }
   .photo::after { box-shadow: none; outline: 1px solid CanvasText; }
-  .note-text, .sheet-text, .sheet-foot, .hint-card, .tip, .caption { color: CanvasText; text-shadow: none; }
+  .note-text, .hint-card, .tip, .caption { color: CanvasText; text-shadow: none; }
   .slot.is-link .note-text, .note-domain { color: LinkText; }
   .caption { background: Canvas; padding: 0 3px; }
 
@@ -44,8 +43,7 @@
   .badge { forced-color-adjust: none; background: Highlight; color: HighlightText; border: 1px solid HighlightText; }
 
   #board.kbd .slot.focused .card::before,
-  #board.kbd.focused .hint-card.show::after,
-  #board.kbd .sheet:focus-within::before {
+  #board.kbd.focused .hint-card.show::after {
     border: 0;
     box-shadow: none;
     outline: 2px solid Highlight;

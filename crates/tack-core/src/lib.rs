@@ -14,14 +14,19 @@
 
 pub mod board;
 pub mod capture;
+pub mod felt;
 pub mod files;
+pub mod frame;
 pub mod history;
+mod lenient;
 pub mod netbird;
 pub mod note;
 pub mod origin;
+pub mod paper;
 pub mod phone;
 pub mod print;
 pub mod recycle;
+pub mod reveal_speed;
 pub mod settings;
 pub mod shortcut;
 pub mod store;
@@ -29,7 +34,11 @@ pub mod thumbnail;
 pub mod view;
 
 pub use board::{Arrival, Board, KeepChange, PinOutcome};
+pub use felt::{Felt, FeltPreset};
+pub use frame::{Frame, FramePreset};
+pub use paper::{NotePaper, PaperPreset};
 pub use print::{Kind, NoteBody, Origin, Print};
+pub use reveal_speed::RevealSpeed;
 pub use settings::Settings;
 pub use thumbnail::Thumb;
 pub use view::{CssRect, Rect, RevealReason, View};

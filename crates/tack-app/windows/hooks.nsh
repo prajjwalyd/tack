@@ -7,7 +7,9 @@
 ; Tauri's template already stops a running Tack first and removes the
 ; "Start with Windows" Run value on uninstall.
 !macro NSIS_HOOK_POSTUNINSTALL
-  ; An update runs the old uninstaller with /UPDATE and must keep the board.
+  ; An update (the installer run with /UPDATE by the in-app updater) keeps the
+  ; board. Tauri's template installs over the old version without running its
+  ; uninstaller at all; this also covers an uninstaller that is run with /UPDATE.
   ${If} $DeleteAppDataCheckboxState = 1
   ${AndIf} $UpdateMode <> 1
     SetShellVarContext current
