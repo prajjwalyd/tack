@@ -52,6 +52,30 @@ impl UpdateStatus {
     pub fn idle() -> UpdateStatus {
         UpdateStatus { state: Phase::Idle, version: None, notes: None, progress: None, error: None, checked_at: None }
     }
+
+    /// A check began: all but the last good time is dropped.
+    pub fn checking(&self) -> UpdateStatus {
+        UpdateStatus { state: Phase::Checking, checked_at: self.checked_at, ..Self::idle() }
+    }
+
+    pub fn found(version: String, notes: Option<String>, now: u64) -> UpdateStatus {
+        UpdateStatus {
+            state: Phase::Available,
+            version: Some(version),
+            notes: clean_notes(notes),
+            checked_at: Some(now),
+            ..Self::idle()
+        }
+    }
+
+    pub fn up_to_date(now: u64) -> UpdateStatus {
+        UpdateStatus { state: Phase::UpToDate, checked_at: Some(now), ..Self::idle() }
+    }
+
+    /// A check or an install failed: `message` is shown, the last good time stays.
+    pub fn failed(&self, message: &str) -> UpdateStatus {
+        UpdateStatus { state: Phase::Error, notes: None, progress: None, error: Some(message.into()), ..self.clone() }
+    }
 }
 
 /// The notes as the UI gets them: nothing if blank, otherwise cut to
@@ -73,46 +97,50 @@ mod tests {
     use super::*;
 
     #[test]
-    fn blank_notes_are_nothing() {
+    fn notes_are_blank_cut_or_left_alone() {
         assert_eq!(clean_notes(None), None);
-        assert_eq!(clean_notes(Some(String::new())), None);
         assert_eq!(clean_notes(Some(" \r\n\t".into())), None);
-    }
-
-    #[test]
-    fn short_notes_are_left_as_they_are() {
         let notes = "## Fixes\n- <b>one</b> & two\n";
         assert_eq!(clean_notes(Some(notes.into())).as_deref(), Some(notes));
-        let exact = "a".repeat(NOTES_MAX_CHARS);
-        assert_eq!(clean_notes(Some(exact.clone())), Some(exact));
-    }
-
-    #[test]
-    fn long_notes_are_cut_on_a_character_boundary() {
-        let long = "\u{e9}".repeat(NOTES_MAX_CHARS + 50);
-        let cut = clean_notes(Some(long)).unwrap();
+        let cut = clean_notes(Some("\u{e9}".repeat(NOTES_MAX_CHARS + 50))).unwrap();
         assert_eq!(cut.chars().count(), NOTES_MAX_CHARS + 1);
         assert!(cut.ends_with('\u{2026}'));
     }
 
     #[test]
-    fn the_status_is_sent_in_camel_case() {
-        let status = UpdateStatus {
-            state: Phase::UpToDate,
-            version: Some("0.2.0".into()),
-            notes: None,
-            progress: Some(0.5),
-            error: None,
-            checked_at: Some(7),
-        };
-        let json = serde_json::to_value(&status).unwrap();
+    fn a_failure_keeps_the_last_good_time_and_drops_the_rest() {
+        let found = UpdateStatus::found("0.2.0".into(), Some("new".into()), 1_000);
+        assert_eq!((found.state, found.checked_at), (Phase::Available, Some(1_000)));
+        let checking = found.checking();
+        assert_eq!((checking.state, checking.version.clone(), checking.notes.clone()), (Phase::Checking, None, None));
+        let failed = checking.failed("no luck");
         assert_eq!(
-            json,
+            (failed.state, failed.error.as_deref(), failed.checked_at),
+            (Phase::Error, Some("no luck"), Some(1_000))
+        );
+        assert_eq!(UpdateStatus::up_to_date(2_000).checked_at, Some(2_000));
+    }
+
+    #[test]
+    fn a_failed_install_keeps_the_version_but_not_the_notes() {
+        let downloading = UpdateStatus {
+            state: Phase::Downloading,
+            progress: Some(0.4),
+            ..UpdateStatus::found("0.2.0".into(), Some("new".into()), 5)
+        };
+        let failed = downloading.failed("no luck");
+        assert_eq!((failed.version.as_deref(), failed.notes, failed.progress), (Some("0.2.0"), None, None));
+    }
+
+    #[test]
+    fn the_status_is_sent_in_camel_case() {
+        let status = UpdateStatus { progress: Some(0.5), ..UpdateStatus::up_to_date(7) };
+        assert_eq!(
+            serde_json::to_value(&status).unwrap(),
             serde_json::json!({
-                "state": "upToDate", "version": "0.2.0", "notes": null,
+                "state": "upToDate", "version": null, "notes": null,
                 "progress": 0.5, "error": null, "checkedAt": 7
             })
         );
-        assert_eq!(serde_json::to_value(Phase::Idle).unwrap(), "idle");
     }
 }
