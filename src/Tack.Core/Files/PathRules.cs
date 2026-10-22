@@ -29,6 +29,15 @@ public static class PathRules
 
     public static string FileName(string path) => Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
 
+    /// <summary>
+    /// A full path on a drive letter (<c>C:\...</c>). Anything else is refused
+    /// before it is touched: a UNC path would make Windows connect to that
+    /// server and offer it the user's sign-in, and <c>\\?\</c> and <c>\\.\</c>
+    /// paths reach devices and the same servers.
+    /// </summary>
+    public static bool IsOnDrive(string path) =>
+        path.Length >= 3 && char.IsAsciiLetter(path[0]) && path[1] == ':' && path[2] is '\\' or '/';
+
     /// <summary>The screenshot formats Tack pins.</summary>
     public static bool IsImage(string path) => Path.GetExtension(path).ToLowerInvariant() is ".png" or ".jpg" or ".jpeg";
 }

@@ -21,6 +21,12 @@ public sealed record TackPaths(string Roaming, string Local)
     public string Notes => Path.Combine(Local, "Notes");
 
     /// <summary>
+    /// The folders come from TACK_HOME: a build being tried out, which must
+    /// leave the machine's settings (such as the Run value) alone.
+    /// </summary>
+    public bool FromHome { get; init; }
+
+    /// <summary>
     /// TACK_HOME if it is set. Otherwise a development build gets a scratch
     /// folder of its own, so it can never touch the real board, and a release
     /// build gets the real folders. Without APPDATA or LOCALAPPDATA the folders
@@ -31,7 +37,7 @@ public sealed record TackPaths(string Roaming, string Local)
         var home = environment(HomeVariable);
         if (!string.IsNullOrWhiteSpace(home))
         {
-            return Under(home);
+            return Under(home) with { FromHome = true };
         }
         var local = environment("LOCALAPPDATA");
         if (development)

@@ -17,6 +17,11 @@ static class Program
     static int Main()
     {
         DllSearch.Secure();
+        // Started inside another app's MSIX container: run as a normal app instead.
+        if (PackageContainer.HostPackage() is { } host && PackageContainer.RelaunchOutside(host))
+        {
+            return 0;
+        }
         var identity = AppIdentity.For(BuildInfo.IsDevelopment);
         using var instance = SingleInstance.TryClaim(identity.MutexName);
         if (instance is null)
@@ -32,7 +37,7 @@ static class Program
         {
             var context = new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread());
             SynchronizationContext.SetSynchronizationContext(context);
-            _ = new App(identity);
+            _ = new App(identity, paths);
         });
         return 0;
     }

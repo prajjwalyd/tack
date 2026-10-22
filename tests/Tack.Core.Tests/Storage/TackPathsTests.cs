@@ -44,6 +44,7 @@ public class TackPathsTests
 
         Assert.Equal(@"D:\scratch\Roaming\board.json", paths.BoardFile);
         Assert.Equal(@"D:\scratch\Local\Notes", paths.Notes);
+        Assert.True(paths.FromHome);
     }
 
     [Fact]
@@ -51,7 +52,10 @@ public class TackPathsTests
     {
         var environment = Environment(("APPDATA", @"C:\R"), ("LOCALAPPDATA", @"C:\L"), (TackPaths.HomeVariable, "  "));
 
-        Assert.Equal(@"C:\R\Tack", TackPaths.Resolve(environment, development: false).Roaming);
+        var paths = TackPaths.Resolve(environment, development: false);
+
+        Assert.Equal(@"C:\R\Tack", paths.Roaming);
+        Assert.False(paths.FromHome);
     }
 
     [Fact]

@@ -84,6 +84,12 @@ public sealed unsafe class HostWindow : IDisposable
             return;
         }
         PInvoke.DestroyWindow((HWND)Handle);
+        // So a later host window in the same process can register the class again.
+        HINSTANCE instance = PInvoke.GetModuleHandle((PCWSTR)null);
+        fixed (char* name = ClassName)
+        {
+            PInvoke.UnregisterClass(name, instance);
+        }
         s_current = null;
     }
 }

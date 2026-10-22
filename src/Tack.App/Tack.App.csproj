@@ -30,6 +30,17 @@
     <Content Include="..\..\assets\icons\icon.ico" Link="Assets\Tack.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- The compiled XAML (.xbf) is embedded in Tack.pri from a copy beside the
+       exe, and a build leaves that copy there. With it there XAML no longer finds
+       its own theme resources, so the app crashes at start. Publish leaves it
+       out; this tidies a build the same way once Tack.pri is made. -->
+  <Target Name="RemoveLooseXbf" AfterTargets="Build">
+    <ItemGroup>
+      <_LooseXbf Include="$(OutDir)*.xbf" />
+    </ItemGroup>
+    <Delete Files="@(_LooseXbf)" />
+  </Target>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
     <PackageReference Include="Microsoft.WindowsAppSDK" />

@@ -28,6 +28,27 @@ public class PathRulesTests
     }
 
     [Fact]
+    public void Only_files_on_a_drive_are_opened()
+    {
+        Assert.True(PathRules.IsOnDrive(@"C:\Users\me\Pictures\a.png"));
+        Assert.True(PathRules.IsOnDrive(@"Z:\shots\b.jpg"), "a mapped drive is the user's own");
+        foreach (var path in new[]
+        {
+            @"\\server\share\a.png",
+            "//server/share/a.png",
+            @"\\?\UNC\server\share\a.png",
+            @"\\?\C:\Users\me\a.png",
+            @"\\.\pipe\a.png",
+            "C:a.png",
+            "a.png",
+            "",
+        })
+        {
+            Assert.False(PathRules.IsOnDrive(path), path);
+        }
+    }
+
+    [Fact]
     public void The_same_folder_spelled_another_way_is_the_same()
     {
         using var scratch = new Scratch("same-dir");

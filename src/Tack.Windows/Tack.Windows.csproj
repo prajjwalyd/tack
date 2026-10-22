@@ -21,4 +21,8 @@
     <ProjectReference Include="..\Tack.Core\Tack.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tack.Windows.Tests" />
+  </ItemGroup>
+
 </Project>
