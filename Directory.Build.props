@@ -1,0 +1,20 @@
+<Project>
+  <!-- Settings every project in the repository shares. -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Public members are documented where it helps, not everywhere. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <Product>Tack</Product>
+    <Authors>The Tack contributors</Authors>
+    <Copyright>The Tack contributors</Copyright>
+    <!-- Above the last release of Tack 0.2 (0.2.1), so its updater offers this one. -->
+    <Version>0.3.0</Version>
+  </PropertyGroup>
+</Project>

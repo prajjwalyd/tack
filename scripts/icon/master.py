@@ -1,7 +1,7 @@
 """Tack's icon, the vector sizes: the 256 master and the pixel-hinted 48 / 64.
 
-A framed felt tile (brushed-aluminium frame, the board's felt from
-ui/styles/tokens.css) seen a little from above, and a brass push-pin driven in
+A framed felt tile (brushed-aluminium frame, the board's green felt,
+#24503f) seen a little from above, and a brass push-pin driven in
 diagonally (needle into the felt, cap up and to the right). One key light from
 the top left: the frame's highlight and the pin's shadow agree.
 

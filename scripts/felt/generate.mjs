@@ -1,11 +1,11 @@
-// Generates the board's felt textures: ui/assets/felt-*.webp.
+// Generates the board's felt textures: assets/felt/felt-*.webp.
 //
 //   node scripts/felt/generate.mjs            write the three tiles (WebP, via headless Chrome)
 //   node scripts/felt/generate.mjs --png      write PNGs instead (no Chrome needed; larger)
 //   node scripts/felt/generate.mjs --out DIR  somewhere else (a preview, say)
 //   env: CHROME (path to chrome.exe); STRENGTH, MID, HIGHLIGHTS, K_LIGHT, K_DARK, ALPHA_STEP to experiment
 //
-// What it makes: seamless pictures of wool felt that ui/styles/felt.css lays
+// What it makes: seamless pictures of wool felt that the board lays
 // over the felt colour with PLAIN alpha blending, so painting them costs no
 // more than painting an image (no blend mode, nothing read back), and one set
 // works on every colour. Each tile is white where the felt is lighter than
@@ -21,8 +21,8 @@
 //
 // Tiles wrap at their edges (every stroke is drawn modulo the tile), and are
 // drawn at 2x (the cloud, being soft, at 1x) so they stay crisp at 100-200 %
-// Windows scaling: the CSS shows each at half its pixel size. Their sizes in
-// CSS pixels (256, 357, 193) share no factor, so the three never line up and no repeat shows. Everything is
+// Windows scaling: the board shows each at half its pixel size. Their sizes in
+// logical pixels (256, 357, 193) share no factor, so the three never line up and no repeat shows. Everything is
 // seeded: the same script always writes the same files.
 //
 // Dependency-free: Node 22 only. Lossless WebP (with alpha) comes from Chrome's canvas encoder
@@ -37,7 +37,7 @@ import { deflateSync } from "node:zlib";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
-const OUT = args.includes("--out") ? args[args.indexOf("--out") + 1] : join(HERE, "../../ui/assets");
+const OUT = args.includes("--out") ? args[args.indexOf("--out") + 1] : join(HERE, "../../assets/felt");
 const AS_PNG = args.includes("--png");
 const CHROME = process.env.CHROME || "C:/Program Files/Google/Chrome/Application/chrome.exe";
 
@@ -122,7 +122,7 @@ function toGrey(buf, sd) {
   return out;
 }
 
-// ---- the three tiles (S in pixels: 2x their CSS size) ----
+// ---- the three tiles (S in pixels: 2x their logical size) ----
 
 /** Dense short fibres: the surface. */
 function fibre(S) {
@@ -167,9 +167,9 @@ function pile(S) {
 }
 
 const TILES = [
-  { name: "felt-fibre", css: 256, draw: fibre },
-  { name: "felt-cloud", css: 357, draw: cloud, scale: 1 },   // soft clouds need no more than 1x: it saves 1.5 MB decoded
-  { name: "felt-pile", css: 193, draw: pile },
+  { name: "felt-fibre", size: 256, draw: fibre },
+  { name: "felt-cloud", size: 357, draw: cloud, scale: 1 },   // soft clouds need no more than 1x: it saves 1.5 MB decoded
+  { name: "felt-pile", size: 193, draw: pile },
 ];
 
 // The tiles are designed as a grey g laid on with soft-light (0.5 = no change),
@@ -252,12 +252,12 @@ async function chromeWebp(pngs) {   // PNG buffers -> WebP buffers, by Chrome's 
 const WEBP_QUALITY = +(process.env.WEBP_QUALITY || 1);   // 1: lossless (the alpha is the picture; lossy colour only made it bigger)
 
 mkdirSync(OUT, { recursive: true });
-const greys = TILES.map((t) => ({ ...t, S: t.css * (t.scale || 2) }));
+const greys = TILES.map((t) => ({ ...t, S: t.size * (t.scale || 2) }));
 for (const t of greys) t.grey = t.scale === 1 ? halve(t.draw(t.S * 2), t.S * 2) : t.draw(t.S);
 const pngs = greys.map((t) => png(overlay(t.grey), t.S));
 const files = AS_PNG ? pngs : await chromeWebp(pngs);
 greys.forEach((t, i) => {
   const path = join(OUT, `${t.name}.${AS_PNG ? "png" : "webp"}`);
   writeFileSync(path, files[i]);
-  console.log(`${t.name}: ${t.S}x${t.S} px, shown at ${t.css} CSS px, ${(files[i].length / 1024).toFixed(1)} KB`);
+  console.log(`${t.name}: ${t.S}x${t.S} px, shown at ${t.size} logical px, ${(files[i].length / 1024).toFixed(1)} KB`);
 });

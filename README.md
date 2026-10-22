@@ -84,14 +84,14 @@ The details are in [docs/privacy.md](docs/privacy.md).
 Tack updates itself: when a new version is out, Settings offers it, and one
 click installs it. Your board stays as it was.
 
-Windows 10 or 11.
+Windows 11.
 
 To build it yourself, see [docs/development.md](docs/development.md).
 
 ## Credits
 
 Inspired by [Tendedero](https://github.com/alejandrobujan/tendedero) by Alejandro Buján.
-Built with [Tauri](https://tauri.app).
+Built with C#, [WinUI 3](https://learn.microsoft.com/windows/apps/winui/winui3/) and .NET.
 
 ## License
 

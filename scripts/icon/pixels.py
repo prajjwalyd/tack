@@ -18,7 +18,7 @@ PAL = {
     "l": "#f3d27e8c", "m": "#dcad4880", "n": "#a8792380", "k": "#7a541080",
     # steel needle
     "s": "#eef1f4", "t": "#a9b2bc", "u": "#6f7983",
-    # felt (ui/styles/tokens.css), lit to shaded
+    # felt (the board's green, #24503f), lit to shaded
     "j": "#3d7a60", "f": "#2f6a52", "g": "#24503f", "h": "#183a2d", "i": "#0f281f", "q": "#0a1d16",
     # aluminium frame, light to dark; o / v / w = soft corners
     "a": "#eef0f2", "b": "#c9ced3", "c": "#a3a9b0", "d": "#7b828a", "e": "#5d646c",

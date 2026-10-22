@@ -1,12 +1,9 @@
 """Writes every icon file Tack ships from the sources in this folder.
 
     python scripts/icon/build.py svg     # the SVG sources: app icon, tray, logo
-    npx tauri icon crates/tack-app/icons/icon.svg -o crates/tack-app/icons
-    (delete crates/tack-app/icons/android and .../ios)
-    python scripts/icon/build.py png     # icon.ico, 32x32.png, tray PNGs, logo.png
+    python scripts/icon/build.py png     # icon.ico, tray PNGs, logo.png
 
-Run `png` after `tauri icon`: tauri writes its own icon.ico and 32x32.png from
-the master, and this replaces them with the hand-tuned small sizes.
+icon.ico holds the hand-tuned 16-32 px sizes plus 48 and 256 from the master.
 Needs Python 3 with Pillow, Node 22+ and Chrome or Edge (render.mjs).
 """
 import os, struct, subprocess, sys, tempfile
@@ -15,7 +12,7 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 import master, pixels
 
-IC = os.path.join(REPO, "crates", "tack-app", "icons")
+IC = os.path.join(REPO, "assets", "icons")
 ASSETS = os.path.join(REPO, "docs", "assets")
 PIXEL = (16, 20, 24, 32)
 
@@ -70,7 +67,6 @@ def pngs():
         for t in ("light", "dark"):
             name = f"tray-{t}.png" if n == 32 else f"tray-{t}-{n}.png"
             pixels.to_png(rows, t).save(os.path.join(IC, name))
-    pixels.to_png(grid(32)).save(os.path.join(IC, "32x32.png"))
     datas += [(48, big[48]), (256, big[256])]
     blobs = [open(p, "rb").read() for _, p in datas]
     head = struct.pack("<HHH", 0, 1, len(datas)); off = 6 + 16 * len(datas); ents = b""
@@ -78,7 +74,7 @@ def pngs():
         ents += struct.pack("<BBBBHHII", n % 256, n % 256, 0, 0, 1, 32, len(d), off); off += len(d)
     with open(os.path.join(IC, "icon.ico"), "wb") as fh:
         fh.write(head + ents + b"".join(blobs))
-    print("icon.ico (16, 20, 24, 32, 48, 256), 32x32.png, tray PNGs, logo.png written")
+    print("icon.ico (16, 20, 24, 32, 48, 256), tray PNGs, logo.png written")
 
 if __name__ == "__main__":
     step = sys.argv[1] if len(sys.argv) > 1 else ""

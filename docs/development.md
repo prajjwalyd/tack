@@ -1,69 +1,78 @@
 # Working on Tack
 
-How to build, run and preview Tack, and the conventions the code follows.
+How to build, run and test Tack, and the conventions the code follows.
 Tack is small on purpose: a board, prints, pins.
+
+Tack is being ported from Rust and Tauri to C#, WinUI 3 and Native AOT; the
+plan, and what is done so far, is in [csharp-port.md](csharp-port.md). The
+Rust app is kept on `main` until the C# app replaces it.
 
 ## Prerequisites
 
-- Windows 10 or 11 (Tack is Windows only; `tack-core` also builds elsewhere)
-- [Rust](https://rustup.rs), stable, MSVC toolchain, with the `rustfmt` and
-  `clippy` components (`rustup component add rustfmt clippy`)
-- Visual Studio C++ Build Tools
-- Node.js 20 or later (only for the Tauri CLI)
-- Python 3, optional, for the UI preview server
+- Windows 11
+- [.NET 10 SDK](https://dotnet.microsoft.com/download) (`global.json` pins
+  the version; `winget install Microsoft.DotNet.SDK.10`)
+- For Native AOT publishing: Visual Studio or its Build Tools with the
+  "Desktop development with C++" workload, plus "C++ ARM64 build tools" to
+  publish for ARM64
+- Optional: Visual Studio 2026, for XAML Hot Reload and the WinUI debugger.
+  Everything builds from the command line without it.
 
 ## The dev loop
 
 ```sh
-npm install
-npm run dev                  # debug build of crates/tack-app, then runs it
-cargo test --workspace       # unit tests (the board model lives in tack-core)
-npm run test:ui              # the page code's tests (Node, no dependencies): tests/ui
+dotnet build Tack.slnx                     # everything, Debug
+dotnet test --solution Tack.slnx           # the tests
+dotnet run --project src/Tack.App          # run the app (a debug build)
+./scripts/check-file-length.ps1            # no file over 300 lines
+dotnet publish src/Tack.App -c Release -r win-x64 -o artifacts/win-x64   # Native AOT
 ```
 
-The installer: `npm run build` writes it to `target/release/bundle/nsis/`.
-It is built with updater signatures (`bundle.createUpdaterArtifacts`), so
-without the signing key (see Releases) it stops at the signing step. For a
-local installer, set `TAURI_SIGNING_PRIVATE_KEY` to a throwaway key from
-`npx tauri signer generate` (never the release key): no installed Tack
-accepts an update signed with it. CI's plain build (`tauri build
---no-bundle`) makes no installer and needs no key.
+**A debug build never touches your real Tack.** It keeps its data in
+`%LOCALAPPDATA%\Tack.Dev` (a `Roaming` folder for board.json and a `Local`
+folder for Captures and Notes), and runs under names of its own (mutex,
+autostart value, tray tooltip "Tack (development)"), so it runs beside the
+installed Tack. Set `TACK_HOME` to a folder to use that instead, for any
+build. To try the app on a copy of your board, copy `%APPDATA%\Tack\*` into
+`<TACK_HOME>\Roaming` and `%LOCALAPPDATA%\Tack\*` into `<TACK_HOME>\Local`.
+The copied board.json still names your real files; the app reads them but
+only ever recycles files inside its own folders.
 
-Only one Tack runs at a time: quit the tray icon (or
-`taskkill /IM tack.exe /F`) before starting another build.
+A release build uses the real folders and names: run one only with
+`TACK_HOME` set, or with the installed Tack quit.
 
-The debug build keeps a console. Tack logs to stderr with a `tack:` prefix,
-including one line per clipboard change, which is how the Snipping Tool
-capture flow is debugged.
+Debug builds trace to the debugger's output and stderr with a `tack` prefix
+(`DevTrace`). Release builds trace nothing.
 
-The UI and the backend talk only through Tauri commands and events: if
-you change one, change `crates/tack-app/src/ipc/`, `ui/scripts/ipc.js` and
-`ui/dev/fake-ipc.js` together.
+## Code style
 
-## The UI preview
+- **One type per file, and short files.** A file over 300 lines fails CI
+  (`scripts/check-file-length.ps1`); split it into smaller types instead. A
+  folder is a namespace: `src/Tack.Windows/Shell/TrayIcon.cs` is
+  `Tack.Windows.Shell.TrayIcon`.
+- **Three layers, dependencies pointing down:** `Tack.Core` (logic, no
+  Windows APIs, unit tested), `Tack.Windows` (Win32 and WinRT, through
+  CsWin32), `Tack.App` (WinUI windows and wiring). No IPC, no MVVM framework,
+  no dependency injection container.
+- **Use what Windows and .NET provide** before writing Win32 by hand, and
+  never poll where Windows can notify.
+- Every type starts with a `<summary>` saying what it is for. Comments
+  explain why, not what.
+- Warnings are errors, `.editorconfig` holds the style, and everything must
+  stay Native AOT compatible: no reflection-based JSON or binding.
+- Package versions live in `Directory.Packages.props` only.
+- Use the domain words: the **board**, a **print** (one pinned screenshot),
+  its **pin**, a **capture** (from the clipboard) versus a **screenshot
+  file** (from the folder), **reveal** and **tuck**.
+- The app's only outgoing connection is the update check and download (one
+  HTTPS endpoint, signature-verified). There are no analytics and no
+  fetching of anything else. The only listening is the phone board, on the
+  NetBird address alone, when the user switches it on. Keep it that way, and
+  keep `docs/privacy.md` true when it changes.
 
-The board UI is plain HTML, CSS and ES modules with no build step, so it can
-be developed in any browser without Rust:
-
-```sh
-npm run preview              # python -m http.server 5178 --directory ui
-```
-
-Open <http://localhost:5178/dev/preview.html>. The page loads the real
-`ui/styles` and `ui/scripts`, with `ui/dev/fake-ipc.js` standing in for the
-backend: it installs a fake `window.__TAURI__`, draws placeholder
-screenshots, and the buttons fire the events the backend would (reveal, add,
-keep, remove, copied, breeze, drag, update, pointer left...). "Fill to 20"
-(or `?n=20` in the URL) gives a row long enough to scroll, "Shuffle" sends
-an `order-changed`, and "Theme" forces the board light or dark instead of
-following the system; "Felt", "Frame" and "Paper" step through the board
-colours, frame finishes and note papers (`?felt=`, `?finish=` and `?paper=`
-start on one). The preview runs under the same
-content security policy as the app, so anything the app would block fails
-there too.
-
-`ui/dev/` is embedded in the app with the rest of `ui/` (Tauri embeds the
-whole `frontendDist` folder) but nothing in the app links to it.
+CI builds, tests, checks file lengths and publishes with Native AOT for x64
+and ARM64 on every push to `main` or a `port/` branch and on every pull
+request. The AOT builds are kept as artifacts for a week.
 
 ## The social preview
 
@@ -72,68 +81,21 @@ repository is linked, but a file in the repository is not enough: a
 maintainer has to upload it under the repository's **Settings › General ›
 Social preview** each time it changes.
 
-## Code style
+## Releases and the updater key
 
-- Rust: `cargo fmt --all` (see `rustfmt.toml`) and
-  `cargo clippy --workspace --all-targets -- -D warnings` must pass. Fix
-  lints rather than allowing them.
-- Every Rust module starts with a `//!` paragraph saying what it does and
-  why; every JS module starts with a short header comment.
-- Comments explain why, not what. The code already says what.
-- Keep platform-independent logic in `tack-core` with unit tests, Win32 in
-  `tack-windows` behind plain functions and callbacks, and Tauri glue in
-  `tack-app`.
-- Use the domain words: the **board**, a **print** (one pinned screenshot),
-  its **pin**, a **capture** (from the clipboard) versus a **screenshot
-  file** (from the folder), **reveal** and **tuck**.
-- The app's only outgoing connection is the update check and download
-  (`crates/tack-app/src/updates/`, one HTTPS endpoint, signature-verified);
-  there are no analytics and no fetching of anything else, and the web views
-  stay off the network. The only listening is the phone board
-  (`crates/tack-app/src/phone/`), on the NetBird address alone, when the user
-  switches it on. Keep it that way, and keep `docs/privacy.md` true when it
-  changes (`updates/config_guard.rs` fails the build if an update safeguard
-  or the web views' limits are loosened).
+The C# app's installer and updater come in phase 6 of the port. Until then,
+releases are made from `main` as before.
 
-CI runs formatting, clippy, the tests and a release build on Windows for
-every push.
-
-## Releases
-
-Push a tag that matches the version in `Cargo.toml` and
-`crates/tack-app/tauri.conf.json` (`v0.2.0` for `0.2.0`). The release workflow
-builds the x64 and arm64 installers, signs them for the updater, and
-attaches them, their `.sig` files and `latest.json` to a **draft** release.
-Its last job checks `latest.json` (version, both builds, signatures made for
-that version) and fails if it is wrong. Nothing reaches users until a
-maintainer publishes the draft: the in-app updater reads
-`releases/latest/download/latest.json`, which GitHub points at the newest
-published (non-draft, non-prerelease) release.
-
-The installers are signed with the updater key, a minisign key pair made by
-`npx tauri signer generate`. The public key is in
-`crates/tack-app/tauri.conf.json` (`plugins.updater.pubkey`); every installed
-Tack trusts updates signed by the matching private key and nothing else. The
-repository secrets:
+Installed copies of Tack 0.2 only accept updates signed with the updater
+key, a minisign key pair whose public key is built into them. The first C#
+release reaches them through that updater, so it has to be signed with the
+same key. The repository secrets:
 
 - `TAURI_SIGNING_PRIVATE_KEY`: the private key's contents.
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: its password.
 
-They are passed to the build step only (not the whole job), and the tag's
-code is what is built. **Keep a backup of the private key and its password**
-outside GitHub (a password manager); the secrets cannot be read back. Never
-commit the key, paste it in an issue or a log, or put it on a shared drive.
-
-If the private key is lost or leaked, installed copies cannot be updated by
-the usual route, because they only accept the old key and the key is built
-into them:
-
-1. Generate a new pair, put the new public key in `tauri.conf.json`, replace
-   the two secrets, and release a version signed with it.
-2. Copies that already have the old public key will not install it: tell
-   people (the README, the release notes) to download and run the new
-   installer once by hand. After that, updates work again.
-3. If the key leaked rather than was lost, treat any release signed after
-   the leak as suspect, publish the new one at once, and say so in the
-   notes; whoever has the old key can sign an update that old copies accept
-   until they have moved to the new one.
+**Keep a backup of the private key and its password** outside GitHub (a
+password manager); the secrets cannot be read back. Never commit the key,
+paste it in an issue or a log, or put it on a shared drive. If it is lost
+before the first C# release, installed copies can only move to the C# app by
+downloading its installer by hand.
