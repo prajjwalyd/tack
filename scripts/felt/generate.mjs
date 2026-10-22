@@ -1,7 +1,8 @@
-// Generates the board's felt textures: assets/felt/felt-*.webp.
+// Generates the board's felt textures: assets/felt/felt-*.png.
 //
-//   node scripts/felt/generate.mjs            write the three tiles (WebP, via headless Chrome)
-//   node scripts/felt/generate.mjs --png      write PNGs instead (no Chrome needed; larger)
+//   node scripts/felt/generate.mjs            write the three tiles (PNG)
+//   node scripts/felt/generate.mjs --webp     write lossless WebPs instead, via headless Chrome (smaller;
+//                                             the same pixels, but Windows may lack the codec)
 //   node scripts/felt/generate.mjs --out DIR  somewhere else (a preview, say)
 //   env: CHROME (path to chrome.exe); STRENGTH, MID, HIGHLIGHTS, K_LIGHT, K_DARK, ALPHA_STEP to experiment
 //
@@ -25,7 +26,7 @@
 // logical pixels (256, 357, 193) share no factor, so the three never line up and no repeat shows. Everything is
 // seeded: the same script always writes the same files.
 //
-// Dependency-free: Node 22 only. Lossless WebP (with alpha) comes from Chrome's canvas encoder
+// Dependency-free: Node 22 only. With --webp, lossless WebP (with alpha) comes from Chrome's canvas encoder
 // (CDP over the global WebSocket, as the demo renderer does).
 
 import { spawn } from "node:child_process";
@@ -38,7 +39,7 @@ import { deflateSync } from "node:zlib";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const OUT = args.includes("--out") ? args[args.indexOf("--out") + 1] : join(HERE, "../../assets/felt");
-const AS_PNG = args.includes("--png");
+const AS_PNG = !args.includes("--webp");
 const CHROME = process.env.CHROME || "C:/Program Files/Google/Chrome/Application/chrome.exe";
 
 // ---- tools ----

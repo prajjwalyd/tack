@@ -5,13 +5,29 @@ using Windows.Win32.UI.WindowsAndMessaging;
 namespace Tack.Windows.Shell;
 
 /// <summary>
-/// A native popup menu at the pointer, as the tray icon shows on right-click.
-/// Native rather than XAML: it costs nothing while closed.
+/// A native popup menu, as the tray icon shows on right-click and a print on
+/// the board does. Native rather than XAML: it costs nothing while closed.
+/// Modal: it returns once the menu has closed, so call it on the owner's
+/// thread, outside any input handler of its own.
 /// </summary>
 public static unsafe class PopupMenu
 {
-    /// <summary>Shows <paramref name="items"/> and runs the one chosen, if any, once the menu has closed.</summary>
-    public static void ShowAtPointer(nint owner, IReadOnlyList<MenuItem> items)
+    /// <summary>Shows <paramref name="items"/> at the pointer and runs the one chosen, if any, once the menu has closed.</summary>
+    /// <param name="takeForeground">
+    /// Brings <paramref name="owner"/> to the front first, which a hidden owner
+    /// (the tray's) needs for the menu to close on a click elsewhere.
+    /// </param>
+    public static void ShowAtPointer(nint owner, IReadOnlyList<MenuItem> items, bool takeForeground = true)
+    {
+        PInvoke.GetCursorPos(out var pointer);
+        ShowAt(owner, (pointer.X, pointer.Y), items, takeForeground);
+    }
+
+    /// <summary>
+    /// Shows <paramref name="items"/> with the menu's corner at <paramref name="at"/>
+    /// (physical screen px) and runs the one chosen, if any, once the menu has closed.
+    /// </summary>
+    public static void ShowAt(nint owner, (int X, int Y) at, IReadOnlyList<MenuItem> items, bool takeForeground = true)
     {
         var menu = PInvoke.CreatePopupMenu();
         int picked;
@@ -21,13 +37,15 @@ public static unsafe class PopupMenu
             {
                 Append(menu, items[i], id: (nuint)(i + 1));
             }
-            PInvoke.GetCursorPos(out var pointer);
-            // Without this the menu would not close when the user clicks elsewhere.
-            PInvoke.SetForegroundWindow((HWND)owner);
+            if (takeForeground)
+            {
+                // Without this a hidden owner's menu would not close when the user clicks elsewhere.
+                PInvoke.SetForegroundWindow((HWND)owner);
+            }
             picked = PInvoke.TrackPopupMenu(
                 menu,
                 TRACK_POPUP_MENU_FLAGS.TPM_RETURNCMD | TRACK_POPUP_MENU_FLAGS.TPM_RIGHTBUTTON | TRACK_POPUP_MENU_FLAGS.TPM_NONOTIFY,
-                pointer.X, pointer.Y, 0, (HWND)owner, null).Value;
+                at.X, at.Y, 0, (HWND)owner, null).Value;
             PInvoke.PostMessage((HWND)owner, PInvoke.WM_NULL, default, default);
         }
         finally

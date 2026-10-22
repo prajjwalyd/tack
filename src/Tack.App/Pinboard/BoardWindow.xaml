@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Tack.App.Pinboard.BoardWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:automation="using:Tack.App.Pinboard.Automation"
+    Title="Tack">
+    <!-- The window covers the monitor's work area and is see-through; y 0 is the screen edge.
+         Sizes are BoardMetrics': the board is 174 tall at y -24 (150 show), the rail runs 360 down. -->
+    <Grid x:Name="Root">
+        <Canvas x:Name="Stage" HorizontalAlignment="Center" VerticalAlignment="Top" Width="360" Height="384">
+            <automation:PeerCanvas x:Name="Board" Canvas.Top="-24" Width="360" Height="174">
+                <Border x:Name="Cork" Width="360" Height="174" />
+                <Canvas x:Name="Rail" Canvas.Top="24" Width="360" Height="360">
+                    <Canvas x:Name="Track" Canvas.Left="180" />
+                </Canvas>
+                <Border x:Name="Veil" Width="360" Height="174" CornerRadius="0,0,12,12"
+                        Background="#99000804" IsHitTestVisible="False" />
+            </automation:PeerCanvas>
+        </Canvas>
+        <Canvas x:Name="OverlayLayer" />
+    </Grid>
+</Window>

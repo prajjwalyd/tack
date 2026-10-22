@@ -21,6 +21,7 @@
          the app's .pri, and no XAML page loads. -->
     <EnableMsixTooling>true</EnableMsixTooling>
     <PublishAot>true</PublishAot>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- Program.cs is the entry point: it checks for another Tack before any UI starts. -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
@@ -28,18 +29,17 @@
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
     <Content Include="..\..\assets\icons\icon.ico" Link="Assets\Tack.ico" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The print art (scripts/board-assets), read from beside the exe. -->
+    <Content Include="..\..\assets\board\*.png" Link="Assets\Board\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The board's felt wool and the frame's brushed grain (Pinboard/Chrome). -->
+    <Content Include="..\..\assets\felt\*.png" Link="Assets\felt\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\board\chrome\*.png" Link="Assets\Board\chrome\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <!-- The compiled XAML (.xbf) is embedded in Tack.pri from a copy beside the
-       exe, and a build leaves that copy there. With it there XAML no longer finds
-       its own theme resources, so the app crashes at start. Publish leaves it
-       out; this tidies a build the same way once Tack.pri is made. -->
-  <Target Name="RemoveLooseXbf" AfterTargets="Build">
-    <ItemGroup>
-      <_LooseXbf Include="$(OutDir)*.xbf" />
-    </ItemGroup>
-    <Delete Files="@(_LooseXbf)" />
-  </Target>
+  <!-- The board's tock and pop (scripts/sounds/render.cs writes them), played from memory. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\assets\board\sounds\*.wav" LogicalName="Tack.Sounds.%(Filename)%(Extension)" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />

@@ -23,7 +23,7 @@ static class Program
             return 0;
         }
         var identity = AppIdentity.For(BuildInfo.IsDevelopment);
-        using var instance = SingleInstance.TryClaim(identity.MutexName);
+        using var instance = SingleInstance.TryClaim(identity.MutexName + DevInstance());
         if (instance is null)
         {
             DevTrace.Write("another Tack is running; this one leaves");
@@ -40,5 +40,19 @@ static class Program
             _ = new App(identity, paths);
         });
         return 0;
+    }
+
+    /// <summary>
+    /// Development builds: TACK_DEV_INSTANCE gives a build a single-instance
+    /// name of its own, so several can run side by side (each with its own
+    /// TACK_HOME), as the board-picture script does.
+    /// </summary>
+    static string DevInstance()
+    {
+#if DEBUG
+        return Environment.GetEnvironmentVariable("TACK_DEV_INSTANCE") is { Length: > 0 } name ? "." + name : "";
+#else
+        return "";
+#endif
     }
 }

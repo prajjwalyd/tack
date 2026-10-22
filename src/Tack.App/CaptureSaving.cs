@@ -1,3 +1,4 @@
+using Tack.App.Pinboard.Contract;
 using Tack.Core.Captures;
 using Tack.Core.Diagnostics;
 using Tack.Core.Files;
@@ -11,7 +12,7 @@ namespace Tack.App;
 /// it while the picture is written; anything that needs the file itself waits
 /// through <see cref="PendingSaves"/>.
 /// </summary>
-sealed class CaptureSaving(AppState state, Prints prints, PendingSaves saves, string folder)
+sealed class CaptureSaving(AppState state, Unpinning unpinning, PendingSaves saves, string folder)
 {
     /// <summary>
     /// Claims the capture's file name in the Captures folder and writes the
@@ -47,7 +48,7 @@ sealed class CaptureSaving(AppState state, Prints prints, PendingSaves saves, st
         {
             DevTrace.Write($"cannot save the capture {Path.GetFileName(path)}: {e.Message}");
             RemovePartial(path);
-            prints.RemovePath(path);
+            unpinning.RemovePath(path, Removal.Quiet);
         }
         finally
         {

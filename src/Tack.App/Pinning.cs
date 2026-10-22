@@ -18,7 +18,7 @@ namespace Tack.App;
 /// shortcut, and what the user had on it before is put back.
 /// </summary>
 /// <param name="owner">The host window, named as the one holding the clipboard open.</param>
-sealed class Pinning(AppState state, Prints prints, CaptureFlow captures, Reveal reveal, string notesFolder, nint owner)
+sealed class Pinning(AppState state, Prints prints, CaptureFlow captures, Reveal reveal, Notices notices, string notesFolder, nint owner)
 {
     /// <summary>
     /// Set while a selection is pinned: one at a time, and a press meanwhile is
@@ -34,6 +34,10 @@ sealed class Pinning(AppState state, Prints prints, CaptureFlow captures, Reveal
         SelectionGrab.MaskMenu();
         Background.Run("pinning the selection", () => PinSelectionAsync(target));
     }
+
+    /// <summary>Text dropped on the board: pinned as a note (a link if it is one), on the thread pool since it writes a file.</summary>
+    public void PinDroppedText(string text) =>
+        Background.Run("pinning dropped text", async () => DevTrace.Write($"dropped text: {await PinTextAsync(text).ConfigureAwait(false)}"));
 
     /// <summary>Copies the selection in <paramref name="target"/> and pins what it was. Takes up to about two seconds.</summary>
     async Task PinSelectionAsync(Target? target)
@@ -51,7 +55,7 @@ sealed class Pinning(AppState state, Prints prints, CaptureFlow captures, Reveal
             {
                 DevTrace.Write($"the clipboard could not be put back as it was: {failed.Why}");
                 // Last, so it is the notice that stays: the next paste will not be what the user expects.
-                Notices.Show(Notices.NotRestored);
+                notices.Show(Notices.NotRestored);
             }
             DevTrace.Write($"pin selection: {outcome}; clipboard {Describe(grab.Clipboard)}");
         }
@@ -66,26 +70,26 @@ sealed class Pinning(AppState state, Prints prints, CaptureFlow captures, Reveal
         switch (what)
         {
             case ClipboardContent.TextContent text:
-                return PinText(text.Text);
+                return await PinTextAsync(text.Text).ConfigureAwait(false);
             case ClipboardContent.PictureContent picture:
                 return $"picture: {await captures.PinPictureAsync(picture.Picture).ConfigureAwait(false)}";
             case ClipboardContent.FilesContent files:
                 return await PinFilesAsync(files.Paths).ConfigureAwait(false);
             case ClipboardContent.PrivateContent:
-                Notices.Show(Notices.Private);
+                notices.Show(Notices.Private);
                 return "private, not pinned";
             default:
-                Notices.Show(Notices.NothingSelected);
+                notices.Show(Notices.NothingSelected);
                 return "nothing selected";
         }
     }
 
     /// <summary>Pins <paramref name="text"/> as a note (a link if it is one), live. Returns what happened, for the trace.</summary>
-    string PinText(string text)
+    async Task<string> PinTextAsync(string text)
     {
         if (NoteText.Body(text) is not { } body)
         {
-            Notices.Show(Notices.NothingSelected);
+            notices.Show(Notices.NothingSelected);
             return "blank text";
         }
         bool pinned;
@@ -95,7 +99,7 @@ sealed class Pinning(AppState state, Prints prints, CaptureFlow captures, Reveal
         }
         if (pinned)
         {
-            Notices.Show(Notices.AlreadyPinned);
+            notices.Show(Notices.AlreadyPinned);
             return "already pinned";
         }
         string path;
@@ -106,17 +110,18 @@ sealed class Pinning(AppState state, Prints prints, CaptureFlow captures, Reveal
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             DevTrace.Write($"cannot save a note: {e.Message}");
-            Notices.Show(Notices.Failed);
+            notices.Show(Notices.Failed);
             return $"cannot save ({e.Message})";
         }
-        if (prints.PinNote(path, body, Prints.Live()) is PinOutcome.New)
+        if (prints.PinNote(path, body, Prints.Live()) is PinOutcome.New added)
         {
-            reveal.ForNew();
+            await reveal.ForNewAsync().ConfigureAwait(false);
+            prints.AnnounceLater(added.Aged);
             return $"{(body.Link is null ? "note" : "link")} of {body.Text.EnumerateRunes().Count()} characters pinned";
         }
         // Never shown: the same text was pinned a moment ago.
         DeleteUnshown(path);
-        Notices.Show(Notices.AlreadyPinned);
+        notices.Show(Notices.AlreadyPinned);
         return "already pinned";
     }
 
@@ -126,10 +131,11 @@ sealed class Pinning(AppState state, Prints prints, CaptureFlow captures, Reveal
         var images = PinnableFiles.Among(paths);
         if (images.Count == 0)
         {
-            Notices.Show(Notices.NotPinnable);
+            notices.Show(Notices.NotPinnable);
             return $"{paths.Count} file(s), none of them PNG or JPEG";
         }
         var (pinned, already) = (0, 0);
+        var aged = new List<Print>();
         foreach (var path in images)
         {
             Thumb thumb;
@@ -143,17 +149,23 @@ sealed class Pinning(AppState state, Prints prints, CaptureFlow captures, Reveal
             }
             switch (prints.Pin(path, thumb, Origin.Folder, Prints.Live()))
             {
-                case PinOutcome.New: pinned++; break;
-                case PinOutcome.Exists: already++; break;
+                case PinOutcome.New added:
+                    pinned++;
+                    aged.AddRange(added.Aged);
+                    break;
+                case PinOutcome.Exists:
+                    already++;
+                    break;
             }
         }
         if (pinned > 0)
         {
-            reveal.ForNew();
+            await reveal.ForNewAsync().ConfigureAwait(false);
+            prints.AnnounceLater(aged);
         }
         else
         {
-            Notices.Show(already > 0 ? Notices.AlreadyPinned : Notices.BadImage);
+            notices.Show(already > 0 ? Notices.AlreadyPinned : Notices.BadImage);
         }
         return $"{pinned} of {paths.Count} file(s) pinned";
     }

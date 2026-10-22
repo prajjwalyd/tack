@@ -48,6 +48,20 @@ public sealed class FolderEvents
     /// <summary>A file went: only a pinned one matters.</summary>
     public FileStep Gone(Board board, string path) => board.FindPath(path) != null ? FileStep.CheckGone : FileStep.Ignore;
 
+    /// <summary>
+    /// One of Tack's own files (a capture or a note), which no folder watch
+    /// follows, looked at as the board comes down: drawn with stamp
+    /// <paramref name="old"/>, and <paramref name="now"/> now. Gone, it is
+    /// checked as a pinned file that went; changed, it is redrawn.
+    /// </summary>
+    public FileStep Owned(Board board, string path, FileStamp? old, FileStamp? now) =>
+        (old, now) switch
+        {
+            ({ }, null) => Gone(board, path),
+            _ when now != old => Changed(board, path),
+            _ => FileStep.Ignore,
+        };
+
     /// <summary>The file is no longer in hand: decoded, or its settle is over.</summary>
     public void Finished(string path) => _inHand.Remove(PathRules.Key(path));
 

@@ -1,3 +1,5 @@
+using Tack.App.Pinboard.Contract;
+using Tack.Core.Captures;
 using Tack.Core.Diagnostics;
 using Tack.Core.Files;
 using Tack.Core.Notes;
@@ -13,11 +15,13 @@ namespace Tack.App;
 /// Screenshot files: what a change in the Screenshots folder means for the
 /// board (see <see cref="FolderEvents"/>). New image files get pinned and the
 /// board peeks out; an edit to a pinned file redraws its print; a pinned file
-/// deleted or moved elsewhere is unpinned. The watch reports on the thread
-/// pool; each change is judged under the app's lock and the slow part
-/// (decoding, a grace period) runs on as background work.
+/// deleted or moved elsewhere is unpinned with a short fade. Tack's own files
+/// have no watch: each reveal looks them over instead (<see cref="CheckOwned"/>).
+/// The watch reports on the thread pool; each change is judged under the
+/// app's lock and the slow part (decoding, a grace period) runs on as
+/// background work.
 /// </summary>
-sealed class ScreenshotFiles(AppState state, Prints prints, Reveal reveal) : IDisposable
+sealed class ScreenshotFiles(AppState state, Prints prints, Unpinning unpinning, PendingSaves saves, Reveal reveal) : IDisposable
 {
     FolderWatch? _watch;
 
@@ -37,6 +41,35 @@ sealed class ScreenshotFiles(AppState state, Prints prints, Reveal reveal) : IDi
         _watch.Ended += () => DevTrace.Write($"screenshots: {folder} went away; no longer watching it");
     }
 
+    /// <summary>
+    /// Looks Tack's own files over, as the board comes down (on the thread
+    /// pool): a pinned capture or note edited or deleted elsewhere is treated
+    /// as the watch would treat a screenshot file. A capture still being
+    /// written is left alone.
+    /// </summary>
+    public void CheckOwned()
+    {
+        List<(string Path, FileStamp? Stamp)> owned;
+        lock (state.Gate)
+        {
+            owned = [.. state.Board.Prints.Where(p => p.Owned).Select(p => (p.Path, p.Stamp))];
+        }
+        foreach (var (path, old) in owned)
+        {
+            if (saves.IsSaving(path))
+            {
+                continue;
+            }
+            var now = FileStamp.Of(path);
+            FileStep step;
+            lock (state.Gate)
+            {
+                step = state.Files.Owned(state.Board, path, old, now);
+            }
+            Take(step, path);
+        }
+    }
+
     void OnChanged(FolderChange change, string path)
     {
         FileStep step;
@@ -49,6 +82,11 @@ sealed class ScreenshotFiles(AppState state, Prints prints, Reveal reveal) : IDi
                 _ => state.Files.Changed(state.Board, path),
             };
         }
+        Take(step, path);
+    }
+
+    void Take(FileStep step, string path)
+    {
         switch (step)
         {
             case FileStep.Pin:
@@ -83,9 +121,10 @@ sealed class ScreenshotFiles(AppState state, Prints prints, Reveal reveal) : IDi
                 state.Files.Finished(path);
             }
         }
-        if (prints.Pin(path, thumb, Origin.Folder, Prints.Live()) is PinOutcome.New)
+        if (prints.Pin(path, thumb, Origin.Folder, Prints.Live()) is PinOutcome.New added)
         {
-            reveal.ForNew();
+            await reveal.ForNewAsync().ConfigureAwait(false);
+            prints.AnnounceLater(added.Aged);
         }
     }
 
@@ -110,7 +149,7 @@ sealed class ScreenshotFiles(AppState state, Prints prints, Reveal reveal) : IDi
         }
         else
         {
-            prints.RemovePath(path);
+            unpinning.RemovePath(path, Removal.Quiet);
         }
     }
 
@@ -128,18 +167,10 @@ sealed class ScreenshotFiles(AppState state, Prints prints, Reveal reveal) : IDi
             switch (what)
             {
                 case Kind.Note:
-                    var body = NoteFiles.Read(path);
-                    lock (state.Gate)
-                    {
-                        state.Board.UpdateNote(path, body);
-                    }
+                    prints.UpdateNote(path, NoteFiles.Read(path));
                     break;
                 case Kind.Image:
-                    var thumb = await Thumbs.MakePatientlyAsync(path, FolderEvents.WritePatience).ConfigureAwait(false);
-                    lock (state.Gate)
-                    {
-                        state.Board.UpdateThumb(path, thumb);
-                    }
+                    prints.UpdateThumb(path, await Thumbs.MakePatientlyAsync(path, FolderEvents.WritePatience).ConfigureAwait(false));
                     break;
             }
         }

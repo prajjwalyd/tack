@@ -84,8 +84,26 @@ sealed class Storage
     /// </summary>
     void SweepInBackground(List<string> keep, DateTime cutoff) => Background.Run("the leftover sweep", () =>
     {
+        if (SweepOffForDevelopment())
+        {
+            return;
+        }
         var captures = Sweep.Captures(Paths.Captures, keep, cutoff, Bin);
         var notes = NoteFiles.Sweep(Paths.Notes, keep, cutoff, Bin);
         DevTrace.Write($"sweep: {captures.Count} leftover capture(s) and {notes.Count} note(s) moved to the Recycle Bin");
     });
+
+    /// <summary>
+    /// Development builds: TACK_DEBUG_NO_SWEEP=1 leaves leftovers alone, for runs
+    /// on a throwaway copy of the data (the board-picture script) whose sweep
+    /// would otherwise fill the real Recycle Bin.
+    /// </summary>
+    static bool SweepOffForDevelopment()
+    {
+#if DEBUG
+        return Environment.GetEnvironmentVariable("TACK_DEBUG_NO_SWEEP") == "1";
+#else
+        return false;
+#endif
+    }
 }

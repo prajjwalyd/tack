@@ -83,6 +83,38 @@ public class FolderEventsTests
     }
 
     [Fact]
+    public void Tacks_own_file_deleted_elsewhere_is_checked_as_gone()
+    {
+        var (board, events) = (BoardWithOne(), new FolderEvents());
+        var stamp = new FileStamp(new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc), 100);
+
+        Assert.Equal(FileStep.CheckGone, events.Owned(board, Pinned, stamp, null));
+    }
+
+    [Fact]
+    public void Tacks_own_file_edited_elsewhere_is_redrawn_once()
+    {
+        var (board, events) = (BoardWithOne(), new FolderEvents());
+        var stamp = new FileStamp(new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc), 100);
+
+        Assert.Equal(FileStep.Redraw, events.Owned(board, Pinned, stamp, stamp with { Length = 120 }));
+        Assert.Equal(FileStep.Ignore, events.Owned(board, Pinned, stamp, stamp with { Length = 140 }));
+        events.Finished(Pinned);
+        Assert.Equal(FileStep.Redraw, events.Owned(board, Pinned, null, stamp));
+    }
+
+    [Fact]
+    public void Tacks_own_file_as_it_was_drawn_is_left_alone()
+    {
+        var (board, events) = (BoardWithOne(), new FolderEvents());
+        var stamp = new FileStamp(new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc), 100);
+
+        Assert.Equal(FileStep.Ignore, events.Owned(board, Pinned, stamp, stamp));
+        Assert.Equal(FileStep.Ignore, events.Owned(board, Pinned, null, null));
+        Assert.Equal(FileStep.Ignore, events.Owned(board, Fresh, stamp, stamp with { Length = 1 }));
+    }
+
+    [Fact]
     public void A_print_whose_file_is_unchanged_is_not_redrawn()
     {
         var stamp = new FileStamp(new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc), 100);

@@ -10,12 +10,28 @@ namespace Tack.App;
 /// Puts last session's prints and notes back at startup, as they were (kept or
 /// not, in their old order), then saves board.json once. Until then every save
 /// still lists the prints not put back yet, so a quit or crash halfway forgets
-/// none of them.
+/// none of them. Each print reaches the board as it comes back, without a
+/// pin-on, while the board is still hidden.
 /// </summary>
 sealed class Restore(AppState state, Prints prints, string notesFolder)
 {
+    readonly TaskCompletionSource _done = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Finishes once the restore is over, whether or not every print came back.</summary>
+    public Task Done => _done.Task;
+
     /// <summary>Starts the restore in the background, then checks the history once for anything that grew too old meanwhile.</summary>
-    public void Start() => Background.Run("restoring the board", RunAsync);
+    public void Start() => Background.Run("restoring the board", async () =>
+    {
+        try
+        {
+            await RunAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _done.TrySetResult();
+        }
+    });
 
     async Task RunAsync()
     {
@@ -45,13 +61,12 @@ sealed class Restore(AppState state, Prints prints, string notesFolder)
             var arrival = new Arrival.Restored(print.PinnedAt, print.KeptAt);
             try
             {
-                if (print.Kind == Kind.Note)
+                var pinned = print.Kind == Kind.Note
+                    ? prints.PinNote(print.Path, NoteFiles.Read(print.Path), arrival)
+                    : prints.Pin(print.Path, await Thumbs.MakeAsync(print.Path).ConfigureAwait(false), print.Origin, arrival);
+                if (pinned is PinOutcome.New added)
                 {
-                    prints.PinNote(print.Path, NoteFiles.Read(print.Path), arrival);
-                }
-                else
-                {
-                    prints.Pin(print.Path, await Thumbs.MakeAsync(print.Path).ConfigureAwait(false), print.Origin, arrival);
+                    prints.Announce(added.Aged);
                 }
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)

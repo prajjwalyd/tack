@@ -1,7 +1,9 @@
 using System.Threading.Channels;
+using Tack.App.Pinboard.Contract;
 using Tack.Core.Captures;
 using Tack.Core.Diagnostics;
 using Tack.Core.Prints;
+using Tack.Core.Reveal;
 using Tack.Windows.Capture;
 using Tack.Windows.Host;
 using Tack.Windows.Imaging;
@@ -17,7 +19,7 @@ namespace Tack.App;
 /// board from there, and its file is written in the background
 /// (<see cref="CaptureSaving"/>) while it is pinned.
 /// </summary>
-sealed class CaptureFlow(Prints prints, CaptureSaving saving, PendingSaves saves, Reveal reveal) : IDisposable
+sealed class CaptureFlow(AppState state, Prints prints, OwnedFiles files, CaptureSaving saving, PendingSaves saves, Reveal reveal) : IDisposable
 {
     /// <summary>Captures in the order they came, pinned one at a time by one reader.</summary>
     readonly Channel<Snip> _snips = Channel.CreateUnbounded<Snip>(new UnboundedChannelOptions { SingleReader = true });
@@ -87,10 +89,10 @@ sealed class CaptureFlow(Prints prints, CaptureSaving saving, PendingSaves saves
         }
         catch (InvalidDataException e)
         {
-            prints.DiscardCaptures([path]);
+            files.Discard([path]);
             return $"ignored (cannot draw: {e.Message})";
         }
-        return PinSaved(path, pictures, await FoundAsync(lookup).ConfigureAwait(false));
+        return await PinSavedAsync(path, pictures, await FoundAsync(lookup).ConfigureAwait(false)).ConfigureAwait(false);
     }
 
     /// <summary>The lookup's answer; null when there was none to make, or it failed.</summary>
@@ -115,20 +117,39 @@ sealed class CaptureFlow(Prints prints, CaptureSaving saving, PendingSaves saves
         }
     }
 
-    /// <summary>Pins a capture (saved, or still being saved) and, if it is new, brings the board down.</summary>
-    string PinSaved(string path, FlightPicture pictures, Lookup? lookup)
+    /// <summary>
+    /// Pins a capture (saved, or still being saved) and, if it is new, brings
+    /// the board down: on the monitor where it was taken, flying in from there,
+    /// when it came with a place, unless something is full screen; otherwise as
+    /// for any new screenshot.
+    /// </summary>
+    async Task<string> PinSavedAsync(string path, FlightPicture pictures, Lookup? lookup)
     {
-        switch (prints.Pin(path, pictures.Thumb, Origin.Capture, Prints.Live()))
+        var (place, flight, quietly) = (default(Placement), default(Flight), false);
+        if (lookup is { } found)
         {
-            case PinOutcome.New:
-                if (lookup is { } from)
+            if (await reveal.MayRevealNewAsync().ConfigureAwait(false))
+            {
+                place = Placement.At(found.Rect.Center.X, found.Rect.Center.Y);
+                flight = FlightFrom(found, place, pictures.Jpeg);
+            }
+            else
+            {
+                quietly = true;
+            }
+        }
+        switch (prints.Pin(path, pictures.Thumb, Origin.Capture, Prints.Live(), flight))
+        {
+            case PinOutcome.New added:
+                if (place is not null)
                 {
-                    reveal.FlyIn(from.Rect, pictures.Jpeg);
+                    reveal.FlyIn(place);
                 }
-                else
+                else if (!quietly)
                 {
-                    reveal.ForNew();
+                    await reveal.ForNewAsync().ConfigureAwait(false);
                 }
+                prints.AnnounceLater(added.Aged);
                 return "new";
             case PinOutcome.Duplicate:
                 // The auto-saved file got there first and is the one to keep. The
@@ -141,8 +162,26 @@ sealed class CaptureFlow(Prints prints, CaptureSaving saving, PendingSaves saves
                 // A merge pins the incoming file in its twin's place, so it stays.
                 return "merged";
             default:
-                prints.DiscardCaptures([path]);
+                files.Discard([path]);
                 return "duplicate";
+        }
+    }
+
+    /// <summary>
+    /// The capture's flight from where it was taken, relative to the board's
+    /// window at <paramref name="place"/>, with the speed as it is now and the
+    /// one-time tip if it has not been shown yet.
+    /// </summary>
+    Flight FlightFrom(Lookup lookup, Placement place, byte[] jpeg)
+    {
+        lock (state.Gate)
+        {
+            return new Flight(
+                lookup.Rect.ToLogical(place.Position, place.Scale),
+                jpeg,
+                Found: lookup.Found is not null,
+                Tip: !state.Settings.SnipTipShown,
+                MotionScale: state.Settings.Reveal.MotionScale());
         }
     }
 

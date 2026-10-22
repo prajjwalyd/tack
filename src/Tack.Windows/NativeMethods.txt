@@ -3,6 +3,7 @@ AppendMenu
 AttachThreadInput
 BitBlt
 BringWindowToTop
+CallWindowProc
 CloseClipboard
 CloseHandle
 CoCreateInstance
@@ -10,6 +11,7 @@ CoTaskMemFree
 CreateCompatibleDC
 CreateDIBSection
 CreatePopupMenu
+CreateRectRgn
 CreateToolhelp32Snapshot
 CreateWindowEx
 DefWindowProc
@@ -20,15 +22,20 @@ DestroyMenu
 DestroyWindow
 DispatchMessage
 DragQueryFile
+DwmEnableBlurBehindWindow
+DwmExtendFrameIntoClientArea
 DwmGetWindowAttribute
+DwmSetWindowAttribute
 EmptyClipboard
 EnumClipboardFormats
 EnumDisplayMonitors
 EnumWindows
+FillRect
 FindWindowEx
 GetAncestor
 GetAsyncKeyState
 GetClassName
+GetClientRect
 GetClipboardData
 GetClipboardFormatName
 GetClipboardOwner
@@ -40,6 +47,7 @@ GetCursorPos
 GetDC
 GetDpiForMonitor
 GetDpiForSystem
+GetDpiForWindow
 GetForegroundWindow
 GetMessage
 GetModuleHandle
@@ -73,6 +81,7 @@ OleUninitialize
 OpenClipboard
 OpenProcess
 PeekMessage
+PlaySound
 PostMessage
 PostThreadMessage
 Process32FirstW
@@ -102,6 +111,7 @@ Shell_NotifyIcon
 SHGetKnownFolderPath
 ShowWindow
 SHQueryUserNotificationState
+SystemParametersInfo
 TrackPopupMenu
 UnregisterClass
 UnregisterHotKey
@@ -114,6 +124,11 @@ CLIPBOARD_FORMAT
 CLSID_DragDropHelper
 DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
 DPI_AWARENESS_CONTEXT_UNAWARE
+DWM_BB_BLURREGION
+DWM_BB_ENABLE
+DWM_WINDOW_CORNER_PREFERENCE
+DWMWA_COLOR_NONE
+DWMWINDOWATTRIBUTE
 E_ABORT
 E_NOINTERFACE
 FileOperation
@@ -136,10 +151,13 @@ WM_APP
 WM_CLIPBOARDUPDATE
 WM_DISPLAYCHANGE
 WM_DPICHANGED
+WM_DWMCOMPOSITIONCHANGED
+WM_ERASEBKGND
 WM_HOTKEY
 WM_LBUTTONUP
 WM_MOUSEACTIVATE
 WM_MOUSEMOVE
+WM_NCDESTROY
 WM_NULL
 WM_QUIT
 WM_RBUTTONUP
