@@ -6,4 +6,8 @@
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tack.Core.Tests" />
+  </ItemGroup>
+
 </Project>

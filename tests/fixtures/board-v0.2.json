@@ -1,0 +1,51 @@
+{
+  "version": 3,
+  "prints": [
+    {
+      "path": "C:\\Users\\me\\Pictures\\Screenshots\\kept.png",
+      "capture": false,
+      "pinnedAt": 1790000001000,
+      "kept": true,
+      "keptAt": 1790000002000
+    },
+    {
+      "path": "C:\\Users\\me\\AppData\\Local\\Tack\\Notes\\Note 2026-10-08 023224.txt",
+      "kind": "note",
+      "capture": true,
+      "pinnedAt": 1790000003000,
+      "kept": false,
+      "keptAt": null
+    },
+    {
+      "path": "C:\\Users\\me\\AppData\\Local\\Tack\\Captures\\Screenshot 2026-10-08 023223.png",
+      "capture": true,
+      "pinnedAt": 1790000000000,
+      "kept": false,
+      "keptAt": null
+    }
+  ],
+  "sound": true,
+  "edgeReveal": true,
+  "reveal": "normal",
+  "appearance": {
+    "felt": "green",
+    "frame": "aluminium",
+    "paper": "white"
+  },
+  "updates": {
+    "check": true
+  },
+  "snipTipShown": true,
+  "toggleShortcut": "Win+Alt+S",
+  "pinShortcut": "Win+Alt+C",
+  "phone": {
+    "on": true,
+    "devices": [
+      {
+        "key": "cGl4ZWw=",
+        "name": "pixel",
+        "approvedAt": 1790000004000
+      }
+    ]
+  }
+}

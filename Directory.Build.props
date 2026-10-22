@@ -8,8 +8,8 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest</AnalysisLevel>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- Public members are documented where it helps, not everywhere. -->
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- Members and parameters are documented where it helps, not everywhere. -->
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
 
     <Product>Tack</Product>
     <Authors>The Tack contributors</Authors>
