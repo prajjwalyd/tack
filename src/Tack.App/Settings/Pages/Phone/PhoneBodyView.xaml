@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The body of the phone page under its switch: what is needed (NetBird), a quiet line, or the QR code
+     and address once the board is being served. One of them shows at a time. -->
+<UserControl
+    x:Class="Tack.App.Settings.Pages.Phone.PhoneBodyView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <!-- NetBird is not installed. -->
+        <Border x:Name="GetNetBirdCard" Style="{StaticResource SettingsCard}" Visibility="Collapsed">
+            <StackPanel Style="{StaticResource SettingsBlock}" Spacing="10">
+                <TextBlock x:Name="GetNetBirdText" Style="{StaticResource BodyTextBlockStyle}" FontSize="13" TextWrapping="Wrap" />
+                <Button x:Name="GetNetBird" Content="Get NetBird" Style="{StaticResource AccentButtonStyle}" />
+                <TextBlock Text="Then turn this on." Style="{StaticResource SettingsRowDescription}" Margin="0,-2,0,0" />
+            </StackPanel>
+        </Border>
+
+        <!-- Off, or getting ready: a quiet line. -->
+        <TextBlock x:Name="Quiet" Margin="2,0" Style="{StaticResource BodyTextBlockStyle}" FontSize="13" TextWrapping="Wrap"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="Collapsed" />
+
+        <!-- NetBird is not connected on this PC. -->
+        <Border x:Name="NoteCard" Style="{StaticResource SettingsCard}" Visibility="Collapsed">
+            <TextBlock x:Name="NoteText" Margin="16,12,16,14" Style="{StaticResource BodyTextBlockStyle}" FontSize="13" TextWrapping="Wrap" />
+        </Border>
+
+        <!-- Being served: the code, black on white in every theme so it scans, and the address. -->
+        <Border x:Name="ShareCard" Style="{StaticResource SettingsCard}" Visibility="Collapsed">
+            <StackPanel Style="{StaticResource SettingsBlock}" Spacing="8" HorizontalAlignment="Stretch">
+                <Border x:Name="QrTile" Width="164" Height="164" Padding="8" CornerRadius="8" HorizontalAlignment="Center"
+                        Background="White" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                    <Path x:Name="QrPath" Fill="Black" Stretch="Uniform" />
+                </Border>
+                <TextBlock x:Name="ScanText" HorizontalAlignment="Center" Style="{StaticResource BodyStrongTextBlockStyle}" FontSize="13" />
+                <Border Padding="12,4,4,4" CornerRadius="6" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="Address" VerticalAlignment="Center" Style="{StaticResource BodyTextBlockStyle}" FontSize="13"
+                                   TextWrapping="Wrap" IsTextSelectionEnabled="True" AutomationProperties.Name="Address" />
+                        <Button x:Name="Copy" Grid.Column="1" Content="Copy" MinWidth="72" />
+                    </Grid>
+                </Border>
+                <TextBlock Text="Your phone needs the NetBird app, signed in to the same account." HorizontalAlignment="Center"
+                           TextAlignment="Center" Style="{StaticResource BodyTextBlockStyle}" FontSize="13" TextWrapping="Wrap"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+        </Border>
+
+        <!-- The board could not be served: why. -->
+        <Border x:Name="ProblemCard" Style="{StaticResource SettingsCard}" Visibility="Collapsed">
+            <Grid Padding="16,12" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <FontIcon Glyph="&#xE7BA;" FontSize="16" Margin="0,1,0,0" VerticalAlignment="Top"
+                          Foreground="{ThemeResource SystemFillColorCautionBrush}" AutomationProperties.AccessibilityView="Raw" />
+                <TextBlock x:Name="ProblemText" Grid.Column="1" Style="{StaticResource BodyTextBlockStyle}" FontSize="13" TextWrapping="Wrap"
+                           AutomationProperties.LiveSetting="Assertive" />
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

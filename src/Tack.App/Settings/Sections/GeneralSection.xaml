@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- General: the switches the tray's menu has too. -->
+<UserControl
+    x:Class="Tack.App.Settings.Sections.GeneralSection"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:Tack.App.Settings.Controls">
+    <StackPanel>
+        <TextBlock Text="General" Style="{StaticResource SettingsGroupTitle}" AutomationProperties.HeadingLevel="Level2" />
+        <Border Style="{StaticResource SettingsCard}">
+            <StackPanel>
+                <controls:SwitchRow x:Name="Sound" Title="Sound" Description="A soft sound when a snip is pinned." />
+                <Rectangle Style="{StaticResource SettingsDivider}" />
+                <controls:SwitchRow x:Name="EdgeReveal" Title="Reveal at top edge"
+                                    Description="Move the pointer to the top of the screen to show the board." />
+                <Rectangle Style="{StaticResource SettingsDivider}" />
+                <controls:SwitchRow x:Name="Autostart" Title="Start with Windows" Description="Open Tack when you sign in." />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

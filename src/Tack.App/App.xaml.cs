@@ -2,6 +2,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Tack.App.Pinboard;
 using Tack.App.Pinboard.Contract;
+using Tack.App.Settings;
 using Tack.Core;
 using Tack.Core.Captures;
 using Tack.Core.Diagnostics;
@@ -32,6 +33,7 @@ public partial class App : Application
     CaptureFlow? _captures;
     BoardWindow? _board;
     EdgePoller? _poller;
+    SettingsOpener? _settingsWindow;
 
     public App(AppIdentity identity, TackPaths paths)
     {
@@ -74,7 +76,9 @@ public partial class App : Application
         // day say if another app has one of them.
         _shortcuts = new Shortcuts(_host, settings, reveal, pinning);
         var autostart = Autostart.For(_identity);
-        _tray = new Tray(_host, _identity, autostart, reveal, unpinning, new SettingsChanges(state, reveal, feed), Quit);
+        var changes = new SettingsChanges(state, reveal, feed, _shortcuts, autostart, ui);
+        _settingsWindow = new SettingsOpener(state, changes, reveal);
+        _tray = new Tray(_host, _identity, reveal, unpinning, changes, _settingsWindow.Open, Quit);
         // Keeps the Run value pointing at this exe if it was moved, unless this
         // is a build tried out against other folders.
         if (!_paths.FromHome)
@@ -88,6 +92,7 @@ public partial class App : Application
         _captures.Start(_host);
         _poller = StartPoller(state, reveal, feed);
         DevBoardShot.Start(state, reveal, restore.Done);
+        DevSettingsShot.Start(_settingsWindow, ui);
     }
 
     /// <summary>What the board asks of the app, each command handed to the service that does it.</summary>
@@ -133,6 +138,7 @@ public partial class App : Application
     /// </summary>
     void Quit()
     {
+        _settingsWindow?.Close();
         _poller?.Dispose();
         _captures?.Dispose();
         _screenshots?.Dispose();

@@ -80,6 +80,7 @@ OleInitialize
 OleUninitialize
 OpenClipboard
 OpenProcess
+PrintWindow
 PeekMessage
 PlaySound
 PostMessage

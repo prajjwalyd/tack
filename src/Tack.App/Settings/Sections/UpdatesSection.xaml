@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Updates: this version, the check-when-Tack-starts switch, and a row saying how updates stand
+     with the one button that fits, a progress bar while it downloads, and the release notes. -->
+<UserControl
+    x:Class="Tack.App.Settings.Sections.UpdatesSection"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:Tack.App.Settings.Controls">
+    <UserControl.Resources>
+        <!-- The release notes open in place, as a quiet line inside the card rather than a card of their own.
+             The expander's own padding and height come from its template, so the rest is set on it. -->
+        <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="Transparent" />
+        <Thickness x:Key="ExpanderHeaderBorderThickness">0</Thickness>
+    </UserControl.Resources>
+    <StackPanel>
+        <TextBlock Text="Updates" Style="{StaticResource SettingsGroupTitle}" AutomationProperties.HeadingLevel="Level2" />
+        <Border Style="{StaticResource SettingsCard}">
+            <StackPanel>
+                <Grid Style="{StaticResource SettingsRow}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Tack" Style="{StaticResource SettingsRowTitle}" VerticalAlignment="Center" />
+                    <TextBlock x:Name="VersionText" Grid.Column="1" Style="{StaticResource SettingsRowValue}" IsTextSelectionEnabled="True" />
+                </Grid>
+                <Rectangle Style="{StaticResource SettingsDivider}" />
+                <controls:SwitchRow x:Name="CheckSwitch" Title="Check for updates when Tack starts"
+                                    Description="Tack looks for a new version once each time it starts." />
+                <Rectangle Style="{StaticResource SettingsDivider}" />
+                <Grid x:Name="StatusRow" Style="{StaticResource SettingsRow}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock x:Name="Headline" Style="{StaticResource SettingsRowTitle}" />
+                        <TextBlock x:Name="Sub" Style="{StaticResource SettingsRowDescription}" Visibility="Collapsed" />
+                    </StackPanel>
+                    <Button x:Name="ActionButton" Grid.Column="1" MinWidth="120" VerticalAlignment="Center" IsEnabled="False" />
+                    <ProgressBar x:Name="Meter" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,12,0,4" Maximum="100" Visibility="Collapsed"
+                                 AutomationProperties.Name="Download progress" />
+                    <Expander x:Name="Notes" Grid.Row="2" Grid.ColumnSpan="2" Margin="-16,4,0,0" Padding="16,0,0,4"
+                              MinHeight="32" Background="Transparent" BorderBrush="Transparent"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Visibility="Collapsed">
+                        <Expander.Header>
+                            <TextBlock x:Name="NotesTitle" Style="{StaticResource BodyTextBlockStyle}" FontSize="13"
+                                       Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                        </Expander.Header>
+                        <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="4">
+                            <ScrollViewer x:Name="NotesScroll" MaxHeight="132" Padding="10,8">
+                                <TextBlock x:Name="NotesText" Style="{StaticResource SettingsRowDescription}" IsTextSelectionEnabled="True" />
+                            </ScrollViewer>
+                        </Border>
+                    </Expander>
+                </Grid>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

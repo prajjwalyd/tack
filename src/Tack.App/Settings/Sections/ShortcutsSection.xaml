@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shortcuts: the two global shortcuts, each shown as keycaps in a field that listens for a new chord when chosen. -->
+<UserControl
+    x:Class="Tack.App.Settings.Sections.ShortcutsSection"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <TextBlock Text="Shortcuts" Style="{StaticResource SettingsGroupTitle}" AutomationProperties.HeadingLevel="Level2" />
+        <TextBlock x:Name="Intro" Text="Select a shortcut, then press the keys you want." Style="{StaticResource SettingsGroupDescription}" />
+        <Border Style="{StaticResource SettingsCard}">
+            <StackPanel>
+                <Grid Style="{StaticResource SettingsRow}" Padding="16,8,12,8" RowSpacing="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="ToggleLabel" Text="Show or hide the board" Style="{StaticResource SettingsRowTitle}" VerticalAlignment="Center" />
+                    <Border x:Name="ToggleRing" Grid.Column="1" Style="{StaticResource SettingsFieldRing}">
+                        <Button x:Name="ToggleField" Width="184" Height="36" Padding="3,0" CornerRadius="8" HorizontalContentAlignment="Center" />
+                    </Border>
+                    <StackPanel x:Name="ToggleStatusLine" Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="6" Visibility="Collapsed">
+                        <FontIcon Glyph="&#xE7BA;" FontSize="14" Foreground="{ThemeResource SystemFillColorCautionBrush}" VerticalAlignment="Top" Margin="0,1,0,0" />
+                        <TextBlock x:Name="ToggleStatus" Style="{StaticResource SettingsRowDescription}" />
+                    </StackPanel>
+                </Grid>
+                <Rectangle Style="{StaticResource SettingsDivider}" />
+                <Grid Style="{StaticResource SettingsRow}" Padding="16,8,12,8" RowSpacing="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="PinLabel" Text="Pin the selection" Style="{StaticResource SettingsRowTitle}" VerticalAlignment="Center" />
+                    <Border x:Name="PinRing" Grid.Column="1" Style="{StaticResource SettingsFieldRing}">
+                        <Button x:Name="PinField" Width="184" Height="36" Padding="3,0" CornerRadius="8" HorizontalContentAlignment="Center" />
+                    </Border>
+                    <StackPanel x:Name="PinStatusLine" Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="6" Visibility="Collapsed">
+                        <FontIcon Glyph="&#xE7BA;" FontSize="14" Foreground="{ThemeResource SystemFillColorCautionBrush}" VerticalAlignment="Top" Margin="0,1,0,0" />
+                        <TextBlock x:Name="PinStatus" Style="{StaticResource SettingsRowDescription}" />
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </Border>
+        <HyperlinkButton x:Name="Reset" Content="Reset to defaults" Margin="-4,8,0,0" IsEnabled="False" />
+    </StackPanel>
+</UserControl>

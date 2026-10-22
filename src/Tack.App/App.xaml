@@ -4,7 +4,13 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Application.Resources>
-        <!-- WinUI needs these even for a plain TextBlock: default fonts and styles live here. -->
-        <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- WinUI needs these even for a plain TextBlock: default fonts and styles live here. -->
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+                <!-- The Settings window's cards, rows and keycaps, for every section's XAML. -->
+                <ResourceDictionary Source="ms-appx:///Settings/SettingsStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Your devices": the ones allowed to use the board, each with Remove. Nothing shows when there are none. -->
+<UserControl
+    x:Class="Tack.App.Settings.Pages.Phone.DeviceList"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Visibility="Collapsed">
+    <StackPanel>
+        <TextBlock x:Name="Heading" Text="Your devices" Margin="2,0,2,6" Style="{StaticResource BodyStrongTextBlockStyle}" FontSize="13"
+                   AutomationProperties.HeadingLevel="Level2" />
+        <Border Style="{StaticResource SettingsCard}">
+            <StackPanel x:Name="Rows" />
+        </Border>
+    </StackPanel>
+</UserControl>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Speed: how soon the board appears and how quickly it and new screenshots move, as one choice of three. -->
+<UserControl
+    x:Class="Tack.App.Settings.Sections.SpeedSection"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <TextBlock x:Name="Heading" Text="Speed" Style="{StaticResource SettingsGroupTitle}" AutomationProperties.HeadingLevel="Level2" />
+        <Border Style="{StaticResource SettingsCard}">
+            <StackPanel Style="{StaticResource SettingsBlock}">
+                <TextBlock x:Name="Description" Style="{StaticResource SettingsRowDescription}"
+                           Text="How soon the board appears, and how quickly it and new screenshots move." />
+                <RadioButtons x:Name="Speeds" MaxColumns="3" AutomationProperties.Name="Speed">
+                    <RadioButton Content="Instant" />
+                    <RadioButton Content="Normal" />
+                    <RadioButton Content="Slow" />
+                </RadioButtons>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

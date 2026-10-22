@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A device asking to use the board: who it is, the code to compare with the phone's, Don't allow and Allow.
+     The one loud thing on the page: a solid card ringed in the accent colour. -->
+<UserControl
+    x:Class="Tack.App.Settings.Pages.Phone.AskCard"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    IsTabStop="True" UseSystemFocusVisuals="True">
+    <Border Padding="14,12,14,14" CornerRadius="8" BorderThickness="2"
+            Background="{ThemeResource SolidBackgroundFillColorTertiaryBrush}" BorderBrush="{ThemeResource AccentFillColorDefaultBrush}">
+        <StackPanel>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <!-- A shield with a tick, in a round tile washed with the accent colour. -->
+                <Grid Width="36" Height="36" VerticalAlignment="Top" AutomationProperties.AccessibilityView="Raw">
+                    <Ellipse Fill="{ThemeResource AccentFillColorDefaultBrush}" Opacity="0.15" />
+                    <Viewbox Width="20" Height="20">
+                        <Path Width="24" Height="24" Stroke="{ThemeResource AccentTextFillColorPrimaryBrush}" StrokeThickness="1.6"
+                              StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                              Data="M12 2.8 L19 5.4 V11 C19 15.4 16.2 19 12 21 C7.8 19 5 15.4 5 11 V5.4 Z M9 11.8 L11.2 14 L15.2 10" />
+                    </Viewbox>
+                </Grid>
+                <StackPanel Grid.Column="1">
+                    <TextBlock x:Name="Title" Style="{StaticResource SubtitleTextBlockStyle}" FontSize="16" LineHeight="22"
+                               TextWrapping="Wrap" AutomationProperties.HeadingLevel="Level2" />
+                    <TextBlock x:Name="Who" Margin="0,2,0,0" Style="{StaticResource SettingsRowDescription}" FontSize="13" LineHeight="18" />
+                </StackPanel>
+            </Grid>
+            <TextBlock Margin="0,10,0,0" Style="{StaticResource BodyTextBlockStyle}" FontSize="13" TextWrapping="Wrap">
+                <Run x:Name="CodeLead" /><Run x:Name="Code" FontFamily="Cascadia Mono, Consolas" FontSize="15" FontWeight="Bold" CharacterSpacing="120" />
+            </TextBlock>
+            <StackPanel Margin="0,12,0,0" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button x:Name="DontAllow" Content="Don't allow" MinWidth="96" />
+                <Button x:Name="Allow" Content="Allow" MinWidth="96" Style="{StaticResource AccentButtonStyle}" IsEnabled="False" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

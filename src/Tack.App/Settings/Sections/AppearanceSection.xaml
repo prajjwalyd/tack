@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Appearance: the board colour, the frame's finish and the note paper, each a card of swatches,
+     and Reset appearance under them. -->
+<UserControl
+    x:Class="Tack.App.Settings.Sections.AppearanceSection"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:appearance="using:Tack.App.Settings.Sections.Appearance">
+    <StackPanel>
+        <TextBlock Text="Appearance" Style="{StaticResource SettingsGroupTitle}" AutomationProperties.HeadingLevel="Level2" />
+        <StackPanel Spacing="8">
+            <appearance:SwatchCard x:Name="FeltCard" Heading="Board colour" />
+            <appearance:SwatchCard x:Name="FrameCard" Heading="Frame" />
+            <appearance:SwatchCard x:Name="PaperCard" Heading="Note paper" />
+        </StackPanel>
+        <HyperlinkButton x:Name="Reset" Content="Reset appearance" Margin="-4,8,0,0" IsEnabled="False" />
+    </StackPanel>
+</UserControl>

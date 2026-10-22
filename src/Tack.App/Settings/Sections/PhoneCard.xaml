@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Use on your phone: the card at the top of Settings. A status line with a dot that says at a glance
+     whether it is on, and the button that opens the phone page. -->
+<UserControl
+    x:Class="Tack.App.Settings.Sections.PhoneCard"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Style="{StaticResource SettingsCard}">
+        <Grid Padding="16,14" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="Use on your phone" Style="{StaticResource SubtitleTextBlockStyle}" FontSize="16"
+                           AutomationProperties.HeadingLevel="Level2" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <!-- One dot per tone, so each takes its colour from the theme the window is drawn in. -->
+                    <Ellipse x:Name="OkDot" Width="8" Height="8" Margin="0,5,6,0" VerticalAlignment="Top" Visibility="Collapsed"
+                             Fill="{ThemeResource SystemFillColorSuccessBrush}" AutomationProperties.AccessibilityView="Raw" />
+                    <Ellipse x:Name="AttentionDot" Width="8" Height="8" Margin="0,5,6,0" VerticalAlignment="Top" Visibility="Collapsed"
+                             Fill="{ThemeResource AccentFillColorDefaultBrush}" AutomationProperties.AccessibilityView="Raw" />
+                    <Ellipse x:Name="WarnDot" Width="8" Height="8" Margin="0,5,6,0" VerticalAlignment="Top" Visibility="Collapsed"
+                             Fill="{ThemeResource SystemFillColorCautionBrush}" AutomationProperties.AccessibilityView="Raw" />
+                    <TextBlock x:Name="Status" Grid.Column="1" Style="{StaticResource SettingsRowDescription}" FontSize="13" LineHeight="18" />
+                </Grid>
+            </StackPanel>
+            <Button x:Name="Open" Grid.Column="1" MinWidth="88" VerticalAlignment="Center" />
+        </Grid>
+    </Border>
+</UserControl>

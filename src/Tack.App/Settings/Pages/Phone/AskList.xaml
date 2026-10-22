@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The requests at the top of the phone page: a card per device asking. Nothing shows when nobody asks. -->
+<UserControl
+    x:Class="Tack.App.Settings.Pages.Phone.AskList"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    AutomationProperties.Name="Requests to use your board"
+    Visibility="Collapsed">
+    <StackPanel x:Name="Cards" Spacing="10" />
+</UserControl>
