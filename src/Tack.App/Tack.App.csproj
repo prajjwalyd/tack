@@ -41,6 +41,12 @@
     <EmbeddedResource Include="..\..\assets\board\sounds\*.wav" LogicalName="Tack.Sounds.%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!-- The phone board's page (Phone/PhonePageFiles), served from memory to the person's devices. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\assets\phone\index.html;..\..\assets\phone\phone.js;..\..\assets\phone\phone.css;..\..\assets\phone\icon.png"
+                      LogicalName="Tack.Phone.%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
     <PackageReference Include="Microsoft.WindowsAppSDK" />

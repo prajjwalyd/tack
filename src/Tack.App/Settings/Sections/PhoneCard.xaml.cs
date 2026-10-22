@@ -39,11 +39,13 @@ public sealed partial class PhoneCard : UserControl, ISettingsSection
         Refresh();
     }
 
-    /// <summary>Shows what <paramref name="link"/> tells from now on, rather than the saved settings alone.</summary>
+    /// <summary>
+    /// Shows what <paramref name="link"/> tells from now on, rather than the
+    /// saved settings alone. The window renders again on its changes.
+    /// </summary>
     internal void Use(IPhoneLink link)
     {
         _link = link;
-        link.Changed += Refresh;
         Refresh();
     }
 

@@ -31,6 +31,7 @@ EnumClipboardFormats
 EnumDisplayMonitors
 EnumWindows
 FillRect
+FlashWindowEx
 FindWindowEx
 GetAncestor
 GetAsyncKeyState
@@ -134,6 +135,7 @@ E_ABORT
 E_NOINTERFACE
 FileOperation
 FILEOPERATION_FLAGS
+FLASHWINFO_FLAGS
 FOLDERID_Screenshots
 HWND_TOPMOST
 IDataObject

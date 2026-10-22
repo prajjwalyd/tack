@@ -1,5 +1,6 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using Tack.App.Phone;
 using Tack.App.Pinboard;
 using Tack.App.Pinboard.Contract;
 using Tack.App.Settings;
@@ -34,6 +35,7 @@ public partial class App : Application
     BoardWindow? _board;
     EdgePoller? _poller;
     SettingsOpener? _settingsWindow;
+    PhoneLink? _phone;
 
     public App(AppIdentity identity, TackPaths paths)
     {
@@ -65,7 +67,8 @@ public partial class App : Application
         var saving = new CaptureSaving(state, unpinning, saves, _paths.Captures);
         _captures = new CaptureFlow(state, prints, files, saving, saves, reveal);
         var pinning = new Pinning(state, prints, _captures, reveal, notices, _paths.Notes, _host.Handle);
-        _board.Start(BoardActionsFor(state, saves, files, feed, ui, prints, unpinning, reveal, notices, pinning), feed);
+        var drops = new ImageDrops(prints, files, reveal, notices, _paths.Captures);
+        _board.Start(BoardActionsFor(state, saves, feed, ui, prints, unpinning, reveal, pinning, drops), feed);
 
         TackSettings settings;
         lock (state.Gate)
@@ -77,7 +80,10 @@ public partial class App : Application
         _shortcuts = new Shortcuts(_host, settings, reveal, pinning);
         var autostart = Autostart.For(_identity);
         var changes = new SettingsChanges(state, reveal, feed, _shortcuts, autostart, ui);
-        _settingsWindow = new SettingsOpener(state, changes, reveal);
+        _phone = new PhoneLink(changes, ui);
+        _settingsWindow = new SettingsOpener(state, changes, reveal, _phone);
+        // A device asking shows Settings at its question, without taking the keyboard.
+        _phone.DeviceAsks += () => _settingsWindow?.ShowQuietly(SettingsRoute.PhoneId);
         _tray = new Tray(_host, _identity, reveal, unpinning, changes, _settingsWindow.Open, Quit);
         // Keeps the Run value pointing at this exe if it was moved, unless this
         // is a build tried out against other folders.
@@ -90,6 +96,8 @@ public partial class App : Application
         _screenshots = new ScreenshotFiles(state, prints, unpinning, saves, reveal);
         _screenshots.Watch(ScreenshotsFolder.Find());
         _captures.Start(_host);
+        // Serves the board to the person's phone now if the switch was left on.
+        _phone.Start(new PhoneHost(state, saves, pinning, drops, _phone));
         _poller = StartPoller(state, reveal, feed);
         DevBoardShot.Start(state, reveal, restore.Done);
         DevSettingsShot.Start(_settingsWindow, ui);
@@ -97,8 +105,8 @@ public partial class App : Application
 
     /// <summary>What the board asks of the app, each command handed to the service that does it.</summary>
     BoardActions BoardActionsFor(
-        AppState state, PendingSaves saves, OwnedFiles files, BoardFeed feed, DispatcherQueue ui,
-        Prints prints, Unpinning unpinning, Reveal reveal, Notices notices, Pinning pinning)
+        AppState state, PendingSaves saves, BoardFeed feed, DispatcherQueue ui,
+        Prints prints, Unpinning unpinning, Reveal reveal, Pinning pinning, ImageDrops drops)
     {
         var window = _board!.Handle;
         var commands = new PrintCommands(state, saves, prints, feed);
@@ -111,7 +119,7 @@ public partial class App : Application
             new PrintMenu(state, commands, prints, unpinning, ui, window),
             new DragOutFlow(state, saves, unpinning, feed, ui, window),
             pinning,
-            new ImageDrops(prints, files, reveal, notices, _paths.Captures),
+            drops,
             new SnipTip(state));
     }
 
@@ -133,12 +141,14 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Stops taking in new prints, writes whatever save is still waiting (board.json
-    /// is written a moment after each change), and ends Tack.
+    /// Stops taking in new prints and serving the phone board, writes whatever
+    /// save is still waiting (board.json is written a moment after each change),
+    /// and ends Tack.
     /// </summary>
     void Quit()
     {
         _settingsWindow?.Close();
+        _phone?.Dispose();
         _poller?.Dispose();
         _captures?.Dispose();
         _screenshots?.Dispose();

@@ -67,7 +67,7 @@ sealed class SettingsChanges(AppState state, Reveal reveal, BoardFeed feed, Shor
     /// <summary>Look for a new version once when Tack starts.</summary>
     public void SetUpdatesCheck(bool on) => Change(s => s with { Updates = s.Updates with { Check = on } });
 
-    /// <summary>The phone board's switch, saved; serving it follows in phase 5.</summary>
+    /// <summary>The phone board's switch, saved; the phone link hears the change and starts or stops serving the board.</summary>
     public void SetPhoneOn(bool on) => Change(s => s with { Phone = s.Phone with { On = on } });
 
     /// <summary>Removes an allowed device: it has to ask again.</summary>

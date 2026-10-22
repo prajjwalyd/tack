@@ -7,29 +7,37 @@ using Tack.Windows.Imaging;
 namespace Tack.App;
 
 /// <summary>
-/// A picture dropped on the board: the bytes of a PNG or JPEG file, at most
-/// 40 MB (<see cref="DroppedImage"/>). Saved unchanged in Tack's Captures
-/// folder as "Image ..." and pinned like a capture, so it goes to the Recycle
-/// Bin when it leaves the board. Anything else gets a notice instead.
+/// A picture dropped on the board, or sent from the phone board: the bytes of
+/// a PNG or JPEG file, at most 40 MB (<see cref="DroppedImage"/>). Saved
+/// unchanged in Tack's Captures folder as "Image ..." and pinned like a
+/// capture, so it goes to the Recycle Bin when it leaves the board. Anything
+/// else gets a notice instead.
 /// </summary>
 sealed class ImageDrops(Prints prints, OwnedFiles files, Reveal reveal, Notices notices, string capturesFolder)
 {
     /// <summary>Pins the dropped picture; on the thread pool, since it decodes and writes a file.</summary>
-    public void Pin(string name, byte[] bytes) =>
-        Background.Run("pinning a dropped picture", async () => DevTrace.Write($"dropped picture: {await PinAsync(name, bytes).ConfigureAwait(false)}"));
+    public void Pin(string name, byte[] bytes) => Background.Run("pinning a dropped picture", () => PinAsync(name, bytes));
 
-    /// <summary>Returns what happened, for the trace.</summary>
-    async Task<string> PinAsync(string name, byte[] bytes)
+    /// <summary>Pins the picture where the caller is; true if it is on the board now. What happened goes to the trace.</summary>
+    public async Task<bool> PinAsync(string name, byte[] bytes)
+    {
+        var (pinned, what) = await TryPinAsync(name, bytes).ConfigureAwait(false);
+        DevTrace.Write($"pinned picture: {what}");
+        return pinned;
+    }
+
+    /// <summary>Whether it was pinned, and what happened, for the trace.</summary>
+    async Task<(bool Pinned, string What)> TryPinAsync(string name, byte[] bytes)
     {
         if (DroppedImage.TooLarge(bytes.LongLength))
         {
             notices.Show(Notices.BadImage);
-            return $"{name}: too large";
+            return (false, $"{name}: too large");
         }
         if (DroppedImage.Extension(bytes) is not { } extension)
         {
             notices.Show(Notices.BadImage);
-            return $"{name}: neither PNG nor JPEG";
+            return (false, $"{name}: neither PNG nor JPEG");
         }
         Thumb thumb;
         try
@@ -39,7 +47,7 @@ sealed class ImageDrops(Prints prints, OwnedFiles files, Reveal reveal, Notices 
         catch (InvalidDataException e)
         {
             notices.Show(Notices.BadImage);
-            return $"{name}: cannot decode ({e.Message})";
+            return (false, $"{name}: cannot decode ({e.Message})");
         }
         string path;
         try
@@ -49,15 +57,15 @@ sealed class ImageDrops(Prints prints, OwnedFiles files, Reveal reveal, Notices 
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             notices.Show(Notices.Failed);
-            return $"{name}: cannot save ({e.Message})";
+            return (false, $"{name}: cannot save ({e.Message})");
         }
         if (prints.Pin(path, thumb, Origin.Capture, Prints.Live()) is PinOutcome.New added)
         {
             await reveal.ForNewAsync().ConfigureAwait(false);
             prints.AnnounceLater(added.Aged);
-            return $"{name}: pinned";
+            return (true, $"{name}: pinned");
         }
         files.Discard([path]);
-        return $"{name}: not pinned";
+        return (false, $"{name}: not pinned");
     }
 }

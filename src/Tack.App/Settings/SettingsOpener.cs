@@ -1,4 +1,5 @@
 using Tack.Core.Geometry;
+using Tack.Core.Phone;
 using Tack.Core.Settings;
 using Tack.Windows.Windowing;
 using Windows.Graphics;
@@ -11,7 +12,8 @@ namespace Tack.App.Settings;
 /// Created while open: closing it lets the window and its pages go. UI thread
 /// only.
 /// </summary>
-sealed class SettingsOpener(AppState state, SettingsChanges settings, Reveal reveal)
+/// <param name="phone">The phone board, which the phone card and page show.</param>
+sealed class SettingsOpener(AppState state, SettingsChanges settings, Reveal reveal, IPhoneLink phone)
 {
     SettingsWindow? _window;
 
@@ -38,12 +40,14 @@ sealed class SettingsOpener(AppState state, SettingsChanges settings, Reveal rev
     /// Shows the window at <paramref name="section"/> without taking the
     /// keyboard, so a key the person was about to press elsewhere cannot answer
     /// what it shows; it does not hold the board, having no focus. A window that
-    /// is open stays where it is. For a device asking to use the board (phase 5).
+    /// is open stays where it is and flashes its taskbar button instead, as Tack
+    /// 0.2 asked for attention. For a device asking to use the board.
     /// </summary>
     public void ShowQuietly(string section)
     {
         if (_window is not null)
         {
+            Attention.Ask(_window.Handle);
             return;
         }
         var window = Create();
@@ -57,7 +61,7 @@ sealed class SettingsOpener(AppState state, SettingsChanges settings, Reveal rev
 
     SettingsWindow Create()
     {
-        var window = new SettingsWindow(settings, reveal);
+        var window = new SettingsWindow(settings, reveal, phone);
         window.Closed += (_, _) => _window = null;
         _window = window;
         return window;

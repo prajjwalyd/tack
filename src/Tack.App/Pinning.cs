@@ -39,6 +39,14 @@ sealed class Pinning(AppState state, Prints prints, CaptureFlow captures, Reveal
     public void PinDroppedText(string text) =>
         Background.Run("pinning dropped text", async () => DevTrace.Write($"dropped text: {await PinTextAsync(text).ConfigureAwait(false)}"));
 
+    /// <summary>
+    /// Text sent from the phone board: pinned as a note (a link if it is one),
+    /// with the same notices and reveal as the pin shortcut. Finishes once it is
+    /// pinned or turned away.
+    /// </summary>
+    public async Task PinPhoneTextAsync(string text) =>
+        DevTrace.Write($"phone text: {await PinTextAsync(text).ConfigureAwait(false)}");
+
     /// <summary>Copies the selection in <paramref name="target"/> and pins what it was. Takes up to about two seconds.</summary>
     async Task PinSelectionAsync(Target? target)
     {

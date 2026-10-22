@@ -45,12 +45,14 @@ public sealed partial class PhonePage : UserControl, ISettingsSection
         Refresh();
     }
 
-    /// <summary>Shows what <paramref name="link"/> tells from now on, and answers requests through it.</summary>
+    /// <summary>
+    /// Shows what <paramref name="link"/> tells from now on, and answers requests
+    /// through it. The window renders again on its changes.
+    /// </summary>
     internal void Use(IPhoneLink link)
     {
         _link = link;
         Asks.Use(link);
-        link.Changed += Refresh;
         Refresh();
     }
 

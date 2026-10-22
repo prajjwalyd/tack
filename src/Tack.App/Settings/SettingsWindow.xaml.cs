@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Tack.Core.Phone;
 using Tack.Core.Settings;
 using Windows.System;
 using CoreVirtualKeyStates = Windows.UI.Core.CoreVirtualKeyStates;
@@ -23,15 +24,17 @@ public sealed partial class SettingsWindow : Window
 
     readonly SettingsChanges _settings;
     readonly Reveal _reveal;
+    readonly IPhoneLink _phone;
     readonly SettingsContext _context;
     readonly ISettingsSection[] _sections;
     bool _loaded;
     bool _active;
     string? _wanted;
 
-    internal SettingsWindow(SettingsChanges settings, Reveal reveal)
+    /// <param name="phone">The phone board: the phone card and page show it, and render again when it changes.</param>
+    internal SettingsWindow(SettingsChanges settings, Reveal reveal, IPhoneLink phone)
     {
-        (_settings, _reveal) = (settings, reveal);
+        (_settings, _reveal, _phone) = (settings, reveal, phone);
         InitializeComponent();
         Handle = WinRT.Interop.WindowNative.GetWindowHandle(this);
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "Tack.ico"));
@@ -48,8 +51,11 @@ public sealed partial class SettingsWindow : Window
         {
             section.Start(_context);
         }
+        PhoneCardSection.Use(phone);
+        PhonePage.Use(phone);
         Render();
         settings.Changed += Render;
+        phone.Changed += RenderPhone;
         Activated += OnActivated;
         Closed += OnClosed;
         Root.KeyDown += OnKeyDown;
@@ -122,6 +128,14 @@ public sealed partial class SettingsWindow : Window
         }
     }
 
+    /// <summary>The phone board changed by itself (NetBird, serving, a device asking): only its card and page show that.</summary>
+    void RenderPhone()
+    {
+        var settings = _settings.Current;
+        ((ISettingsSection)PhoneCardSection).Render(settings);
+        ((ISettingsSection)PhonePage).Render(settings);
+    }
+
     /// <summary>The settings hold: the board stays down while this window has the keyboard focus.</summary>
     void OnActivated(object sender, WindowActivatedEventArgs args)
     {
@@ -137,6 +151,7 @@ public sealed partial class SettingsWindow : Window
     {
         _active = false;
         _settings.Changed -= Render;
+        _phone.Changed -= RenderPhone;
         _context.RaiseLeaving();
         // Closed while a shortcut was listening: the shortcuts come back.
         _settings.PauseShortcuts(false);
