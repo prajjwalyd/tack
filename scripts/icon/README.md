@@ -4,7 +4,7 @@ Everything Tack ships as an icon is generated from this folder.
 
 | File | What it is |
 |---|---|
-| `master.py` | The vector sizes: the 256 master (`icon.svg`, `docs/assets/logo.svg`), the pixel-hinted 48 px and the 64 px tray icons. The design's numbers (board 70% of the square, pin 53% of the board's diagonal, cap 31% of its width, needle at (0.61, 0.39) of the felt) are at the top. |
+| `master.py` | The vector sizes: the 256 master (`icon.svg`, `docs/assets/logo.svg`), the pixel-hinted 48 px and the 64 px tray icons. The design's numbers (board 95% of the square, pin 41% of the board's diagonal, cap 29% of its width, needle at (0.55, 0.46) of the felt) are at the top. |
 | `grids/16.txt`, `20.txt`, `24.txt`, `32.txt` | The small sizes, drawn by hand: one letter per pixel, colours in `pixels.py`. Edit these, not the SVGs. |
 | `pixels.py` | Writes a grid out as a crisp-edged SVG or a PNG, in the app colours or a tray tuning (`light`: darker frame and brass rim; `dark`: dimmer frame, lighter felt, no shadow). |
 | `render.mjs` | Rasterises SVGs at exact sizes in headless Chrome or Edge (`$CHROME` to pick one). |

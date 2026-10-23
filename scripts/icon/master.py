@@ -5,11 +5,12 @@ A framed felt tile (brushed-aluminium frame, the board's green felt,
 diagonally (needle into the felt, cap up and to the right). One key light from
 the top left: the frame's highlight and the pin's shadow agree.
 
-Proportions: the board is 70% of the square; the pin
-is 53% of the board's diagonal and its cap 31% of the board's width; the needle
-enters at (0.61, 0.39) of the felt, so the cap overhangs the tile's top-right
-corner. The pin has the shipped character: a flat-topped cap with a bevelled
-rim and one specular point, a waisted grip, a neat flange, a short steel needle.
+Proportions: the board is 95% of the square and centred in it, so it fills the
+taskbar slot like other apps' tiles; the pin is 41% of the board's diagonal and
+its cap 29% of the board's width; the needle enters at (0.55, 0.46) of the
+felt, so the cap sits over the tile's top-right corner like a badge. The pin
+has the shipped character: a flat-topped cap with a bevelled rim and one
+specular point, a waisted grip, a neat flange, a short steel needle.
 
     python master.py <out.svg> [size=256] [hint=0] [tune=app|light|dark]
 
@@ -93,8 +94,8 @@ BOARD = dict(w=200, h=190, t=5, r=25, fw=11)
 # Pin: where the needle enters the felt (fractions of the felt box), its angle from
 # vertical, L its projected length (cap top to the hole), D the cap's diameter,
 # k how much of the cap's top face we see.
-PIN = dict(entry=(.61, .39), phi=45, L=146, D=62, k=.42)
-BOARD_PX = 180    # the board's width in the 256 master: 70 %
+PIN = dict(entry=(.55, .46), phi=45, L=112, D=58, k=.42)
+BOARD_PX = 244    # the board's width in the 256 master: 95 %
 SHADOW = .30      # how far the pin's shadow leans away from the light, per unit of height
 
 def pin_geom(L, D, k):
@@ -154,10 +155,9 @@ def bbox(B, g):
 def build(size=256, hint=0, tune="app"):
     B = dict(BOARD)
     g = pin_geom(PIN["L"], PIN["D"], PIN["k"])
-    x0, y0, x1, y1 = bbox(B, g)
     sc = BOARD_PX / B["w"]
-    tx = 128 - sc * (x0 + x1) / 2
-    ty = 128 - sc * (y0 + y1) / 2
+    tx = 128 - sc * B["w"] / 2
+    ty = 128 - sc * (B["h"] + B["t"]) / 2
     if hint:   # the tile's face and frame on whole output pixels
         gpx = 256 / hint
         snap = lambda v: round(v / gpx) * gpx
@@ -167,6 +167,8 @@ def build(size=256, hint=0, tune="app"):
         # the pin keeps its place on the felt: scale the board, not the pin
         B.update(w=W / sc, h=H / sc, fw=max(gpx, snap(sc * B["fw"])) / sc,
                  t=(0 if hint <= 48 else max(gpx, snap(sc * B["t"]))) / sc)
+    x0, y0, x1, y1 = bbox(B, g)
+    assert tx + sc * x1 <= 256 and ty + sc * y0 >= 0, "the pin's cap runs off the square"
     face, felt, E, O, u = layout(B)
     Br, S, F, A = PAL["brass"], PAL["steel"], PAL["felt"], PAL["alu"]
     fx0, fy0 = face[0]; fx1, fy1 = face[2]
