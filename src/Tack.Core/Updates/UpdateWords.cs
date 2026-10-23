@@ -52,6 +52,10 @@ public static class UpdateWords
         }
     }
 
+    /// <summary>The tray's updates item: the new version once one is ready to install, else the way to look for one.</summary>
+    public static string TrayLabel(UpdateStatus status) =>
+        status is { State: UpdatePhase.Available, Version: { } version } ? $"Update available: v{version}" : "Check for updates…";
+
     /// <summary>What a screen reader is told when the phase changes: the headline, and for an error its line too.</summary>
     public static string Announcement(UpdateStatus status, UpdateView view) =>
         status.State == UpdatePhase.Error ? $"{view.Title}. {view.Sub}" : view.Title;

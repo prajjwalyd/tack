@@ -1,6 +1,7 @@
 using Tack.Core.Geometry;
 using Tack.Core.Phone;
 using Tack.Core.Settings;
+using Tack.Core.Updates;
 using Tack.Windows.Windowing;
 using Windows.Graphics;
 
@@ -13,7 +14,8 @@ namespace Tack.App.Settings;
 /// only.
 /// </summary>
 /// <param name="phone">The phone board, which the phone card and page show.</param>
-sealed class SettingsOpener(AppState state, SettingsChanges settings, Reveal reveal, IPhoneLink phone)
+/// <param name="updater">Updates, which the updates section shows.</param>
+sealed class SettingsOpener(AppState state, SettingsChanges settings, Reveal reveal, IPhoneLink phone, IUpdater updater)
 {
     SettingsWindow? _window;
 
@@ -61,7 +63,7 @@ sealed class SettingsOpener(AppState state, SettingsChanges settings, Reveal rev
 
     SettingsWindow Create()
     {
-        var window = new SettingsWindow(settings, reveal, phone);
+        var window = new SettingsWindow(settings, reveal, phone, updater);
         window.Closed += (_, _) => _window = null;
         _window = window;
         return window;

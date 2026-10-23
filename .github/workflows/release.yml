@@ -1,0 +1,206 @@
+name: Release
+
+# Pushing a tag like v0.3.0 builds the x64 and arm64 installers on a clean
+# machine and attaches them to a draft release, so every download comes from
+# the public code at that tag. Each installer is signed for the updaters (see
+# docs/development.md), and latest.json, which every installed Tack (0.2 and
+# the C# app alike) reads from the release marked "latest", is built from the
+# two signatures. Nothing is published here: the draft becomes the latest
+# release when a maintainer publishes it.
+on:
+  push:
+    tags:
+      - "v*"
+
+# Each job asks for what it needs.
+permissions: {}
+
+jobs:
+  # Both installer jobs upload to this one release. Creating it here, before
+  # they start, keeps them from each creating their own draft.
+  draft:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      # The tag, the app's version and the installer's name must agree: the
+      # updaters compare the version in latest.json with the signed one.
+      - name: Check the tag against the version
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = ./scripts/release/Get-TackVersion.ps1
+          if ("v$version" -ne $env:TAG) {
+            Write-Host "::error::The tag is $env:TAG but Directory.Build.props says $version."
+            exit 1
+          }
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          BODY: |
+            Download the installer for your PC below and run it. Tack starts at the top of your screen; its icon is in the tray. An installed Tack updates itself from Settings › Updates.
+
+            - **x64-setup.exe**: most PCs (Intel and AMD).
+            - **arm64-setup.exe**: PCs with an ARM processor, such as a Snapdragon X laptop.
+
+            Windows 11. The installer isn't code-signed yet, so Windows SmartScreen may ask: choose **More info › Run anyway**.
+        run: |
+          # A re-run reuses the draft instead of making a second one.
+          id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+            --jq '.[] | select(.tag_name == env.TAG and .draft) | .id' | sed -n 1p)
+          if [ -z "$id" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/releases" \
+              -f tag_name="$TAG" -f name="Tack $TAG" -f body="$BODY" \
+              -F draft=true -F prerelease=false --jq .id
+          fi
+
+  # Per architecture: publish with Native AOT, compile the installer, sign it
+  # for the updaters, and add it and its .sig to the draft.
+  installer:
+    name: Installer (${{ matrix.arch }})
+    needs: draft
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            arch: x64
+          - rid: win-arm64
+            arch: arm64
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      # Native AOT finds the C++ linker through vswhere.
+      - name: Put vswhere on PATH
+        shell: pwsh
+        run: '"${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer" >> $env:GITHUB_PATH'
+
+      - name: Publish
+        run: dotnet publish src/Tack.App -c Release -r ${{ matrix.rid }} -o artifacts/${{ matrix.rid }}
+
+      # Inno Setup 6.7.3 from its GitHub release, checked against a pinned SHA-256.
+      - name: Install Inno Setup
+        shell: pwsh
+        run: ./scripts/release/Install-InnoSetup.ps1 -Dir "$env:RUNNER_TEMP/inno-setup"
+
+      - name: Build the installer
+        shell: pwsh
+        run: ./scripts/release/Build-Installer.ps1 -PublishDir artifacts/${{ matrix.rid }} -Arch ${{ matrix.arch }} -OutputDir artifacts/installer
+
+      # AUTHENTICODE: SKIPPED until Tack has a code-signing certificate (Azure
+      # Artifact Signing or an OV certificate; docs/csharp-port.md, phase 6).
+      # Then sign through ISCC's SignTool (a SignTool= line in Tack.iss and
+      # /S<name>=<command> from Build-Installer.ps1), so the uninstaller that
+      # Setup carries is signed too, and move this before "Build the
+      # installer". It must come before the updater's signature below, which
+      # covers the file's final bytes.
+      - name: Sign with Authenticode (not set up yet)
+        if: false
+        shell: pwsh
+        run: Write-Host "Authenticode signing is not set up yet."
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      # Downloads the pinned Tauri CLI into npm's cache now, while no key is
+      # in the environment; the signing step then runs npm offline.
+      - name: Fetch the Tauri CLI
+        shell: pwsh
+        run: ./scripts/release/Sign-Installer.ps1 -Fetch
+
+      # The signing key reaches this step only: it is not in the job's
+      # environment, so no other step (the .NET build, Inno Setup, npm) can
+      # read it. The Tauri CLI signs the installer with it.
+      - name: Sign the installer for the updaters
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $version = ./scripts/release/Get-TackVersion.ps1
+          ./scripts/release/Sign-Installer.ps1 -Installer "artifacts/installer/Tack_${version}_${{ matrix.arch }}-setup.exe" -Version $version
+
+      - name: Add the installer to the draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = ./scripts/release/Get-TackVersion.ps1
+          $installer = "artifacts/installer/Tack_${version}_${{ matrix.arch }}-setup.exe"
+          gh release upload $env:TAG $installer "$installer.sig" --clobber --repo $env:GITHUB_REPOSITORY
+
+  # One job writes latest.json from both signatures, after both builds, so
+  # neither build can overwrite the other's entry.
+  latest:
+    needs: installer
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Write latest.json and add it to the draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = $env:TAG.Substring(1)
+          $x64 = "Tack_${version}_x64-setup.exe.sig"
+          $arm64 = "Tack_${version}_arm64-setup.exe.sig"
+          foreach ($name in $x64, $arm64) {
+            gh release download $env:TAG --pattern $name --dir signatures --clobber --repo $env:GITHUB_REPOSITORY
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+          ./scripts/release/New-LatestJson.ps1 -Version $version -Tag $env:TAG -Repository $env:GITHUB_REPOSITORY `
+            -X64Signature "signatures/$x64" -Arm64Signature "signatures/$arm64" -OutFile latest.json
+          gh release upload $env:TAG latest.json --clobber --repo $env:GITHUB_REPOSITORY
+
+  # Checks latest.json before anyone publishes the draft: a release whose
+  # update file is wrong would hand every installed Tack a failing update.
+  verify:
+    needs: latest
+    runs-on: ubuntu-latest
+    permissions:
+      # Reading a draft release needs the same access as writing it.
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      # Version, shape, both builds from this release with their .sig files,
+      # and signatures made for this version with the key the app trusts.
+      - name: Check latest.json
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release download $env:TAG --pattern latest.json --dir feed --clobber --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-Content feed/latest.json
+          $assets = @(gh release view $env:TAG --json assets --jq '.assets[].name' --repo $env:GITHUB_REPOSITORY)
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          ./scripts/release/Test-LatestJson.ps1 -Path feed/latest.json -Version $env:TAG.Substring(1) `
+            -Tag $env:TAG -Repository $env:GITHUB_REPOSITORY -AssetNames $assets

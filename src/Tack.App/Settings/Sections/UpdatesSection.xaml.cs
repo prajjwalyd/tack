@@ -37,12 +37,24 @@ public sealed partial class UpdatesSection : UserControl, ISettingsSection
         Show(_status);
     }
 
-    /// <summary>Shows how <paramref name="updater"/> stands from now on, and lets the button check and install with it.</summary>
+    /// <summary>
+    /// Shows how <paramref name="updater"/> stands, and lets the button check
+    /// and install with it. The window, which hears it change, calls
+    /// <see cref="ShowStatus"/> each time.
+    /// </summary>
     internal void Use(IUpdater updater)
     {
         _updater = updater;
-        updater.StatusChanged += () => Show(updater.Status);
         Show(updater.Status);
+    }
+
+    /// <summary>The updater's status changed: show it as it stands now.</summary>
+    internal void ShowStatus()
+    {
+        if (_updater is { } updater)
+        {
+            Show(updater.Status);
+        }
     }
 
     void ISettingsSection.Render(TackSettings settings)

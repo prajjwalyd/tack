@@ -4,6 +4,7 @@ using Tack.App.Phone;
 using Tack.App.Pinboard;
 using Tack.App.Pinboard.Contract;
 using Tack.App.Settings;
+using Tack.App.Updates;
 using Tack.Core;
 using Tack.Core.Captures;
 using Tack.Core.Diagnostics;
@@ -36,6 +37,7 @@ public partial class App : Application
     EdgePoller? _poller;
     SettingsOpener? _settingsWindow;
     PhoneLink? _phone;
+    Updater? _updater;
 
     public App(AppIdentity identity, TackPaths paths)
     {
@@ -81,10 +83,14 @@ public partial class App : Application
         var autostart = Autostart.For(_identity);
         var changes = new SettingsChanges(state, reveal, feed, _shortcuts, autostart, ui);
         _phone = new PhoneLink(changes, ui);
-        _settingsWindow = new SettingsOpener(state, changes, reveal, _phone);
+        // Quit is how a started installer ends Tack: the tray icon goes and board.json is written.
+        _updater = new Updater(changes, _storage, ui, Quit, BuildInfo.IsDevelopment);
+        _settingsWindow = new SettingsOpener(state, changes, reveal, _phone, _updater);
         // A device asking shows Settings at its question, without taking the keyboard.
         _phone.DeviceAsks += () => _settingsWindow?.ShowQuietly(SettingsRoute.PhoneId);
-        _tray = new Tray(_host, _identity, reveal, unpinning, changes, _settingsWindow.Open, Quit);
+        _tray = new Tray(_host, _identity, reveal, unpinning, changes, _updater, _settingsWindow.Open, Quit);
+        // As in 0.2, the updater starts once the tray exists: its one automatic check is 45 s away.
+        _updater.Start();
         // Keeps the Run value pointing at this exe if it was moved, unless this
         // is a build tried out against other folders.
         if (!_paths.FromHome)
@@ -141,13 +147,14 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Stops taking in new prints and serving the phone board, writes whatever
+    /// Stops looking for updates, taking in new prints and serving the phone board, writes whatever
     /// save is still waiting (board.json is written a moment after each change),
     /// and ends Tack.
     /// </summary>
     void Quit()
     {
         _settingsWindow?.Close();
+        _updater?.Dispose();
         _phone?.Dispose();
         _poller?.Dispose();
         _captures?.Dispose();

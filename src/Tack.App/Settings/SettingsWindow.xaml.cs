@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Tack.Core.Phone;
 using Tack.Core.Settings;
+using Tack.Core.Updates;
 using Windows.System;
 using CoreVirtualKeyStates = Windows.UI.Core.CoreVirtualKeyStates;
 
@@ -25,6 +26,7 @@ public sealed partial class SettingsWindow : Window
     readonly SettingsChanges _settings;
     readonly Reveal _reveal;
     readonly IPhoneLink _phone;
+    readonly IUpdater _updater;
     readonly SettingsContext _context;
     readonly ISettingsSection[] _sections;
     bool _loaded;
@@ -32,9 +34,10 @@ public sealed partial class SettingsWindow : Window
     string? _wanted;
 
     /// <param name="phone">The phone board: the phone card and page show it, and render again when it changes.</param>
-    internal SettingsWindow(SettingsChanges settings, Reveal reveal, IPhoneLink phone)
+    /// <param name="updater">Updates: the updates section shows it, and renders again when it changes.</param>
+    internal SettingsWindow(SettingsChanges settings, Reveal reveal, IPhoneLink phone, IUpdater updater)
     {
-        (_settings, _reveal, _phone) = (settings, reveal, phone);
+        (_settings, _reveal, _phone, _updater) = (settings, reveal, phone, updater);
         InitializeComponent();
         Handle = WinRT.Interop.WindowNative.GetWindowHandle(this);
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "Tack.ico"));
@@ -53,9 +56,11 @@ public sealed partial class SettingsWindow : Window
         }
         PhoneCardSection.Use(phone);
         PhonePage.Use(phone);
+        UpdatesSection.Use(updater);
         Render();
         settings.Changed += Render;
         phone.Changed += RenderPhone;
+        updater.StatusChanged += UpdatesSection.ShowStatus;
         Activated += OnActivated;
         Closed += OnClosed;
         Root.KeyDown += OnKeyDown;
@@ -152,6 +157,7 @@ public sealed partial class SettingsWindow : Window
         _active = false;
         _settings.Changed -= Render;
         _phone.Changed -= RenderPhone;
+        _updater.StatusChanged -= UpdatesSection.ShowStatus;
         _context.RaiseLeaving();
         // Closed while a shortcut was listening: the shortcuts come back.
         _settings.PauseShortcuts(false);

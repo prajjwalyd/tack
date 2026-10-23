@@ -1,5 +1,6 @@
 using Tack.Core;
 using Tack.Core.Reveal;
+using Tack.Core.Updates;
 using Tack.Windows.Host;
 using Tack.Windows.Screenshots;
 using Tack.Windows.Shell;
@@ -19,16 +20,19 @@ sealed class Tray : IDisposable
     readonly Reveal _reveal;
     readonly Unpinning _unpinning;
     readonly SettingsChanges _settings;
+    readonly IUpdater _updater;
     readonly Action<string?> _openSettings;
     readonly Action _quit;
     readonly TrayIcon _icon;
 
+    /// <param name="updater">Updates: the updates item names a version that is ready, and checks.</param>
     /// <param name="openSettings">Opens Settings, at a section ("shortcuts", "phone", "updates") or at its top for null.</param>
     public Tray(
         HostWindow host, AppIdentity identity, Reveal reveal, Unpinning unpinning, SettingsChanges settings,
-        Action<string?> openSettings, Action quit)
+        IUpdater updater, Action<string?> openSettings, Action quit)
     {
-        (_host, _reveal, _unpinning, _settings, _openSettings, _quit) = (host, reveal, unpinning, settings, openSettings, quit);
+        (_host, _reveal, _unpinning, _settings, _updater, _openSettings, _quit) =
+            (host, reveal, unpinning, settings, updater, openSettings, quit);
         _icon = new TrayIcon(host, identity.DisplayName, Path.Combine(AppContext.BaseDirectory, "Assets", "Tack.ico"));
         _icon.Clicked += () => reveal.Toggle(RevealReason.Tray);
         _icon.MenuRequested += ShowMenu;
@@ -61,12 +65,25 @@ sealed class Tray : IDisposable
             new MenuItem("Sound", () => _settings.SetSound(!settings.Sound), Checked: settings.Sound),
             new MenuItem("Start with Windows", () => _settings.SetAutostart(!autostart), Checked: autostart),
             new MenuItem("Shortcuts…", () => _openSettings("shortcuts")),
-            // The updater comes in phase 6; until then this only opens the Updates section.
-            new MenuItem("Check for updates…", () => _openSettings("updates")),
+            new MenuItem(UpdateWords.TrayLabel(_updater.Status), OpenUpdates),
             MenuItem.Separator,
             new MenuItem("Quit Tack", _quit),
         ]);
         PopupMenu.ShowAtPointer(_host.Handle, items);
+    }
+
+    /// <summary>
+    /// Opens Settings at Updates. With a version ready, that is where to
+    /// install it; otherwise Tack looks now, and Settings shows the answer.
+    /// </summary>
+    void OpenUpdates()
+    {
+        _openSettings("updates");
+        if (_updater.Status.State != UpdatePhase.Available)
+        {
+            // The check ends in a status, never an exception, and Settings hears it.
+            _ = _updater.CheckAsync();
+        }
     }
 
     public void Dispose() => _icon.Dispose();

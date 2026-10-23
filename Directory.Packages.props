@@ -6,7 +6,10 @@
   <ItemGroup>
     <PackageVersion Include="Microsoft.Windows.CsWin32" Version="0.3.366" />
     <PackageVersion Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
-    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <!-- The parts of the Windows App SDK Tack uses: WinUI, and through it Foundation, InteractiveExperiences and Base. The metapackage would also bring AI, ML (onnxruntime, DirectML), Search and Widgets, about 50 MB Tack never loads. -->
+    <PackageVersion Include="Microsoft.WindowsAppSDK.WinUI" Version="2.3.9" />
+    <!-- WinUI asks for 2.1.8 or later; 2.1.9 is what the Windows App SDK 2.5.1 release ships with it. -->
+    <PackageVersion Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="2.1.9" />
     <PackageVersion Include="xunit.v3" Version="4.0.2" />
   </ItemGroup>
 </Project>

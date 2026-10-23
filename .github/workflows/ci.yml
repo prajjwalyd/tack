@@ -1,7 +1,8 @@
 name: CI
 
-# Builds and tests Tack, and publishes it with Native AOT for both
-# architectures, so a change that breaks AOT shows up the day it is made.
+# Builds and tests Tack, publishes it with Native AOT for both architectures
+# and compiles an unsigned installer from each, so a change that breaks AOT
+# or the installer shows up the day it is made.
 on:
   push:
     branches: [main, "port/**"]
@@ -39,7 +40,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rid: [win-x64, win-arm64]
+        include:
+          - rid: win-x64
+            arch: x64
+          - rid: win-arm64
+            arch: arm64
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -65,8 +70,23 @@ jobs:
           $exe = (Get-Item artifacts/${{ matrix.rid }}/Tack.exe).Length / 1MB
           "${{ matrix.rid }}: {0:N1} MB in {1} files, Tack.exe {2:N1} MB" -f $total, $files.Count, $exe >> $env:GITHUB_STEP_SUMMARY
 
+      # An unsigned installer from the same publish, so a broken installer
+      # script shows up the day it breaks. Inno Setup 6.7.3 comes from its
+      # GitHub release, checked against a pinned SHA-256, whatever the runner
+      # image has. Never run it on a PC whose installed Tack you want to keep.
+      - name: Install Inno Setup
+        shell: pwsh
+        run: ./scripts/release/Install-InnoSetup.ps1 -Dir "$env:RUNNER_TEMP/inno-setup"
+
+      - name: Installer
+        shell: pwsh
+        run: ./scripts/release/Build-Installer.ps1 -PublishDir artifacts/${{ matrix.rid }} -Arch ${{ matrix.arch }} -OutputDir artifacts/installer
+
+      # The publish folder as win-x64/ (or win-arm64/) and the installer as installer/.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: tack-${{ matrix.rid }}
-          path: artifacts/${{ matrix.rid }}
+          path: |
+            artifacts/${{ matrix.rid }}
+            artifacts/installer
           retention-days: 7

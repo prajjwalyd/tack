@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "notes": "",
+  "pub_date": "2026-10-12T20:28:24.971Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdjJUSHlvUFVnblpTMjI0eUxteFVQeUZoNlRqZTVLdXdQRDFrRnVRZFgwMmpvQi93bUgvQVZGL2hkYUFaeVIwUlh6SEMzU2g0Q2l2WFRmR2loQnkyb1dwenBOZ2s2Rnd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODM2NjExCWZpbGU6VGFja18wLjIuMF94NjQtc2V0dXAuZXhlCXZlcnNpb246MC4yLjAKK3k4bFpRL3U2cXZPYVdWZlFIOGkzOTI4dmRadFE4ZGM4WDlNOXp3dzhpc3FCOFBjVnZkcUZBYmRXZmNhblRlWDJhdks4cVBsT1JraDcyVmZXTGo5Qnc9PQo=",
+      "url": "https://github.com/prajjwalyd/tack/releases/download/v0.2.0/Tack_0.2.0_x64-setup.exe"
+    },
+    "windows-x86_64-nsis": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdjJUSHlvUFVnblpTMjI0eUxteFVQeUZoNlRqZTVLdXdQRDFrRnVRZFgwMmpvQi93bUgvQVZGL2hkYUFaeVIwUlh6SEMzU2g0Q2l2WFRmR2loQnkyb1dwenBOZ2s2Rnd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODM2NjExCWZpbGU6VGFja18wLjIuMF94NjQtc2V0dXAuZXhlCXZlcnNpb246MC4yLjAKK3k4bFpRL3U2cXZPYVdWZlFIOGkzOTI4dmRadFE4ZGM4WDlNOXp3dzhpc3FCOFBjVnZkcUZBYmRXZmNhblRlWDJhdks4cVBsT1JraDcyVmZXTGo5Qnc9PQo=",
+      "url": "https://github.com/prajjwalyd/tack/releases/download/v0.2.0/Tack_0.2.0_x64-setup.exe"
+    },
+    "windows-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdjJUSHlvUFVnblZ0Mjh2dFhUVVRia0lwcDgrRjFLSkE4UlRxM0h6QjB0eVNTSGFGZUxLRU8yS0U0WXdpNXgyRWxSbUpYaDlhM1JTQzZCaGQyMDkzWGhDNlY3dm9CN3dzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODM2OTAzCWZpbGU6VGFja18wLjIuMF9hcm02NC1zZXR1cC5leGUJdmVyc2lvbjowLjIuMApZdk4wZjI4UWtncUV2S1dHYXBUWVBoZ01kNlpIVlZlVmE1MjVHZkxDVzFNTmVjaSt3c0tHWVlSWU5uZ3IyUk1kcWlzNWIxMVZqN2cxd0Rwd2loWEtEQT09Cg==",
+      "url": "https://github.com/prajjwalyd/tack/releases/download/v0.2.0/Tack_0.2.0_arm64-setup.exe"
+    },
+    "windows-aarch64-nsis": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdjJUSHlvUFVnblZ0Mjh2dFhUVVRia0lwcDgrRjFLSkE4UlRxM0h6QjB0eVNTSGFGZUxLRU8yS0U0WXdpNXgyRWxSbUpYaDlhM1JTQzZCaGQyMDkzWGhDNlY3dm9CN3dzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODM2OTAzCWZpbGU6VGFja18wLjIuMF9hcm02NC1zZXR1cC5leGUJdmVyc2lvbjowLjIuMApZdk4wZjI4UWtncUV2S1dHYXBUWVBoZ01kNlpIVlZlVmE1MjVHZkxDVzFNTmVjaSt3c0tHWVlSWU5uZ3IyUk1kcWlzNWIxMVZqN2cxd0Rwd2loWEtEQT09Cg==",
+      "url": "https://github.com/prajjwalyd/tack/releases/download/v0.2.0/Tack_0.2.0_arm64-setup.exe"
+    }
+  }
+}

@@ -34,7 +34,11 @@ static class PhoneClient
         return Encoding.UTF8.GetString(await ReadToEndAsync(socket));
     }
 
-    /// <summary>Everything the server sends until it closes; a reset ends it as a close does.</summary>
+    /// <summary>
+    /// Everything the server sends until it closes; a reset or an abort ends it
+    /// as a close does (a connection closed with the request unread can come
+    /// back either way, by timing).
+    /// </summary>
     public static async Task<byte[]> ReadToEndAsync(Socket socket)
     {
         using var output = new MemoryStream();
@@ -47,7 +51,7 @@ static class PhoneClient
             {
                 read = await socket.ReceiveAsync(chunk, SocketFlags.None, deadline.Token);
             }
-            catch (SocketException e) when (e.SocketErrorCode == SocketError.ConnectionReset)
+            catch (SocketException e) when (e.SocketErrorCode is SocketError.ConnectionReset or SocketError.ConnectionAborted)
             {
                 read = 0;
             }
