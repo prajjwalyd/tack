@@ -2,7 +2,8 @@ name: CI
 
 # Builds and tests Tack, publishes it with Native AOT for both architectures
 # and compiles an unsigned installer from each, so a change that breaks AOT
-# or the installer shows up the day it is made.
+# or the installer shows up the day it is made. The x64 installer then
+# updates a real Tack 0.2 on the runner, as 0.2's updater would.
 on:
   push:
     branches: [main, "port/**"]
@@ -89,4 +90,80 @@ jobs:
           path: |
             artifacts/${{ matrix.rid }}
             artifacts/installer
+          retention-days: 7
+
+  # The bridge from 0.2 on a clean Windows: install a released Tack 0.2 with
+  # a board, update it to this build exactly as 0.2's updater does, check
+  # that nothing of 0.2 is left and none of the person's data is lost, update
+  # again as this Tack's updater does, then uninstall silently (data kept)
+  # and from the uninstaller's own dialog with "Delete the application data"
+  # ticked. The scripts in scripts/upgrade refuse to run anywhere but a
+  # throwaway machine.
+  upgrade:
+    name: Upgrade from ${{ matrix.from }}
+    needs: publish
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 0.2.0 is the release marked Latest, which 0.2's updater reads;
+        # 0.2.1 is a pre-release that people may have installed by hand.
+        from: ["0.2.0", "0.2.1"]
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: tack-win-x64
+          path: artifacts
+
+      # Written as UTF-8: Windows PowerShell's >> would write UTF-16.
+      - name: Find this build's installer
+        run: |
+          $version = ./scripts/release/Get-TackVersion.ps1
+          $installer = (Resolve-Path "artifacts/installer/Tack_${version}_x64-setup.exe").Path
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "VERSION=$version`nINSTALLER=$installer`n")
+
+      - name: Install Tack ${{ matrix.from }}
+        run: ./scripts/upgrade/Install-OldTack.ps1 -Version ${{ matrix.from }}
+
+      - name: Give Tack ${{ matrix.from }} a board and start it
+        run: ./scripts/upgrade/Set-OldBoard.ps1 -Snapshot "$env:RUNNER_TEMP/before.json"
+
+      - name: Update as Tack ${{ matrix.from }}'s updater does
+        run: ./scripts/upgrade/Invoke-Update.ps1 -Installer $env:INSTALLER -AsTack02
+
+      - name: Check the bridge
+        run: ./scripts/upgrade/Test-Installed.ps1 -Snapshot "$env:RUNNER_TEMP/before.json" -Version $env:VERSION
+
+      - name: Update again as this Tack's updater does
+        run: ./scripts/upgrade/Invoke-Update.ps1 -Installer $env:INSTALLER
+
+      - name: Check the update
+        run: ./scripts/upgrade/Test-Installed.ps1 -Snapshot "$env:RUNNER_TEMP/before.json" -Version $env:VERSION
+
+      - name: Uninstall silently, keeping the data
+        run: ./scripts/upgrade/Test-Uninstall.ps1 -Snapshot "$env:RUNNER_TEMP/before.json"
+
+      - name: Uninstall deleting the data
+        run: ./scripts/upgrade/Test-UninstallDeletingData.ps1 -Installer $env:INSTALLER
+
+      # Setup's and the uninstaller's logs, and the snapshot, to look into a failure.
+      - name: Gather the logs
+        if: always()
+        run: |
+          $logs = New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/upgrade-logs"
+          Get-ChildItem $env:TEMP -Filter '*Log*.txt' -ErrorAction SilentlyContinue | Copy-Item -Destination $logs
+          Copy-Item "$env:RUNNER_TEMP/before.json" $logs -ErrorAction SilentlyContinue
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: upgrade-logs-${{ matrix.from }}
+          path: ${{ runner.temp }}/upgrade-logs
           retention-days: 7

@@ -154,22 +154,24 @@ section 4):
 
   | Argument | Meaning |
   |---|---|
-  | `/P` | passive: a progress window and no questions (runs again as `/SILENT /SUPPRESSMSGBOXES`) |
-  | `/S` | silent (runs again as `/VERYSILENT /SUPPRESSMSGBOXES`) |
+  | `/P` | passive: a progress window and no questions |
   | `/UPDATE` | an update: keeps everything of the person's, and does not bring back a deleted Start menu shortcut |
   | `/R` | starts Tack when done |
   | `/ARGS …` | ignored, with everything after it |
 
-  `/P` and `/S` start the installer again because Inno decides whether it is
-  silent before any script runs. The first copy waits and exits with code 1,
-  so a script that needs the real exit code passes `/SILENT` or
-  `/VERYSILENT` itself.
+  Inno decides whether it is silent before any script runs, and does not let
+  a script start Setup again, so `/P` is an ordinary run that skips every
+  page and presses Next on the Ready page itself (`installer/code/Passive.iss`).
+  NSIS's `/S` is not taken; for a silent install pass Inno's `/VERYSILENT`.
 - Uninstalling ends Tack, removes its files, the Start menu shortcut and the
-  Run value `Tack`, and asks about "Delete the application data", unticked.
-  Only when it is ticked does it delete `%APPDATA%\Tack` and
-  `%LOCALAPPDATA%\Tack` (the board, captures and notes), and never when the
-  uninstaller is run with `/UPDATE` or silently. An update never runs the
-  uninstaller.
+  Run value `Tack`, and asks one question, with "Delete the application
+  data" unticked. Apps runs the uninstaller with `/SILENT /ASK`: `/SILENT`
+  leaves out Inno's own "Are you sure?" and "was removed" boxes, and `/ASK`
+  asks Tack's question all the same (run `unins000.exe` by hand and Inno
+  asks too). Only when the box is ticked does it delete `%APPDATA%\Tack`
+  and `%LOCALAPPDATA%\Tack` (the board, captures and notes), and never when
+  the uninstaller is run with `/UPDATE`, or silently without `/ASK`. An
+  update never runs the uninstaller.
 - Setup and the uninstaller write a log to `%TEMP%` every run ("Setup Log
   …"), the first thing to ask for when an update goes wrong.
 
@@ -183,8 +185,8 @@ an installer that takes 0.2's arguments.
    built into it, and that the signed version is the announced one.
 2. It saves the installer in `%TEMP%`, starts it with `/P /UPDATE /R /ARGS`
    and quits.
-3. The installer runs again silently, waits for 0.2 to be gone (ending it if
-   it is not), and installs `Tack.exe` over `tack.exe` (names compare without
+3. The installer shows its progress and nothing else, waits for 0.2 to be
+   gone (ending it if it is not), and installs `Tack.exe` over `tack.exe` (names compare without
    case, so it is the same file).
 4. Then it removes what only 0.2 used: its `uninstall.exe`, its Apps entry
    `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Tack`, the key
@@ -202,8 +204,23 @@ arguments. On Windows 10 the installer changes nothing: with `/UPDATE` it
 starts 0.2 again (if `/R`) and exits with an error code; run by hand it says
 that Tack needs Windows 11. 0.2 there keeps offering the update.
 
-The bridge is checked by hand on a clean virtual machine with 0.2 installed
-and in use ([csharp-port.md](csharp-port.md), phase 6).
+CI checks the bridge on every push (the `upgrade` job in `ci.yml`, once from
+0.2.0 and once from 0.2.1). On a clean runner it installs the released 0.2
+with a board (a capture, a note, a kept picture, every setting changed, a
+phone, Start with Windows), starts it, and runs this build's x64 installer
+with `/P /UPDATE /R /ARGS` while 0.2 quits, as 0.2's updater does. It then
+checks that nothing of 0.2 is left, that the board, files, settings and Run
+value are as they were, and that the new Tack started. It updates once more
+as the C# updater does, uninstalls silently (data kept), and uninstalls
+through the uninstaller's own dialog with "Delete the application data"
+ticked (data gone). Setup's logs are kept as the `upgrade-logs-*` artifact.
+The scripts are in `scripts/upgrade`. They refuse to run anywhere but a
+GitHub runner or a machine where `TACK_THROWAWAY_MACHINE=1` is set: they
+replace the installed Tack.
+
+What CI cannot check is 0.2 finding the update itself (it reads only the
+release marked Latest) and Windows 10. Those are checked by hand on a
+virtual machine ([csharp-port.md](csharp-port.md), phase 6).
 
 ## Releases
 
@@ -294,8 +311,9 @@ $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = 'throwaway'
 ```
 
 Without `-PublicKey`, `Test-LatestJson.ps1` checks against the real key and
-says the throwaway one is wrong, as the release workflow would. To try the
-installer itself, and the bridge, use a virtual machine with 0.2 installed.
+says the throwaway one is wrong, as the release workflow would. The
+installer itself and the bridge are tried by CI's `upgrade` job (see
+[The bridge from Tack 0.2](#the-bridge-from-tack-02)), never on your own PC.
 
 ### Authenticode
 

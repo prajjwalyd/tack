@@ -10,9 +10,30 @@
 
 const
   RunKey = 'Software\Microsoft\Windows\CurrentVersion\Run';
+  AppsKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\';
 
 var
   DeleteAppData: Boolean;
+
+{ Uninstalling from Apps asks one question, Tack's, as 0.2's did. Inno's
+  uninstaller asks its own "Are you sure?" after Tack's unless it runs with
+  /SILENT, which also leaves out its "was removed" box and shows progress
+  only. So Apps' UninstallString gets "/SILENT /ASK", and /ASK has the
+  uninstaller ask Tack's question all the same (InitializeUninstall in
+  Tack.iss). QuietUninstallString, Inno's "/SILENT", still asks nothing.
+  Inno writes the entry before ssPostInstall, every install and update. }
+procedure AskOnceFromApps(const EntryName: String);
+var
+  Command: String;
+begin
+  if not RegQueryStringValue(HKCU, AppsKey + EntryName, 'UninstallString', Command) then
+  begin
+    Log('No UninstallString in ' + AppsKey + EntryName + '.');
+    Exit;
+  end;
+  if Pos('/ASK', Command) = 0 then
+    RegWriteStringValue(HKCU, AppsKey + EntryName, 'UninstallString', Command + ' /SILENT /ASK');
+end;
 
 { Asks whether to uninstall, with "Delete the application data" unticked.
   Returns False when the person cancels. Sets DeleteAppData. }

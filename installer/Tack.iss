@@ -39,6 +39,9 @@
   #error The publish folder has no Tack.exe
 #endif
 
+; Tack's AppId, the GUID that names its Apps entry ({AppGuid}_is1).
+#define AppGuid "61E19669-5E3C-4153-A9BF-1D36EFE9BEA9"
+
 ; File version resources take numbers only: 0.3.0-beta.1 becomes 0.3.0.
 #define NumericVersion Copy(AppVersion, 1, Pos("-", AppVersion + "-") - 1)
 
@@ -46,7 +49,7 @@
 ; Setup's identity in Apps (HKCU\...\Uninstall\{AppId}_is1) and the key every
 ; later installer uses to find and update this installation. It must never
 ; change: a new AppId would install a second Tack beside the first.
-AppId={{61E19669-5E3C-4153-A9BF-1D36EFE9BEA9}
+AppId={{{#AppGuid}}
 AppName=Tack
 AppVersion={#AppVersion}
 AppVerName=Tack {#AppVersion}
@@ -77,8 +80,7 @@ ArchitecturesInstallIn64BitMode={#InnoArch}
 MinVersion=10.0
 
 ; Inno would ask the person to close Tack; an update must not ask, so the
-; script finds and ends it (code\Processes.iss). There is no SetupMutex
-; either: /P and /S run a second, silent copy while the first waits.
+; script finds and ends it (code\Processes.iss).
 CloseApplications=no
 RestartApplications=no
 
@@ -124,10 +126,11 @@ Name: "{userprograms}\Tack"; Filename: "{app}\Tack.exe"; WorkingDir: "{app}"; Ch
 
 [Run]
 ; Run by hand, the last page offers to start Tack; with /R, CurStepChanged
-; starts it instead.
-Filename: "{app}\Tack.exe"; Description: "{cm:LaunchTack}"; Flags: nowait postinstall skipifsilent; Check: not WantsRestart
+; starts it instead. /P skips that page.
+Filename: "{app}\Tack.exe"; Description: "{cm:LaunchTack}"; Flags: nowait postinstall skipifsilent; Check: not WantsRestart and not WantsPassive
 
 #include "code\Arguments.iss"
+#include "code\Passive.iss"
 #include "code\Processes.iss"
 #include "code\Bridge.iss"
 #include "code\Uninstall.iss"
@@ -152,9 +155,6 @@ begin
       SuppressibleMsgBox(CustomMessage('NeedsWindows11'), mbCriticalError, MB_OK, IDOK);
     Exit;
   end;
-  { /P and /S (0.2 BRIDGE, and the C# updater): run again silently. }
-  if HandedToSilentRun then
-    Exit;
   Result := True;
 end;
 
@@ -166,7 +166,7 @@ end;
 { Before any file is replaced: no Tack may be running from here, nor (0.2
   BRIDGE) from where 0.2 is, if that is somewhere else. An update waits for
   the updater's Tack to quit by itself first. Run by hand, Setup asks before
-  ending Tack, as 0.2's did. }
+  ending Tack, as 0.2's did; silent or passive, it does not ask. }
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Paths: TArrayOfString;
@@ -183,7 +183,7 @@ begin
     WaitMs := 10000
   else
     WaitMs := 0;
-  Result := CloseTack(Paths, WaitMs, not WizardSilent);
+  Result := CloseTack(Paths, WaitMs, not (WizardSilent or WantsPassive));
 end;
 
 procedure StartTack;
@@ -199,6 +199,8 @@ begin
   { 0.2 BRIDGE: once the new files are in place. }
   if (CurStep = ssPostInstall) and OldTackInstalled then
     RemoveOldTack;
+  if CurStep = ssPostInstall then
+    AskOnceFromApps('{{#AppGuid}}_is1');
   if (CurStep = ssDone) and WantsRestart then
     StartTack;
 end;
@@ -206,8 +208,9 @@ end;
 function InitializeUninstall: Boolean;
 begin
   DeleteAppData := False;
-  { Silent, the uninstaller never deletes the person's data. }
-  if UninstallSilent then
+  { Silent, the uninstaller never deletes the person's data, unless /ASK
+    asked the person first (from Apps: see AskOnceFromApps). }
+  if UninstallSilent and not HasArg('/ASK') then
     Result := True
   else
     Result := AskToUninstall;

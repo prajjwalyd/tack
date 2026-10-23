@@ -10,13 +10,13 @@
   both. Inno Setup ignores arguments it does not know and hands them to this
   script through ParamStr, so they are read here:
 
-    /P       passive: no questions, progress only
-    /S       silent: nothing shown
+    /P       passive: no questions, progress only (code\Passive.iss)
     /UPDATE  an update: keep everything of the person's
     /R       start Tack when done
     /ARGS    the end of our arguments: it and everything after it are ignored
 
-  Inno's own /SILENT, /VERYSILENT, /SUPPRESSMSGBOXES, /LOG work as usual. }
+  NSIS's /S (silent) is not taken: nothing passes it. Inno's own /SILENT,
+  /VERYSILENT, /SUPPRESSMSGBOXES and /LOG work as usual. }
 
 { True when Name is one of the arguments before /ARGS, compared without case. }
 function HasArg(const Name: String): Boolean;
@@ -51,58 +51,4 @@ end;
 function WantsPassive: Boolean;
 begin
   Result := HasArg('/P');
-end;
-
-function WantsSilent: Boolean;
-begin
-  Result := HasArg('/S');
-end;
-
-{ The command line for running this installer again in Inno's own silent
-  mode: /S becomes /VERYSILENT and /P becomes /SILENT (a progress window
-  and nothing else, which is what NSIS's passive mode shows). The other
-  arguments before /ARGS are kept, so /UPDATE, /R and /LOG carry over. }
-function SilentRunArgs: String;
-var
-  I: Integer;
-  Arg: String;
-begin
-  if WantsSilent then
-    Result := '/VERYSILENT'
-  else
-    Result := '/SILENT';
-  Result := Result + ' /SUPPRESSMSGBOXES /NORESTART';
-  for I := 1 to ParamCount do
-  begin
-    Arg := ParamStr(I);
-    if CompareText(Arg, '/ARGS') = 0 then
-      Break;
-    if (CompareText(Arg, '/P') <> 0) and (CompareText(Arg, '/S') <> 0) then
-      Result := Result + ' ' + AddQuotes(Arg);
-  end;
-end;
-
-{ Inno decides whether it runs silently from its command line, before any
-  script runs, and a script cannot change that. So for /P or /S this
-  installer starts itself again with /SILENT or /VERYSILENT, waits for that
-  run, and ends (exit code 1, "failed to initialize": nobody reads it, since
-  0.2's updater and the C# one have quit by then; scripts that need the exit
-  code use /SILENT or /VERYSILENT directly). Returns True when it handed
-  over. If the second run cannot be started, this one goes on with the
-  wizard, which still installs, only with a click. }
-function HandedToSilentRun: Boolean;
-var
-  ResultCode: Integer;
-begin
-  Result := False;
-  if WizardSilent or not (WantsPassive or WantsSilent) then
-    Exit;
-  Log('Running again silently: ' + SilentRunArgs);
-  if Exec(ExpandConstant('{srcexe}'), SilentRunArgs, '', SW_SHOWNORMAL, ewWaitUntilTerminated, ResultCode) then
-  begin
-    Log('The silent run ended with exit code ' + IntToStr(ResultCode) + '.');
-    Result := True;
-  end
-  else
-    Log('Could not run silently (' + SysErrorMessage(ResultCode) + '); showing the wizard instead.');
 end;
