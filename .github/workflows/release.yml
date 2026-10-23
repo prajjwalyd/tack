@@ -104,7 +104,7 @@ jobs:
         run: ./scripts/release/Build-Installer.ps1 -PublishDir artifacts/${{ matrix.rid }} -Arch ${{ matrix.arch }} -OutputDir artifacts/installer
 
       # AUTHENTICODE: SKIPPED until Tack has a code-signing certificate (Azure
-      # Artifact Signing or an OV certificate; docs/csharp-port.md, phase 6).
+      # Artifact Signing or an OV certificate).
       # Then sign through ISCC's SignTool (a SignTool= line in Tack.iss and
       # /S<name>=<command> from Build-Installer.ps1), so the uninstaller that
       # Setup carries is signed too, and move this before "Build the

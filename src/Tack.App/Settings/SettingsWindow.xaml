@@ -8,22 +8,30 @@
     xmlns:sections="using:Tack.App.Settings.Sections"
     xmlns:pages="using:Tack.App.Settings.Pages"
     Title="Tack settings">
-    <Grid x:Name="Root" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+    <!-- Mica, as Windows Settings has: the window takes a tint of the wallpaper behind it. -->
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+    <Grid x:Name="Root">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- On the phone page the title reads "Settings › Use on your phone", the first part the way back. -->
-        <StackPanel Orientation="Horizontal" Padding="20,14,20,8">
-            <HyperlinkButton x:Name="Back" Content="Settings" Visibility="Collapsed" Padding="6,0" Margin="-6,0,0,0" VerticalAlignment="Center"
-                             FontSize="20" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                             AutomationProperties.Name="Back to Settings" />
-            <TextBlock x:Name="Crumb" Text="&#x203A;" Visibility="Collapsed" Margin="6,0" VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw"
-                       Style="{StaticResource SubtitleTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            <TextBlock x:Name="PageTitle" Text="Settings" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center"
-                       AutomationProperties.HeadingLevel="Level1" />
-        </StackPanel>
+        <!-- The title, WinUI's breadcrumb at Windows Settings' size: "Settings", or "Settings › Use on your phone"
+             on the phone page, where the first part is the way back. -->
+        <BreadcrumbBar x:Name="Crumbs" Margin="20,10,20,8" AutomationProperties.Name="Settings pages">
+            <BreadcrumbBar.Resources>
+                <x:Double x:Key="BreadcrumbBarItemThemeFontSize">28</x:Double>
+                <x:Double x:Key="BreadcrumbBarChevronFontSize">14</x:Double>
+                <Thickness x:Key="BreadcrumbBarChevronPadding">11,0</Thickness>
+                <FontWeight x:Key="BreadcrumbBarItemFontWeight">SemiBold</FontWeight>
+                <!-- The way back and the chevron are grey, brightening when pointed at; the page itself is white. -->
+                <StaticResource x:Key="BreadcrumbBarForegroundBrush" ResourceKey="TextFillColorSecondaryBrush" />
+                <StaticResource x:Key="BreadcrumbBarNormalForegroundBrush" ResourceKey="TextFillColorSecondaryBrush" />
+                <StaticResource x:Key="BreadcrumbBarHoverForegroundBrush" ResourceKey="TextFillColorPrimaryBrush" />
+            </BreadcrumbBar.Resources>
+        </BreadcrumbBar>
         <!-- A hairline under the title once something is scrolled beneath it. -->
         <Rectangle x:Name="HeadLine" Style="{StaticResource SettingsDivider}" VerticalAlignment="Bottom" Opacity="0" />
 

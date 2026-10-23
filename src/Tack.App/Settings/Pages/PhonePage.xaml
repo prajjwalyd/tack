@@ -10,33 +10,11 @@
     <StackPanel Spacing="12">
         <phone:AskList x:Name="Asks" />
 
-        <Grid ColumnSpacing="14" Padding="2,2,2,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <!-- The phone, on a tile washed with the accent colour: the body, a faint screen tint, the speaker slot and the home bar. -->
-            <Grid Width="48" Height="48" AutomationProperties.AccessibilityView="Raw">
-                <Rectangle Fill="{ThemeResource AccentFillColorDefaultBrush}" Opacity="0.15" RadiusX="12" RadiusY="12" />
-                <Viewbox Width="30" Height="30">
-                    <Canvas Width="32" Height="32">
-                        <Rectangle Canvas.Left="8" Canvas.Top="2.2" Width="16" Height="27.6" RadiusX="4.2" RadiusY="4.2"
-                                   Fill="{ThemeResource AccentTextFillColorPrimaryBrush}" Opacity="0.14" />
-                        <Rectangle Canvas.Left="8" Canvas.Top="2.2" Width="16" Height="27.6" RadiusX="4.2" RadiusY="4.2"
-                                   Stroke="{ThemeResource AccentTextFillColorPrimaryBrush}" StrokeThickness="1.6" />
-                        <Path Data="M13.5 6.3 H18.5 M13.2 25.7 H18.8" Stroke="{ThemeResource AccentTextFillColorPrimaryBrush}" StrokeThickness="1.6"
-                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                    </Canvas>
-                </Viewbox>
-            </Grid>
-            <TextBlock Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource BodyTextBlockStyle}" FontSize="13" TextWrapping="Wrap"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       Text="Snip on your PC, it's on your phone. Pin a photo on your phone, it's on your PC. Any network." />
-        </Grid>
+        <TextBlock Margin="2,2,2,0" Style="{StaticResource BodyTextBlockStyle}" FontSize="13" TextWrapping="Wrap"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                   Text="Snip on your PC, it's on your phone. Pin a photo on your phone, it's on your PC. Any network." />
 
-        <Border Style="{StaticResource SettingsCard}">
-            <controls:SwitchRow x:Name="OnSwitch" Title="Use on phone" />
-        </Border>
+        <controls:SwitchRow x:Name="OnSwitch" Title="Use on phone" />
 
         <phone:PhoneBodyView x:Name="Body" />
 

@@ -23,6 +23,9 @@ public sealed partial class SettingsWindow : Window
 {
     const string Activity = "Tack.Settings.Announcement";
 
+    static readonly List<string> ListCrumbs = ["Settings"];
+    static readonly List<string> PhoneCrumbs = ["Settings", "Use on your phone"];
+
     readonly SettingsChanges _settings;
     readonly Reveal _reveal;
     readonly IPhoneLink _phone;
@@ -65,7 +68,13 @@ public sealed partial class SettingsWindow : Window
         Closed += OnClosed;
         Root.KeyDown += OnKeyDown;
         Root.Loaded += OnLoaded;
-        Back.Click += (_, _) => ToList();
+        Crumbs.ItemClicked += (_, e) =>
+        {
+            if (e.Index == 0 && PhoneScroll.Visibility == Visibility.Visible)
+            {
+                ToList();
+            }
+        };
         ListScroll.ViewChanged += (_, _) => SyncHead();
         PhoneScroll.ViewChanged += (_, _) => SyncHead();
     }
@@ -97,8 +106,7 @@ public sealed partial class SettingsWindow : Window
         var phone = route.Phone;
         ListScroll.Visibility = phone ? Visibility.Collapsed : Visibility.Visible;
         PhoneScroll.Visibility = phone ? Visibility.Visible : Visibility.Collapsed;
-        Back.Visibility = Crumb.Visibility = phone ? Visibility.Visible : Visibility.Collapsed;
-        PageTitle.Text = phone ? "Use on your phone" : "Settings";
+        Crumbs.ItemsSource = phone ? PhoneCrumbs : ListCrumbs;
         FrameworkElement? target = phone ? PhonePage : Array.Find(_sections, s => s.Id == route.Section) as FrameworkElement;
         if (phone)
         {

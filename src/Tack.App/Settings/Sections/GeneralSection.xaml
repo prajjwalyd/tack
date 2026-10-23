@@ -7,15 +7,11 @@
     xmlns:controls="using:Tack.App.Settings.Controls">
     <StackPanel>
         <TextBlock Text="General" Style="{StaticResource SettingsGroupTitle}" AutomationProperties.HeadingLevel="Level2" />
-        <Border Style="{StaticResource SettingsCard}">
-            <StackPanel>
-                <controls:SwitchRow x:Name="Sound" Title="Sound" Description="A soft sound when a snip is pinned." />
-                <Rectangle Style="{StaticResource SettingsDivider}" />
-                <controls:SwitchRow x:Name="EdgeReveal" Title="Reveal at top edge"
-                                    Description="Move the pointer to the top of the screen to show the board." />
-                <Rectangle Style="{StaticResource SettingsDivider}" />
-                <controls:SwitchRow x:Name="Autostart" Title="Start with Windows" Description="Open Tack when you sign in." />
-            </StackPanel>
-        </Border>
+        <StackPanel Spacing="4">
+            <controls:SwitchRow x:Name="Sound" Glyph="&#xE767;" Title="Sound" Description="A soft sound when a snip is pinned." />
+            <controls:SwitchRow x:Name="EdgeReveal" Glyph="&#xE74A;" Title="Reveal at top edge"
+                                Description="Move the pointer to the top of the screen to show the board." />
+            <controls:SwitchRow x:Name="Autostart" Glyph="&#xE7E8;" Title="Start with Windows" Description="Open Tack when you sign in." />
+        </StackPanel>
     </StackPanel>
 </UserControl>

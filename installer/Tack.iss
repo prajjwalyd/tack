@@ -4,8 +4,7 @@
 ;   ISCC /DAppVersion=0.3.0 /DAppArch=x64 /DPublishDir=<folder> installer\Tack.iss
 ;
 ; writes Tack_0.3.0_x64-setup.exe (AppArch x64 or arm64), the names 0.2's
-; releases used. scripts/release/Build-Installer.ps1 runs it. The design is
-; docs/distribution-design.md, section 4.
+; releases used. scripts/release/Build-Installer.ps1 runs it.
 ;
 ; It installs per user into %LOCALAPPDATA%\Tack, where Tack 0.2 is, and is
 ; also the bridge from 0.2: 0.2's updater downloads it, checks its signature

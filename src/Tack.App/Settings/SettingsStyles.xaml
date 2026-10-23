@@ -20,19 +20,27 @@
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
-    <!-- A card: one rounded block of rows. -->
+    <!-- A card, as Windows Settings draws one per setting, 4 px apart. -->
     <Style x:Key="SettingsCard" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
     </Style>
 
-    <!-- A row of a card: its text on the left, its control on the right. -->
+    <!-- A row of a card: its icon and text on the left, its control on the right. -->
     <Style x:Key="SettingsRow" TargetType="Grid">
-        <Setter Property="MinHeight" Value="52" />
-        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="MinHeight" Value="64" />
+        <Setter Property="Padding" Value="16,10" />
         <Setter Property="ColumnSpacing" Value="12" />
+    </Style>
+
+    <!-- A row's icon, from the Segoe Fluent Icons font Windows ships. -->
+    <Style x:Key="SettingsRowIcon" TargetType="FontIcon">
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="Margin" Value="0,0,4,0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="AutomationProperties.AccessibilityView" Value="Raw" />
     </Style>
 
     <!-- A card that is one block: a description and its control. -->
@@ -97,7 +105,7 @@
     <!-- The ring round a shortcut field: none at rest, the accent colour while it listens, the same size either way. -->
     <Style x:Key="SettingsFieldRing" TargetType="Border">
         <Setter Property="BorderThickness" Value="2" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="CornerRadius" Value="6" />
         <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
 

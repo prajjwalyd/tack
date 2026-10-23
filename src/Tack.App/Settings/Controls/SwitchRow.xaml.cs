@@ -5,7 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 namespace Tack.App.Settings.Controls;
 
 /// <summary>
-/// A row of a card with an on/off switch, as Windows Settings has them. The
+/// A card with an on/off switch, as Windows Settings has them. The
 /// title names the switch for a screen reader and the description is its help
 /// text. <see cref="Toggled"/> is raised only when the person flips it, never
 /// when <see cref="IsOn"/> is set to show a setting.
@@ -22,6 +22,20 @@ public sealed partial class SwitchRow : UserControl
 
     /// <summary>The person flipped the switch: on or off.</summary>
     public event Action<bool>? Toggled;
+
+    /// <summary>The row's icon: a glyph of Segoe Fluent Icons; none if empty, and the text starts at the edge.</summary>
+    public string Glyph
+    {
+        get => Icon.Glyph;
+        set
+        {
+            var shown = value.Length > 0;
+            Icon.Glyph = value;
+            Icon.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
+            Grid.SetColumn(Texts, shown ? 1 : 0);
+            Grid.SetColumnSpan(Texts, shown ? 1 : 2);
+        }
+    }
 
     /// <summary>What the row is, as "Sound".</summary>
     public string Title

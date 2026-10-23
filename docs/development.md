@@ -4,10 +4,8 @@ How to build, run and test Tack, and the conventions the code follows.
 Tack is small on purpose: a board, prints, pins.
 
 Tack 0.2 was a Rust and Tauri app; from 0.3 it is C#, WinUI 3 and Native
-AOT. How the port was planned and done, and the contracts it kept with 0.2
-(board.json, the folders, the identity strings, the phone page), are in
-[csharp-port.md](csharp-port.md); the design notes for the board, Settings,
-the phone board and distribution are beside it.
+AOT. It keeps 0.2's board.json, folders and phone page, so an update
+from 0.2 keeps the person's board.
 
 ## Prerequisites
 
@@ -66,11 +64,11 @@ rest of the screen:
 - `settings-shot.ps1 -Section <id> [-Theme dark]`: opens Settings at a
   group or the phone page and saves a picture of that window alone (debug
   builds; `TACK_DEBUG_SETTINGS*`).
-- `measure.ps1 -Exe <published Tack.exe>`: a Release build against the
-  performance budget in csharp-port.md: start to the tray, the first reveal,
-  memory at rest, shown and tucked, wake-ups and the CPU for 20 reveals. It
-  shows and hides the board by posting the toggle shortcut's message to
-  Tack's own window, so the board comes down on screen while it runs.
+- `measure.ps1 -Exe <published Tack.exe>`: measures a Release build: start
+  to the tray, the first reveal, memory at rest, shown and tucked, wake-ups
+  and the CPU for 20 reveals. It shows and hides the board by posting the
+  toggle shortcut's message to Tack's own window, so the board comes down
+  on screen while it runs.
 
 They set `TACK_DEBUG_NO_SWEEP=1` (debug builds: no Recycle Bin sweep on the
 copy) and `TACK_DEV_INSTANCE`, which gives a debug build a single-instance
@@ -139,8 +137,7 @@ It installs into `%LOCALAPPDATA%\Tack` and replaces whatever Tack is there,
 0.2 included, with its Apps entry. Try it in Windows Sandbox or a virtual
 machine.
 
-What it does (the design is [distribution-design.md](distribution-design.md),
-section 4):
+What it does:
 
 - Installs per user, without elevation, into `%LOCALAPPDATA%\Tack`, with a
   Start menu shortcut "Tack" and an Apps entry "Tack". The `AppId` GUID in
@@ -220,7 +217,7 @@ replace the installed Tack.
 
 What CI cannot check is 0.2 finding the update itself (it reads only the
 release marked Latest) and Windows 10. Those are checked by hand on a
-virtual machine ([csharp-port.md](csharp-port.md), phase 6).
+virtual machine.
 
 ## Releases
 

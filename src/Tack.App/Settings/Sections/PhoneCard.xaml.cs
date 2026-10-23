@@ -74,7 +74,7 @@ public sealed partial class PhoneCard : UserControl, ISettingsSection
         if (Open.Content as string != card.Button)
         {
             Open.Content = card.Button;
-            Open.Style = card.Accent ? XamlStyles.App("AccentButtonStyle") : null;
+            Open.Style = XamlStyles.App(card.Accent ? "AccentButtonStyle" : "DefaultButtonStyle");
         }
         AutomationProperties.SetHelpText(Open, card.Status);
     }

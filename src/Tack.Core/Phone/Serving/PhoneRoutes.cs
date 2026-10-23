@@ -4,9 +4,8 @@ using Tack.Core.Phone.Http;
 namespace Tack.Core.Phone.Serving;
 
 /// <summary>
-/// What the phone board serves, and to whom (docs/phone-design.md has the
-/// table). The page and its files go to any NetBird peer; everything under
-/// /api/ needs a device the user allowed. Every request must name this PC in
+/// What the phone board serves, and to whom. The page and its files go to
+/// any NetBird peer; everything under /api/ needs a device the user allowed. Every request must name this PC in
 /// Host (421 otherwise: DNS rebinding), a request with an Origin must come
 /// from this page (403), and API calls that act or may ask the user must carry
 /// X-Tack: 1, which another site open on the phone cannot add without a CORS

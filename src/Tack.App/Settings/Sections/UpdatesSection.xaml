@@ -14,22 +14,25 @@
     </UserControl.Resources>
     <StackPanel>
         <TextBlock Text="Updates" Style="{StaticResource SettingsGroupTitle}" AutomationProperties.HeadingLevel="Level2" />
-        <Border Style="{StaticResource SettingsCard}">
-            <StackPanel>
+        <StackPanel Spacing="4">
+            <Border Style="{StaticResource SettingsCard}">
                 <Grid Style="{StaticResource SettingsRow}">
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="Tack" Style="{StaticResource SettingsRowTitle}" VerticalAlignment="Center" />
-                    <TextBlock x:Name="VersionText" Grid.Column="1" Style="{StaticResource SettingsRowValue}" IsTextSelectionEnabled="True" />
+                    <FontIcon Glyph="&#xE946;" Style="{StaticResource SettingsRowIcon}" />
+                    <TextBlock Grid.Column="1" Text="Tack" Style="{StaticResource SettingsRowTitle}" VerticalAlignment="Center" />
+                    <TextBlock x:Name="VersionText" Grid.Column="2" Style="{StaticResource SettingsRowValue}" IsTextSelectionEnabled="True" />
                 </Grid>
-                <Rectangle Style="{StaticResource SettingsDivider}" />
-                <controls:SwitchRow x:Name="CheckSwitch" Title="Check for updates when Tack starts"
-                                    Description="Tack looks for a new version once each time it starts." />
-                <Rectangle Style="{StaticResource SettingsDivider}" />
+            </Border>
+            <controls:SwitchRow x:Name="CheckSwitch" Glyph="&#xE823;" Title="Check for updates when Tack starts"
+                                Description="Tack looks for a new version once each time it starts." />
+            <Border Style="{StaticResource SettingsCard}">
                 <Grid x:Name="StatusRow" Style="{StaticResource SettingsRow}">
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
@@ -38,14 +41,15 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <StackPanel VerticalAlignment="Center">
+                    <FontIcon Glyph="&#xE895;" Style="{StaticResource SettingsRowIcon}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="Headline" Style="{StaticResource SettingsRowTitle}" />
                         <TextBlock x:Name="Sub" Style="{StaticResource SettingsRowDescription}" Visibility="Collapsed" />
                     </StackPanel>
-                    <Button x:Name="ActionButton" Grid.Column="1" MinWidth="120" VerticalAlignment="Center" IsEnabled="False" />
-                    <ProgressBar x:Name="Meter" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,12,0,4" Maximum="100" Visibility="Collapsed"
+                    <Button x:Name="ActionButton" Grid.Column="2" MinWidth="120" VerticalAlignment="Center" IsEnabled="False" />
+                    <ProgressBar x:Name="Meter" Grid.Row="1" Grid.ColumnSpan="3" Margin="0,12,0,4" Maximum="100" Visibility="Collapsed"
                                  AutomationProperties.Name="Download progress" />
-                    <Expander x:Name="Notes" Grid.Row="2" Grid.ColumnSpan="2" Margin="-16,4,0,0" Padding="16,0,0,4"
+                    <Expander x:Name="Notes" Grid.Row="2" Grid.ColumnSpan="3" Margin="-16,4,0,0" Padding="16,0,0,4"
                               MinHeight="32" Background="Transparent" BorderBrush="Transparent"
                               HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Visibility="Collapsed">
                         <Expander.Header>
@@ -59,7 +63,7 @@
                         </Border>
                     </Expander>
                 </Grid>
-            </StackPanel>
-        </Border>
+            </Border>
+        </StackPanel>
     </StackPanel>
 </UserControl>

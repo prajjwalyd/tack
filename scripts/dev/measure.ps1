@@ -1,9 +1,8 @@
 <#
 .SYNOPSIS
-Measures a Release build of Tack against the performance budget in
-docs/csharp-port.md: start to the tray, the first reveal, memory at rest,
-shown and tucked, wake-ups while tucked and while shown, and the CPU for 20
-reveals. Only Tack's own process and windows are looked at; nothing on the
+Measures a Release build of Tack: start to the tray, the first reveal,
+memory at rest, shown and tucked, wake-ups while tucked and while shown, and
+the CPU for 20 reveals. Only Tack's own process and windows are looked at; nothing on the
 screen is captured.
 
 .DESCRIPTION

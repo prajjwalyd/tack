@@ -8,9 +8,16 @@
         <TextBlock x:Name="Heading" Text="Speed" Style="{StaticResource SettingsGroupTitle}" AutomationProperties.HeadingLevel="Level2" />
         <Border Style="{StaticResource SettingsCard}">
             <StackPanel Style="{StaticResource SettingsBlock}">
-                <TextBlock x:Name="Description" Style="{StaticResource SettingsRowDescription}"
-                           Text="How soon the board appears, and how quickly it and new screenshots move." />
-                <RadioButtons x:Name="Speeds" MaxColumns="3" AutomationProperties.Name="Speed">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon Glyph="&#xE916;" Style="{StaticResource SettingsRowIcon}" />
+                    <TextBlock x:Name="Description" Grid.Column="1" Style="{StaticResource SettingsRowDescription}" VerticalAlignment="Center"
+                               Text="How soon the board appears, and how quickly it and new screenshots move." />
+                </Grid>
+                <RadioButtons x:Name="Speeds" Margin="36,0,0,0" MaxColumns="3" AutomationProperties.Name="Speed">
                     <RadioButton Content="Instant" />
                     <RadioButton Content="Normal" />
                     <RadioButton Content="Slow" />
