@@ -1,4 +1,4 @@
-# Renders the print art in assets/board: the shadows the board draws as nine
+# Renders the print art in src/Tack.App/Assets/Board: the shadows the board draws as nine
 # grids, the button and badge rims, the pins (five colours, brass, the contact
 # shadow) and the paper's fibre. Each piece is drawn by headless Microsoft
 # Edge from print-art.css (0.2's own rules) at 100, 150, 200 and 250 percent,
@@ -6,7 +6,7 @@
 # fibre is 0.2's 64 px tile, laid 8 by 8 (no tiling brush on the board).
 # Run it again only when the art changes; its output is committed.
 param(
-    [string]$Out = "$PSScriptRoot\..\..\assets\board",
+    [string]$Out = "$PSScriptRoot\..\..\src\Tack.App\Assets\Board",
     [string]$Edge = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
 )
 $ErrorActionPreference = "Stop"

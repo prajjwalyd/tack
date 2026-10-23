@@ -1,4 +1,4 @@
-// Renders the board's two sounds into assets/board/sounds/: the tock of a pin
+// Renders the board's two sounds into src/Tack.App/Assets/Sounds/: the tock of a pin
 // going into cork and the pop of one coming out, synthesised as Tack 0.2 did
 // live (sine sweeps and band-passed noise under exponential envelopes, through
 // the same biquad filters), at its master level. The noise is seeded, so a run
@@ -12,7 +12,7 @@ const int Rate = 44100;
 const double Master = 0.18;
 
 var noise = Synth.Noise((int)Math.Ceiling(Rate * 0.08), seed: 0x7ac4);
-var folder = Path.GetFullPath(Path.Combine(Here(), "..", "..", "assets", "board", "sounds"));
+var folder = Path.GetFullPath(Path.Combine(Here(), "..", "..", "src", "Tack.App", "Assets", "Sounds"));
 Directory.CreateDirectory(folder);
 Write(Path.Combine(folder, "tock.wav"), Tock());
 Write(Path.Combine(folder, "pop.wav"), Pop());

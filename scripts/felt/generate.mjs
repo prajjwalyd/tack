@@ -1,4 +1,4 @@
-// Generates the board's felt textures: assets/felt/felt-*.png.
+// Generates the board's felt textures: src/Tack.App/Assets/felt/felt-*.png.
 //
 //   node scripts/felt/generate.mjs            write the three tiles (PNG)
 //   node scripts/felt/generate.mjs --webp     write lossless WebPs instead, via headless Chrome (smaller;
@@ -38,7 +38,7 @@ import { deflateSync } from "node:zlib";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
-const OUT = args.includes("--out") ? args[args.indexOf("--out") + 1] : join(HERE, "../../assets/felt");
+const OUT = args.includes("--out") ? args[args.indexOf("--out") + 1] : join(HERE, "../../src/Tack.App/Assets/felt");
 const AS_PNG = !args.includes("--webp");
 const CHROME = process.env.CHROME || "C:/Program Files/Google/Chrome/Application/chrome.exe";
 

@@ -2,7 +2,7 @@ using Tack.Core.Phone.Serving;
 
 namespace Tack.App.Phone;
 
-/// <summary>The phone page's files (assets/phone), embedded in the app and served unchanged.</summary>
+/// <summary>The phone page's files (Assets/Phone), embedded in the app and served unchanged.</summary>
 static class PhonePageFiles
 {
     /// <summary>Reads the four files. Throws when one is missing from the app, which a build never leaves out.</summary>

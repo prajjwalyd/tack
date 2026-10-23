@@ -1,14 +1,13 @@
 """Tack's icon, the pixel sizes: grids/16, 20, 24 and 32.txt are drawn by hand,
-one letter per pixel, and written out here as crisp-edged SVGs (one rect per
-horizontal run) or PNGs.
+one letter per pixel, and written out here as PNGs.
 
 Grid: one line per row, all the same length; '.' is transparent, every other
-letter a colour from PAL (8 hex digits = with alpha). Edit the grids, not the
-SVGs. The tray tunings recolour a few letters:
+letter a colour from PAL (8 hex digits = with alpha). The tray tunings
+recolour a few letters:
   light  a darker frame and brass rim, so the tile keeps its edge on a pale taskbar
   dark   a dimmer frame (no glare), a lighter felt (never a dark hole), no shadow
 
-    python pixels.py <grid.txt> <out.svg|out.png> [tune=app|light|dark]
+    python pixels.py <grid.txt> <out.png> [tune=app|light|dark]
 """
 import sys
 
@@ -44,27 +43,6 @@ def load(path):
 def colour(ch, tune="app"):
     return TUNE[tune].get(ch, PAL[ch])
 
-def to_svg(rows, tune="app", comment=""):
-    n = len(rows)
-    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {n} {n}" width="{n}" height="{n}" shape-rendering="crispEdges">']
-    if comment:
-        out.append(f"  <!-- {comment} -->")
-    for y, r in enumerate(rows):
-        x = 0
-        while x < n:
-            ch = r[x]
-            if ch == ".":
-                x += 1; continue
-            c = colour(ch, tune); x2 = x
-            while x2 + 1 < n and r[x2 + 1] != "." and colour(r[x2 + 1], tune) == c:
-                x2 += 1
-            if c[7:9] != "00":
-                op = f' fill-opacity="{int(c[7:9], 16) / 255:.2f}"' if len(c) == 9 else ""
-                out.append(f'  <rect x="{x}" y="{y}" width="{x2 - x + 1}" height="1" fill="{c[:7]}"{op}/>')
-            x = x2 + 1
-    out.append("</svg>")
-    return "\n".join(out) + "\n"
-
 def to_png(rows, tune="app"):
     from PIL import Image
     n = len(rows); im = Image.new("RGBA", (n, n), (0, 0, 0, 0))
@@ -76,9 +54,5 @@ def to_png(rows, tune="app"):
     return im
 
 if __name__ == "__main__":
-    rows = load(sys.argv[1]); out = sys.argv[2]
     tune = dict(a.split("=", 1) for a in sys.argv[3:]).get("tune", "app")
-    if out.endswith(".png"):
-        to_png(rows, tune).save(out)
-    else:
-        open(out, "w", encoding="utf-8", newline="\n").write(to_svg(rows, tune))
+    to_png(load(sys.argv[1]), tune).save(sys.argv[2])

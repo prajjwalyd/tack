@@ -1,5 +1,5 @@
 # Bakes the brushed grain of the board's metal frame into two pictures:
-# assets/board/chrome/grain-side.png (12 x 1024, a side rail's, brushed down)
+# src/Tack.App/Assets/Board/chrome/grain-side.png (12 x 1024, a side rail's, brushed down)
 # and grain-bottom.png (1024 x 12, the bottom rail's, brushed across). Each is
 # the same pair of seeded fractal-noise fields Tack 0.2 drew: fine white
 # streaks over fine dark ones, each with an alpha, so they lie over any finish.
@@ -12,7 +12,7 @@
 # Microsoft Edge renders them, headless, with a clear background. The noise is
 # seeded, so the same Edge always writes the same pictures. Nothing leaves the machine.
 param(
-    [string]$Out = "$PSScriptRoot\..\..\assets\board\chrome",
+    [string]$Out = "$PSScriptRoot\..\..\src\Tack.App\Assets\Board\chrome",
     [string]$Edge = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
 )
 $ErrorActionPreference = "Stop"

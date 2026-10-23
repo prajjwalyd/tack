@@ -9,7 +9,7 @@
     <RootNamespace>Tack.App</RootNamespace>
     <AssemblyName>Tack</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>..\..\assets\icons\icon.ico</ApplicationIcon>
+    <ApplicationIcon>Assets\Tack.ico</ApplicationIcon>
     <Platforms>x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant())</RuntimeIdentifier>
@@ -28,25 +28,12 @@
 
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
-    <Content Include="..\..\assets\icons\icon.ico" Link="Assets\Tack.ico" CopyToOutputDirectory="PreserveNewest" />
-    <!-- The tray's glyphs, light and dark, at each size the tray draws (Shell/TrayGlyph in Tack.Windows). -->
-    <Content Include="..\..\assets\icons\tray-*.png" Link="Assets\Tray\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <!-- The print art (scripts/board-assets), read from beside the exe. -->
-    <Content Include="..\..\assets\board\*.png" Link="Assets\Board\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <!-- The board's felt wool and the frame's brushed grain (Pinboard/Chrome). -->
-    <Content Include="..\..\assets\felt\*.png" Link="Assets\felt\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="..\..\assets\board\chrome\*.png" Link="Assets\Board\chrome\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
-  <!-- The board's tock and pop (scripts/sounds/render.cs writes them), played from memory. -->
-  <ItemGroup>
-    <EmbeddedResource Include="..\..\assets\board\sounds\*.wav" LogicalName="Tack.Sounds.%(Filename)%(Extension)" />
-  </ItemGroup>
-
-  <!-- The phone board's page (Phone/PhonePageFiles), served from memory to the person's devices. -->
-  <ItemGroup>
-    <EmbeddedResource Include="..\..\assets\phone\index.html;..\..\assets\phone\phone.js;..\..\assets\phone\phone.css;..\..\assets\phone\icon.png"
-                      LogicalName="Tack.Phone.%(Filename)%(Extension)" />
+    <!-- Read from beside the exe: the icon, the tray's glyphs, the print art, the felt and the frame's grain.
+         The scripts under scripts/ make them. -->
+    <Content Include="Assets\Tack.ico;Assets\**\*.png" Exclude="Assets\Phone\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Played and served from memory: the board's tock and pop, and the phone board's page. -->
+    <EmbeddedResource Include="Assets\Sounds\*.wav" LogicalName="Tack.Sounds.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Assets\Phone\*" LogicalName="Tack.Phone.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

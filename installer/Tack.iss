@@ -89,7 +89,7 @@ UninstallDisplayIcon={app}\Tack.exe
 ; the cached one (0.2's tack.exe was at this same path). Setup ends by telling
 ; the shell that icons changed (SHChangeNotify, SHCNE_ASSOCCHANGED).
 ChangesAssociations=yes
-SetupIconFile=..\assets\icons\icon.ico
+SetupIconFile=..\src\Tack.App\Assets\Tack.ico
 WizardStyle=modern dynamic
 ShowLanguageDialog=no
 

@@ -75,9 +75,9 @@ copy) and `TACK_DEV_INSTANCE`, which gives a debug build a single-instance
 name of its own so several can run at once.
 
 The asset generators under `scripts/` (`icon`, `felt`, `board-assets`,
-`board-chrome`, `sounds`) remake checked-in files and are rarely needed;
-each says at its top what it needs (Python with Pillow, Node, or Chrome or
-Edge).
+`board-chrome`, `sounds`) remake the files in `src/Tack.App/Assets` and
+are rarely needed; each says at its top what it needs (Python with
+Pillow, Node, or Chrome or Edge).
 
 ## Code style
 

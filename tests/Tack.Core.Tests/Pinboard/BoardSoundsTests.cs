@@ -14,7 +14,7 @@ public class BoardSoundsTests
             folder = folder.Parent;
         }
         Assert.NotNull(folder);
-        return File.ReadAllBytes(Path.Combine(folder.FullName, "assets", "board", "sounds", name));
+        return File.ReadAllBytes(Path.Combine(folder.FullName, "src", "Tack.App", "Assets", "Sounds", name));
     }
 
     static short[] Samples(byte[] wave) =>

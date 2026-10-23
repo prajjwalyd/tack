@@ -273,11 +273,6 @@ def build(size=256, hint=0, tune="app"):
         svg = svg.replace(a_, b_)
     return svg
 
-def note(svg, text):
-    """Put a comment after the opening <svg> tag."""
-    i = svg.index(">") + 1
-    return svg[:i] + "\n  <!-- " + text + " -->" + svg[i:]
-
 if __name__ == "__main__":
     kw = dict(a.split("=", 1) for a in sys.argv[2:])
     svg = build(int(kw.get("size", 256)), int(kw.get("hint", 0)), kw.get("tune", "app"))
