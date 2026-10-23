@@ -30,5 +30,5 @@ static class Keycaps
     }
 
     /// <summary>One of the Settings window's shared styles (SettingsStyles.xaml).</summary>
-    static Style Look(string key) => (Style)Application.Current.Resources[key];
+    static Style Look(string key) => XamlStyles.App(key);
 }

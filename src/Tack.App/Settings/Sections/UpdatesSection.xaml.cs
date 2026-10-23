@@ -85,7 +85,7 @@ public sealed partial class UpdatesSection : UserControl, ISettingsSection
     void ShowButton(UpdateButton button)
     {
         ActionButton.Content = button.Label;
-        ActionButton.Style = button.Accent ? (Style)Application.Current.Resources["AccentButtonStyle"] : null;
+        ActionButton.Style = button.Accent ? XamlStyles.App("AccentButtonStyle") : null;
         // Busy, it stays enabled so it keeps the focus; it only looks quiet and does nothing.
         ActionButton.IsEnabled = _updater is not null;
         ActionButton.Opacity = button.Busy ? 0.55 : 1;

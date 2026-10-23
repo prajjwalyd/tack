@@ -146,7 +146,7 @@ public sealed partial class ShortcutsSection : UserControl, ISettingsSection
     {
         var parts = _rows[row];
         var listening = _listener?.Row == row;
-        parts.Ring.Style = (Style)Application.Current.Resources[listening ? "SettingsFieldRingListening" : "SettingsFieldRing"];
+        parts.Ring.Style = XamlStyles.App(listening ? "SettingsFieldRingListening" : "SettingsFieldRing");
         var chord = _chords[row];
         Keycaps.Fill(parts.Field, listening ? _held : chord.Length > 0 ? chord.Split('+') : [], listening);
         AutomationProperties.SetName(parts.Field, listening

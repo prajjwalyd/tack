@@ -65,7 +65,7 @@ public sealed partial class SwatchCard : UserControl
         for (var n = 0; n < choices.Count; n++)
         {
             var face = new SwatchFace { Text = choices[n].Name, Square = square };
-            var button = new RadioButton { Style = (Style)Resources["SwatchButton"], Content = face, IsTabStop = n == 0 };
+            var button = new RadioButton { Style = XamlStyles.In(Resources, "SwatchButton"), Content = face, IsTabStop = n == 0 };
             AutomationProperties.SetName(button, choices[n].Label);
             AutomationProperties.SetPositionInSet(button, n + 1);
             AutomationProperties.SetSizeOfSet(button, choices.Count);

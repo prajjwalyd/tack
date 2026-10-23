@@ -44,7 +44,7 @@ public sealed partial class DeviceList : UserControl
         {
             if (Rows.Children.Count > 0)
             {
-                Rows.Children.Add(new Rectangle { Style = (Style)Application.Current.Resources["SettingsDivider"] });
+                Rows.Children.Add(new Rectangle { Style = XamlStyles.App("SettingsDivider") });
             }
             Rows.Children.Add(new DeviceRow(device, Forget));
         }
