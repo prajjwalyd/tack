@@ -71,7 +71,8 @@ Both shortcuts can be changed in Settings, under **Shortcuts** (the tray menu's 
   that aren't.
 - Text is never read from your clipboard on its own, only when you press
   Win + Alt + C, and your clipboard is put back as it was.
-- Nothing is deleted for good: Tack's own copies go to the Recycle Bin.
+- Tack's own copies of your snips and notes go to the Recycle Bin when they
+  leave the board; your Screenshots folder is never touched.
 
 The details are in [docs/privacy.md](docs/privacy.md).
 
@@ -84,7 +85,8 @@ The details are in [docs/privacy.md](docs/privacy.md).
 Tack updates itself: when a new version is out, Settings offers it, and one
 click installs it. Your board stays as it was.
 
-Windows 11.
+Windows 11, on x64 or ARM. Tack 0.2 also ran on Windows 10; there it stays
+on 0.2, since the update needs Windows 11 and leaves 0.2 as it was.
 
 To build it yourself, see [docs/development.md](docs/development.md).
 

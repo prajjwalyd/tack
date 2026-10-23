@@ -2,13 +2,14 @@ using Tack.Windows.Host;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.UI.Shell;
-using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace Tack.Windows.Shell;
 
 /// <summary>
 /// Tack's icon in the notification area. It adds itself again when Explorer
-/// restarts, and reports clicks through its host window.
+/// restarts, reports clicks through its host window, and swaps its glyph when
+/// the taskbar's theme or the screen's scale changes. Windows tells the host
+/// window of both, so nothing waits on the registry as Tack 0.2's thread did.
 /// </summary>
 public sealed unsafe class TrayIcon : IDisposable
 {
@@ -17,15 +18,21 @@ public sealed unsafe class TrayIcon : IDisposable
 
     readonly HostWindow _host;
     readonly string _tooltip;
-    readonly HICON _icon;
-    readonly bool _ownsIcon;
+    readonly TrayGlyph _glyph;
 
-    public TrayIcon(HostWindow host, string tooltip, string iconFile)
+    /// <param name="glyphFolder">Where the tray-light-*.png and tray-dark-*.png glyphs are.</param>
+    /// <param name="fallbackIcon">The app's .ico, shown if a glyph will not load.</param>
+    public TrayIcon(HostWindow host, string tooltip, string glyphFolder, string fallbackIcon)
     {
         (_host, _tooltip) = (host, tooltip);
-        (_icon, _ownsIcon) = LoadIcon(iconFile);
+        _glyph = new TrayGlyph(glyphFolder, fallbackIcon);
         host.Listen(CallbackMessage, (_, lParam) => OnMouse((uint)lParam));
-        host.Listen(PInvoke.RegisterWindowMessage("TaskbarCreated"), (_, _) => Add());
+        host.Listen(PInvoke.RegisterWindowMessage("TaskbarCreated"), (_, _) => OnTaskbarCreated());
+        // Any setting change, not only "ImmersiveColorSet" (light or dark): a hidden window is not
+        // sure to hear WM_DPICHANGED, and the glyph is swapped only when the right one differs.
+        host.Listen(PInvoke.WM_SETTINGCHANGE, (_, _) => UpdateGlyph());
+        host.Listen(PInvoke.WM_DPICHANGED, (_, _) => UpdateGlyph());
+        host.Listen(PInvoke.WM_DISPLAYCHANGE, (_, _) => UpdateGlyph());
         Add();
     }
 
@@ -48,12 +55,32 @@ public sealed unsafe class TrayIcon : IDisposable
         }
     }
 
+    /// <summary>Explorer started again, perhaps in another theme: the icon goes back with the glyph for now.</summary>
+    void OnTaskbarCreated()
+    {
+        _glyph.Refresh();
+        Add();
+    }
+
+    /// <summary>Shows the glyph for the theme and scale as they are now, if that is another one.</summary>
+    void UpdateGlyph()
+    {
+        if (!_glyph.Refresh())
+        {
+            return;
+        }
+        var data = Identity();
+        data.uFlags = NOTIFY_ICON_DATA_FLAGS.NIF_ICON;
+        data.hIcon = _glyph.Icon;
+        PInvoke.Shell_NotifyIcon(NOTIFY_ICON_MESSAGE.NIM_MODIFY, &data);
+    }
+
     void Add()
     {
         var data = Identity();
         data.uFlags = NOTIFY_ICON_DATA_FLAGS.NIF_MESSAGE | NOTIFY_ICON_DATA_FLAGS.NIF_ICON | NOTIFY_ICON_DATA_FLAGS.NIF_TIP;
         data.uCallbackMessage = CallbackMessage;
-        data.hIcon = _icon;
+        data.hIcon = _glyph.Icon;
         _tooltip.AsSpan(0, Math.Min(_tooltip.Length, TooltipLength)).CopyTo(data.szTip.AsSpan());
         PInvoke.Shell_NotifyIcon(NOTIFY_ICON_MESSAGE.NIM_ADD, &data);
     }
@@ -65,28 +92,10 @@ public sealed unsafe class TrayIcon : IDisposable
         uID = 1,
     };
 
-    /// <summary>The icon file at the small-icon size, or Windows' generic icon if it will not load.</summary>
-    static (HICON Icon, bool Owned) LoadIcon(string file)
-    {
-        var size = PInvoke.GetSystemMetricsForDpi(SYSTEM_METRICS_INDEX.SM_CXSMICON, PInvoke.GetDpiForSystem());
-        fixed (char* path = file)
-        {
-            var loaded = PInvoke.LoadImage(HINSTANCE.Null, path, GDI_IMAGE_TYPE.IMAGE_ICON, size, size, IMAGE_FLAGS.LR_LOADFROMFILE);
-            if (!loaded.IsNull)
-            {
-                return ((HICON)(nint)loaded.Value, true);
-            }
-        }
-        return (PInvoke.LoadIcon(HINSTANCE.Null, PInvoke.IDI_APPLICATION), false);
-    }
-
     public void Dispose()
     {
         var data = Identity();
         PInvoke.Shell_NotifyIcon(NOTIFY_ICON_MESSAGE.NIM_DELETE, &data);
-        if (_ownsIcon)
-        {
-            PInvoke.DestroyIcon(_icon);
-        }
+        _glyph.Dispose();
     }
 }

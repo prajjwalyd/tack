@@ -55,6 +55,45 @@ public class InstallerFolderTests
         }
     }
 
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(23, false)]
+    [InlineData(24, false)]
+    [InlineData(25, true)]
+    [InlineData(24 * 30, true)]
+    public void A_download_is_cleared_once_it_is_over_a_day_old(int hoursOld, bool cleared)
+    {
+        var now = new DateTime(2026, 10, 23, 12, 0, 0, DateTimeKind.Utc);
+        Assert.Equal(cleared, InstallerFolder.IsOld(now.AddHours(-hoursOld), now));
+    }
+
+    [Fact]
+    public void Clearing_deletes_old_downloads_and_keeps_new_ones_and_other_folders()
+    {
+        var now = DateTime.UtcNow;
+        var old = InstallerFolder.Fresh();
+        File.WriteAllText(Path.Combine(old, "Tack-setup.exe"), "ran yesterday");
+        Directory.SetLastWriteTimeUtc(old, now.AddDays(-2));
+        var recent = InstallerFolder.Fresh();
+        var other = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "tack-test-" + Guid.NewGuid().ToString("N"))).FullName;
+        Directory.SetLastWriteTimeUtc(other, now.AddDays(-2));
+        try
+        {
+            InstallerFolder.ClearOld(now);
+
+            Assert.False(Directory.Exists(old));
+            Assert.True(Directory.Exists(recent));
+            Assert.True(Directory.Exists(other));
+        }
+        finally
+        {
+            foreach (var folder in new[] { old, recent, other }.Where(Directory.Exists))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public void The_installer_is_asked_for_a_passive_update_that_restarts_tack() =>
         Assert.Equal("/P /UPDATE /R", InstallerLauncher.Arguments);

@@ -69,9 +69,9 @@ sealed class Restore(AppState state, Prints prints, string notesFolder)
                     prints.Announce(added.Aged);
                 }
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
+            catch (Exception e)
             {
-                DevTrace.Write($"restore: cannot read {Path.GetFileName(print.Path)} now, keeping it for next time: {e.Message}");
+                DevTrace.Write($"restore: cannot read {Path.GetFileName(print.Path)} now, keeping it for next time: {e.GetType().Name}: {e.Message}");
                 retry.Add(print);
             }
         }

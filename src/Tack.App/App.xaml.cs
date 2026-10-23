@@ -52,6 +52,8 @@ public partial class App : Application
         _storage = new Storage(_paths);
         var state = AppState.Load(_storage);
         _host = new HostWindow();
+        // Signing out or shutting down ends Tack without Quit: write board.json then, as 0.2 did on every exit.
+        SessionEnd.Follow(_host, _storage.Flush);
         var ui = DispatcherQueue.GetForCurrentThread();
         // The board hears every change from here on; it is made hidden now, so the first reveal draws at once.
         var feed = new BoardFeed(ui);
@@ -84,7 +86,8 @@ public partial class App : Application
         var changes = new SettingsChanges(state, reveal, feed, _shortcuts, autostart, ui);
         _phone = new PhoneLink(changes, ui);
         // Quit is how a started installer ends Tack: the tray icon goes and board.json is written.
-        _updater = new Updater(changes, _storage, ui, Quit, BuildInfo.IsDevelopment);
+        // A build run against other folders never updates either: it would install over the real Tack.
+        _updater = new Updater(changes, _storage, ui, Quit, BuildInfo.IsDevelopment || _paths.FromHome);
         _settingsWindow = new SettingsOpener(state, changes, reveal, _phone, _updater);
         // A device asking shows Settings at its question, without taking the keyboard.
         _phone.DeviceAsks += () => _settingsWindow?.ShowQuietly(SettingsRoute.PhoneId);
@@ -122,7 +125,7 @@ public partial class App : Application
             prints,
             unpinning,
             commands,
-            new PrintMenu(state, commands, prints, unpinning, ui, window),
+            new PrintMenu(state, commands, prints, unpinning, ui, _host!.Handle),
             new DragOutFlow(state, saves, unpinning, feed, ui, window),
             pinning,
             drops,

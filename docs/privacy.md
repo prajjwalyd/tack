@@ -7,8 +7,12 @@ itself, and downloading it when you choose to install it ([Updates](#updates),
 below, and you can turn the check at start off). It has no analytics and
 sends nothing about you or your board anywhere. Tack draws the board itself,
 with no web engine inside, so nothing on the board can reach the internet.
-Your board lives in `%APPDATA%\Tack\board.json`, unsaved captures in
-`%LOCALAPPDATA%\Tack\Captures` and notes in `%LOCALAPPDATA%\Tack\Notes`.
+Your board lives in `%APPDATA%\Tack\board.json` (the list of prints and your
+settings, including the devices you allowed to use the board from a phone:
+their NetBird name, WireGuard public key and when you allowed them), unsaved
+captures in `%LOCALAPPDATA%\Tack\Captures` and notes in
+`%LOCALAPPDATA%\Tack\Notes`. Tack keeps no log: a released build writes
+nothing about what it does anywhere.
 
 Out of the box Tack does not listen for connections either. The one thing
 that does is yours to switch on: **Use on your phone** (below).
@@ -25,13 +29,17 @@ What a check sends: one HTTPS request to
 `github.com/prajjwalyd/tack/releases/latest/download/latest.json`, a small
 file that names the newest release, its notes and the address and signature
 of its installer. GitHub answers by passing the request on to its download
-servers (`githubusercontent.com`); Tack follows that only over HTTPS. The
-request carries what any HTTPS request does: your IP address, the time, and
-a `User-Agent` naming Tack's updater (written down here once the native
-updater is in; see `docs/csharp-port.md`, phase 6). It does not carry Tack's version, your Windows version, an
-identifier, a cookie, or anything from your board. Nothing is sent to anyone
-but GitHub, and Tack keeps no record of when it checked beyond that run.
-GitHub, as any web host, can see the requests it receives.
+servers (`githubusercontent.com`); Tack follows that only over HTTPS, at most
+five hops. The request carries what any HTTPS request does: your IP address,
+the time, and a `User-Agent` of `Tack/<version>` (for example `Tack/0.3.0`).
+It does not carry your Windows version, an identifier, a cookie, or anything
+from your board. The check and the installer it names both come from Tack's
+GitHub releases; Tack insists on HTTPS for every address rather than on a
+host name, and it is the signature below, not the address, that decides
+whether anything is installed. Tack keeps no record of when it checked
+beyond that run. GitHub, as any web host, can see the requests it receives.
+A check gives up after 30 seconds and reads at most 1 MB; a download gives
+up after 10 minutes.
 
 The installer is downloaded only when you press **Install** on a new
 version, from the same release, and Tack does not install it unless all of
@@ -46,11 +54,13 @@ this holds:
   sign an update. A download that fails the check is thrown away and Tack
   says so.
 
-The installer then runs for your user alone (no administrator prompt),
-shows a progress bar and starts Tack again. It keeps your board, your
-captures and notes and your settings, including Start with Windows; it
-never touches your Screenshots folder. Tack follows Windows' proxy settings
-for these requests.
+The installer is saved in a folder of its own under `%TEMP%`
+(`tack-update-…`) and removed by a later start of Tack. It runs for your user
+alone (no administrator prompt), shows a progress bar and starts Tack again;
+like any Inno Setup installer it leaves a `Setup Log` text file in `%TEMP%`.
+It keeps your board, your captures and notes and your settings, including
+Start with Windows; it never touches your Screenshots folder. Tack follows
+Windows' proxy settings for these requests.
 
 ## Your board on your phone
 
@@ -75,17 +85,19 @@ Who gets in, layer by layer:
    is who NetBird says it is, and Tack checks that again, against a list at
    most 10 seconds old, before it answers an API request.
 4. **Nothing of the board reaches a device you have not allowed.** The first
-   time a device asks, the PC shows "pixel wants to use your board" with
-   the device's name and address in NetBird and a four-digit code, and the
-   phone shows the same code, so you can tell your phone from a look-alike.
-   The prompt never takes the keyboard (its window flashes in the taskbar
-   instead) and Allow only works after a second, so a key you were pressing
-   cannot answer it. Tack remembers the answer by the device's WireGuard
-   key, not its name or address, so another device cannot pass for it.
-   Remove a device in the same window and it has to ask again. A device you
-   turn down can ask again no sooner than 30 seconds later, twice as long
-   after each further refusal (an hour at most), even if you switch the
-   feature off and on; no more than three can wait at once.
+   time a device asks, Settings opens at its phone page showing "pixel wants
+   to use your board" with the device's name and address in NetBird and a
+   four-digit code, and the phone shows the same code, so you can tell your
+   phone from a look-alike. The window opens without taking the keyboard (if
+   it is already open, it flashes in the taskbar instead) and Allow only
+   works after a second, so a key you were pressing cannot answer it. Tack
+   remembers the answer by the device's WireGuard key, not its name or
+   address, so another device cannot pass for it. Remove a device on the
+   same page and it has to ask again. A request nobody answers lapses after
+   10 minutes. A device you turn down can ask again no sooner than 30
+   seconds later, twice as long after each further refusal (an hour at
+   most), even if you switch the feature off and on, until Tack restarts; no
+   more than three can wait at once.
 5. **Other websites on your phone cannot use it.** Requests must name your
    PC in the Host header (which defeats DNS rebinding), and one that says
    it comes from another site (Origin) is refused. Browsers do not send
@@ -114,9 +126,10 @@ the switch off and the port closes.
 
 ## Text, the clipboard and notes
 
-Text reaches the board only when you put it there: **Win+Alt+C** on a
-selection, or text or a link dropped on the board. Tack never reads text
-off the clipboard on its own. Its clipboard listener only looks at
+Text reaches the board only when you put it there: **Win+Alt+C** (or the pin
+shortcut you chose) on a selection, text or a link dropped on the board, or
+text pinned from an allowed phone. Tack never reads text off the clipboard
+on its own. Its clipboard listener only looks at
 pictures Snipping Tool puts there (see the README), recognised by its
 Windows package or by its program's full path in Windows' own folders, never
 by name alone, and skips any copy marked private. It ignores the clipboard
@@ -154,6 +167,11 @@ What Win+Alt+C does with the clipboard:
 - Copied files are pinned only if they are PNG or JPEG files on a drive
   letter. A network path is never opened: Windows would connect to that
   server and offer it your sign-in.
+
+When a snip from Snipping Tool arrives, Tack looks at the screen around the
+pointer to find where the snip came from, so its print can fly from there.
+That look stays in memory and is dropped at once: Tack never saves it,
+shows it or sends it anywhere.
 
 Notes are plain UTF-8 text files, at most 20 KB each, in
 `%LOCALAPPDATA%\Tack\Notes`; board.json holds only their paths, never their
@@ -199,10 +217,12 @@ arrives only as its address is pinned as a link, never downloaded.
 
 ## Checking it yourself
 
-Every connection Tack makes comes from `tack.exe` itself. With Tack running,
+Every connection Tack makes comes from `Tack.exe` itself. With Tack running,
 this lists them once a second for 3 minutes. Turn off the update check in
 Settings first, or the list also shows the check of GitHub (443) about 45
-seconds in:
+seconds in. With **Use on your phone** on, it also shows your devices
+(100.x.y.z addresses) connecting to port 7717, and Tack runs NetBird's own
+`netbird.exe status` now and then to read the list of devices:
 
 ```powershell
 $tack = (Get-Process tack).Id
@@ -216,5 +236,5 @@ $seen = @{}
 $seen.Keys
 ```
 
-A firewall rule for `tack.exe` blocks all of it (or switch the check off in
+A firewall rule for `Tack.exe` blocks all of it (or switch the check off in
 Settings).

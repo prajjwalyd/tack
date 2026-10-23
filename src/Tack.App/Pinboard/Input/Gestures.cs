@@ -41,9 +41,6 @@ sealed class Gestures : BoardPart
         root.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(RootReleased), true);
     }
 
-    /// <summary>A press went down on a print (the keyboard's look ends with it).</summary>
-    public event Action? PressStarted;
-
     BoardState State => Board.State;
 
     /// <summary>Gives <paramref name="item"/> the hover look (the keyboard's selection), taking it from any other print.</summary>
@@ -180,7 +177,6 @@ sealed class Gestures : BoardPart
             return;
         }
         e.Handled = true;
-        PressStarted?.Invoke();
         Release();
         Run(_machine.Press(item.Id, button, point.Position.X, point.Position.Y, Now()));
         if (_machine.PressId == item.Id && _machine.Sinking)

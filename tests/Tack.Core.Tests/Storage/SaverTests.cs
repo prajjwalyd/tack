@@ -48,4 +48,30 @@ public class SaverTests
         Assert.True(kept, "the snapshot is not lost when its write fails");
         Assert.Equal(7, saved.Prints[0].PinnedAt);
     }
+
+    [Fact]
+    public void A_write_that_throws_anything_is_tried_again()
+    {
+        using var scratch = new Scratch("saver-throws");
+        var file = Path.Combine(scratch.Path, "board.json");
+        var fail = true;
+        var saver = Saver.Unthreaded(file, (to, snapshot) =>
+        {
+            if (fail)
+            {
+                throw new InvalidOperationException("not an I/O error");
+            }
+            BoardFile.Write(to, snapshot);
+        });
+
+        saver.Queue(SnapshotOf(9));
+        saver.Flush();
+        var kept = saver.HasWaiting;
+        fail = false;
+        saver.Flush();
+        var (saved, _) = BoardFile.Load(file, 0);
+
+        Assert.True(kept, "the snapshot waits to be tried again");
+        Assert.Equal(9, saved.Prints[0].PinnedAt);
+    }
 }

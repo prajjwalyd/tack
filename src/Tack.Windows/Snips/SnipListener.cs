@@ -23,17 +23,24 @@ public sealed class SnipListener : IDisposable
 {
     readonly HostWindow _host;
     readonly SnipReader _reader;
+    readonly bool _listening;
     bool _disposed;
 
-    /// <summary>Starts listening; create it on the UI thread, which owns the host window.</summary>
+    /// <summary>
+    /// Starts listening; create it on the UI thread, which owns the host window.
+    /// If Windows will not let it listen, that is traced and no snip ever arrives.
+    /// </summary>
     public SnipListener(HostWindow host)
     {
         _host = host;
         _reader = new SnipReader(host.Handle, snip => Captured?.Invoke(snip));
         host.Listen(PInvoke.WM_CLIPBOARDUPDATE, (_, _) => OnChanged());
-        if (!PInvoke.AddClipboardFormatListener((HWND)host.Handle))
+        // As in Tack 0.2, Tack runs on without snips rather than not at all;
+        // screenshot files and everything else still work.
+        _listening = PInvoke.AddClipboardFormatListener((HWND)host.Handle);
+        if (!_listening)
         {
-            throw new Win32Exception();
+            DevTrace.Write($"cannot watch the clipboard: {new Win32Exception().Message}");
         }
     }
 
@@ -90,7 +97,10 @@ public sealed class SnipListener : IDisposable
             return;
         }
         _disposed = true;
-        PInvoke.RemoveClipboardFormatListener((HWND)_host.Handle);
+        if (_listening)
+        {
+            PInvoke.RemoveClipboardFormatListener((HWND)_host.Handle);
+        }
         _reader.Complete();
     }
 }

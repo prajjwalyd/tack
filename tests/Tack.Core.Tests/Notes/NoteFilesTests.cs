@@ -64,6 +64,19 @@ public class NoteFilesTests
     }
 
     [Fact]
+    public void A_note_held_open_for_writing_and_deleting_still_reads()
+    {
+        using var scratch = new Scratch("note-shared");
+        var path = scratch.File("Note.txt", "being edited");
+
+        // As an editor holds it: open for writing, letting others read, write and delete.
+        using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete))
+        {
+            Assert.Equal("being edited", NoteFiles.Read(path).Text);
+        }
+    }
+
+    [Fact]
     public void A_huge_file_is_read_only_as_far_as_a_note_goes()
     {
         using var scratch = new Scratch("note-huge");

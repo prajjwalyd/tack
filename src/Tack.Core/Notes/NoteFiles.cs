@@ -37,10 +37,14 @@ public static class NoteFiles
         return path;
     }
 
-    /// <summary>Reads a note's file back, as far as a note goes. An emptied file is still a note.</summary>
+    /// <summary>
+    /// Reads a note's file back, as far as a note goes. An emptied file is still
+    /// a note. The file is shared for writing and deleting while it is read, so
+    /// a note open in an editor still reads.
+    /// </summary>
     public static NoteBody Read(string path)
     {
-        using var stream = File.OpenRead(path);
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         var buffer = new byte[MaxReadBytes];
         var length = stream.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
         return FromBytes(buffer.AsSpan(0, length));

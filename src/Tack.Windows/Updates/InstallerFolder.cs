@@ -12,6 +12,12 @@ public static class InstallerFolder
     /// <summary>The start of every such folder's name.</summary>
     internal const string Prefix = "tack-update-";
 
+    /// <summary>
+    /// How long a download is left before <see cref="ClearOld()"/> deletes it:
+    /// long enough that an installer still running is never pulled from under it.
+    /// </summary>
+    internal static readonly TimeSpan KeptFor = TimeSpan.FromDays(1);
+
     /// <summary>Makes a new, empty folder and returns its path.</summary>
     public static string Fresh()
     {
@@ -30,15 +36,44 @@ public static class InstallerFolder
         {
             return;
         }
+        Delete(folder);
+    }
+
+    /// <summary>
+    /// Deletes the downloads of earlier updates: an installer that ran is
+    /// left in its folder, since it cannot delete itself. Only Tack's own
+    /// folders older than <see cref="KeptFor"/>, never a link. Best effort; slow
+    /// on a large %TEMP%, so call it off the UI thread.
+    /// </summary>
+    public static void ClearOld() => ClearOld(DateTime.UtcNow);
+
+    /// <summary>As <see cref="ClearOld()"/>, as if it were <paramref name="nowUtc"/>.</summary>
+    internal static void ClearOld(DateTime nowUtc)
+    {
+        IEnumerable<string> folders;
         try
         {
-            Directory.Delete(folder, recursive: true);
+            folders = Directory.EnumerateDirectories(Path.GetTempPath(), Prefix + "*").ToList();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            DevTrace.Write($"updates: the download could not be deleted: {e.Message}");
+            DevTrace.Write($"updates: %TEMP% could not be read: {e.Message}");
+            return;
+        }
+        foreach (var folder in folders)
+        {
+            var info = new DirectoryInfo(folder);
+            if (Ours(folder)
+                && !info.Attributes.HasFlag(FileAttributes.ReparsePoint)
+                && IsOld(info.LastWriteTimeUtc, nowUtc))
+            {
+                Delete(folder);
+            }
         }
     }
+
+    /// <summary>True when a download last written at <paramref name="writtenUtc"/> has been kept long enough.</summary>
+    internal static bool IsOld(DateTime writtenUtc, DateTime nowUtc) => nowUtc - writtenUtc > KeptFor;
 
     /// <summary>A folder <see cref="Fresh"/> made: right under %TEMP%, with Tack's prefix.</summary>
     internal static bool Ours(string folder)
@@ -48,5 +83,17 @@ public static class InstallerFolder
         return parent is not null
             && string.Equals(Path.GetFullPath(parent), Path.GetFullPath(temp), StringComparison.OrdinalIgnoreCase)
             && Path.GetFileName(folder).StartsWith(Prefix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    static void Delete(string folder)
+    {
+        try
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            DevTrace.Write($"updates: the download could not be deleted: {e.Message}");
+        }
     }
 }

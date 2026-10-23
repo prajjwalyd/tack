@@ -12,3 +12,6 @@ desktop.ini
 *.swp
 .vscode/
 .idea/
+
+# Test output
+TestResults/

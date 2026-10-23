@@ -28,12 +28,13 @@ sealed class KeyboardInput : BoardPart
     /// <summary>The board took the keyboard for this reveal and owes it back.</summary>
     bool _took;
 
-    bool _wired;
-
     public KeyboardInput(BoardContext board) : base(board)
     {
         _focus = new KeyboardFocus(board);
         board.Layers.Board.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(KeyDown), false);
+        // Any press anywhere on the board hides the ring: on a print, the empty
+        // felt or the hint card, with either button, handled on the way or not.
+        board.Layers.Root.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(PointerPressed), true);
     }
 
     /// <summary>The print with the keyboard's focus: the board's selection.</summary>
@@ -60,19 +61,7 @@ sealed class KeyboardInput : BoardPart
         {
             return;
         }
-        // phase 3: P4 fills this in: the keep press plays as for the Keep button,
-        // with Board.Parts.Row.HoldOrder over it.
         Board.Actions.SetKept(item.Id, !item.Print.Kept);
-    }
-
-    /// <summary>The first reveal, every part made: from now on a pointer press hides the ring.</summary>
-    public override void Synced()
-    {
-        if (!_wired)
-        {
-            _wired = true;
-            Board.Parts.Gestures.PressStarted += () => _focus.Ringed = false;
-        }
     }
 
     public override void Revealed(RevealReason reason, bool wasRevealed)
@@ -127,6 +116,14 @@ sealed class KeyboardInput : BoardPart
         var row = State.Row.ToList();
         var next = KeyboardNav.AfterRemoval(item.IndexWhenRemoved, row.Count);
         FocusOn(next >= 0 ? row[next] : null);
+    }
+
+    void PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (_focus.Ringed)
+        {
+            _focus.Ringed = false;
+        }
     }
 
     void KeyDown(object sender, KeyRoutedEventArgs e)

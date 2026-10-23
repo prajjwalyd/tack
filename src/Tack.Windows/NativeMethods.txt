@@ -10,6 +10,7 @@ CoCreateInstance
 CoTaskMemFree
 CreateCompatibleDC
 CreateDIBSection
+CreateIconFromResourceEx
 CreatePopupMenu
 CreateRectRgn
 CreateToolhelp32Snapshot
@@ -56,6 +57,7 @@ GetMonitorInfo
 GetPackageFamilyName
 GetPackageFullName
 GetPhysicalCursorPos
+GetProcAddress
 GetStockObject
 GetSystemMetricsForDpi
 GetThreadTimes
@@ -155,6 +157,7 @@ WM_CLIPBOARDUPDATE
 WM_DISPLAYCHANGE
 WM_DPICHANGED
 WM_DWMCOMPOSITIONCHANGED
+WM_ENDSESSION
 WM_ERASEBKGND
 WM_HOTKEY
 WM_LBUTTONUP
@@ -162,7 +165,9 @@ WM_MOUSEACTIVATE
 WM_MOUSEMOVE
 WM_NCDESTROY
 WM_NULL
+WM_QUERYENDSESSION
 WM_QUIT
 WM_RBUTTONUP
+WM_SETTINGCHANGE
 WM_TIMER
 WM_USER

@@ -19,8 +19,9 @@ namespace Tack.App.Updates;
 /// <remarks>
 /// The state (<see cref="UpdaterState"/>) is kept under a lock; checks and
 /// downloads wait on the thread pool, and <see cref="StatusChanged"/> is
-/// raised on the UI thread. A development build never checks or installs: it
-/// would replace the installed Tack. It says so in the trace and stays Idle.
+/// raised on the UI thread. A development build, and any build run against
+/// other folders (TACK_HOME), never checks or installs: it would replace the
+/// installed Tack. It says so in the trace and stays Idle.
 /// </remarks>
 sealed class Updater : IUpdater, IDisposable
 {
@@ -30,7 +31,7 @@ sealed class Updater : IUpdater, IDisposable
     readonly Storage _storage;
     readonly DispatcherQueue _ui;
     readonly Action _quit;
-    readonly bool _development;
+    readonly bool _disabled;
     readonly UpdateServer _server = new("Tack", BuildInfo.Version);
     readonly CancellationTokenSource _stop = new();
     readonly Lock _lock = new();
@@ -38,9 +39,9 @@ sealed class Updater : IUpdater, IDisposable
     DispatcherQueueTimer? _timer;
 
     /// <param name="quit">The app's own Quit, which ends Tack once the installer has started.</param>
-    /// <param name="development">A development build: never check or install.</param>
-    public Updater(SettingsChanges settings, Storage storage, DispatcherQueue ui, Action quit, bool development) =>
-        (_settings, _storage, _ui, _quit, _development) = (settings, storage, ui, quit, development);
+    /// <param name="disabled">A development build, or one run against other folders: never check or install.</param>
+    public Updater(SettingsChanges settings, Storage storage, DispatcherQueue ui, Action quit, bool disabled) =>
+        (_settings, _storage, _ui, _quit, _disabled) = (settings, storage, ui, quit, disabled);
 
     public UpdateStatus Status
     {
@@ -55,9 +56,17 @@ sealed class Updater : IUpdater, IDisposable
 
     public event Action? StatusChanged;
 
-    /// <summary>Sets the one automatic check going, <see cref="s_startDelay"/> from now. UI thread, once.</summary>
+    /// <summary>
+    /// Sets the one automatic check going, <see cref="s_startDelay"/> from now,
+    /// and clears away installers earlier updates left in %TEMP%. UI thread, once.
+    /// </summary>
     public void Start()
     {
+        if (!_disabled)
+        {
+            // A started installer cannot be deleted while it runs, so an update's download stays behind.
+            Background.Run("clearing old update downloads", InstallerFolder.ClearOld);
+        }
         _timer = _ui.CreateTimer();
         _timer.Interval = s_startDelay;
         _timer.IsRepeating = false;
@@ -70,9 +79,9 @@ sealed class Updater : IUpdater, IDisposable
 
     public async Task<UpdateStatus?> InstallAsync()
     {
-        if (_development)
+        if (_disabled)
         {
-            DevTrace.Write("updates: a development build does not install updates");
+            DevTrace.Write("updates: this build does not install updates (a development build, or TACK_HOME is set)");
             return Status;
         }
         UpdateOffer? offer;
@@ -124,9 +133,9 @@ sealed class Updater : IUpdater, IDisposable
 
     async Task<UpdateStatus?> Check(bool automatic)
     {
-        if (_development)
+        if (_disabled)
         {
-            DevTrace.Write("updates: a development build does not look for updates");
+            DevTrace.Write("updates: this build does not look for updates (a development build, or TACK_HOME is set)");
             return Status;
         }
         var settingOn = _settings.Current.Updates.Check;

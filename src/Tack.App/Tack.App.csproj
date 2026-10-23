@@ -29,6 +29,8 @@
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
     <Content Include="..\..\assets\icons\icon.ico" Link="Assets\Tack.ico" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The tray's glyphs, light and dark, at each size the tray draws (Shell/TrayGlyph in Tack.Windows). -->
+    <Content Include="..\..\assets\icons\tray-*.png" Link="Assets\Tray\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- The print art (scripts/board-assets), read from beside the exe. -->
     <Content Include="..\..\assets\board\*.png" Link="Assets\Board\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- The board's felt wool and the frame's brushed grain (Pinboard/Chrome). -->

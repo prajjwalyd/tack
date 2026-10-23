@@ -19,7 +19,7 @@ public sealed unsafe class HostWindow : IDisposable
 
     static HostWindow? s_current;
 
-    readonly Dictionary<uint, Action<nuint, nint>> _listeners = [];
+    readonly Dictionary<uint, Func<nuint, nint, nint>> _listeners = [];
 
     public HostWindow()
     {
@@ -56,7 +56,18 @@ public sealed unsafe class HostWindow : IDisposable
     public nint Handle { get; }
 
     /// <summary>Calls <paramref name="handler"/> with wParam and lParam whenever <paramref name="message"/> arrives.</summary>
-    public void Listen(uint message, Action<nuint, nint> handler) => _listeners[message] = handler;
+    public void Listen(uint message, Action<nuint, nint> handler) => _listeners[message] = (wParam, lParam) =>
+    {
+        handler(wParam, lParam);
+        return 0;
+    };
+
+    /// <summary>
+    /// As <see cref="Listen"/>, for a message whose answer matters to Windows:
+    /// <paramref name="handler"/>'s result is returned for it. Should the
+    /// handler fail, Windows is answered 0.
+    /// </summary>
+    public void Answer(uint message, Func<nuint, nint, nint> handler) => _listeners[message] = handler;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
     static LRESULT WndProc(HWND hwnd, uint message, WPARAM wParam, LPARAM lParam)
@@ -66,13 +77,13 @@ public sealed unsafe class HostWindow : IDisposable
             // An exception must never unwind into Windows: it would end the process.
             try
             {
-                handler(wParam.Value, lParam.Value);
+                return new LRESULT(handler(wParam.Value, lParam.Value));
             }
             catch (Exception e)
             {
                 DevTrace.Write($"host window: message 0x{message:x} failed: {e}");
+                return default;
             }
-            return default;
         }
         return PInvoke.DefWindowProc(hwnd, message, wParam, lParam);
     }

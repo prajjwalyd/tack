@@ -10,8 +10,12 @@ namespace Tack.App;
 /// pointer or, when the keyboard asked for it, under the print. While it is
 /// open the board never tucks.
 /// </summary>
-/// <param name="window">The board's window, which owns the menu.</param>
-sealed class PrintMenu(AppState state, PrintCommands commands, Prints prints, Unpinning unpinning, DispatcherQueue ui, nint window)
+/// <param name="owner">
+/// Tack's hidden host window, which owns the menu. Not the board's window:
+/// that one is never activated, and a menu whose owner cannot come to the
+/// front does not close on a click elsewhere.
+/// </param>
+sealed class PrintMenu(AppState state, PrintCommands commands, Prints prints, Unpinning unpinning, DispatcherQueue ui, nint owner)
 {
     /// <summary>
     /// Opens the menu for <paramref name="id"/> at <paramref name="at"/> (physical
@@ -37,14 +41,14 @@ sealed class PrintMenu(AppState state, PrintCommands commands, Prints prints, Un
         try
         {
             var items = entries.Select(e => e.Action is { } action ? new MenuItem(e.Label, () => Run(action, id)) : MenuItem.Separator).ToList();
-            // The board's window is never activated: the menu leaves the keyboard where it was.
+            // The menu gives the keyboard back to whoever had it when it closes.
             if (at is { } point)
             {
-                PopupMenu.ShowAt(window, (origin.X + point.X, origin.Y + point.Y), items, takeForeground: false);
+                PopupMenu.ShowAt(owner, (origin.X + point.X, origin.Y + point.Y), items);
             }
             else
             {
-                PopupMenu.ShowAtPointer(window, items, takeForeground: false);
+                PopupMenu.ShowAtPointer(owner, items);
             }
         }
         finally

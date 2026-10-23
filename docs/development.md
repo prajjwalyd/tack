@@ -3,9 +3,11 @@
 How to build, run and test Tack, and the conventions the code follows.
 Tack is small on purpose: a board, prints, pins.
 
-Tack is being ported from Rust and Tauri to C#, WinUI 3 and Native AOT; the
-plan, and what is done so far, is in [csharp-port.md](csharp-port.md). The
-Rust app is kept on `main` until the C# app replaces it.
+Tack 0.2 was a Rust and Tauri app; from 0.3 it is C#, WinUI 3 and Native
+AOT. How the port was planned and done, and the contracts it kept with 0.2
+(board.json, the folders, the identity strings, the phone page), are in
+[csharp-port.md](csharp-port.md); the design notes for the board, Settings,
+the phone board and distribution are beside it.
 
 ## Prerequisites
 
@@ -41,10 +43,43 @@ The copied board.json still names your real files; the app reads them but
 only ever recycles files inside its own folders.
 
 A release build uses the real folders and names: run one only with
-`TACK_HOME` set, or with the installed Tack quit.
+`TACK_HOME` set, or with the installed Tack quit. With `TACK_HOME` set it
+leaves the Run value alone and never checks for or installs updates, but it
+still uses the real single-instance mutex (so quit the installed Tack
+first), and its startup sweep still sends leftovers older than 8 days in
+that folder to the Recycle Bin. Debug builds never check for updates.
 
 Debug builds trace to the debugger's output and stderr with a `tack` prefix
-(`DevTrace`). Release builds trace nothing.
+(`DevTrace`). Release builds trace nothing. Started from a packaged app
+(Windows Terminal, say), Tack starts itself again outside that package and
+its trace goes with it; set `TACK_STAY_IN_PACKAGE=1` to keep it in the
+terminal.
+
+### Pictures and measurements
+
+The scripts in `scripts/dev` run a build on a throwaway copy of
+`%LOCALAPPDATA%\Tack.Dev` and look only at Tack's own windows, never the
+rest of the screen:
+
+- `board-shot.ps1`: brings the board down and saves a PNG of it (debug
+  builds; `TACK_DEBUG_SHOW`, `TACK_DEBUG_SHOT`).
+- `settings-shot.ps1 -Section <id> [-Theme dark]`: opens Settings at a
+  group or the phone page and saves a picture of that window alone (debug
+  builds; `TACK_DEBUG_SETTINGS*`).
+- `measure.ps1 -Exe <published Tack.exe>`: a Release build against the
+  performance budget in csharp-port.md: start to the tray, the first reveal,
+  memory at rest, shown and tucked, wake-ups and the CPU for 20 reveals. It
+  shows and hides the board by posting the toggle shortcut's message to
+  Tack's own window, so the board comes down on screen while it runs.
+
+They set `TACK_DEBUG_NO_SWEEP=1` (debug builds: no Recycle Bin sweep on the
+copy) and `TACK_DEV_INSTANCE`, which gives a debug build a single-instance
+name of its own so several can run at once.
+
+The asset generators under `scripts/` (`icon`, `felt`, `board-assets`,
+`board-chrome`, `sounds`) remake checked-in files and are rarely needed;
+each says at its top what it needs (Python with Pillow, Node, or Chrome or
+Edge).
 
 ## Code style
 
