@@ -51,7 +51,7 @@ public sealed class PictureDecoderTests
     [Fact]
     public async Task Only_png_and_jpeg_are_decoded()
     {
-        var bitmap = BitmapFile.For(Dibs.Bgrx(2, 1, [1, 2, 3, 0, 4, 5, 6, 0]));
+        var bitmap = BmpFiles.Bgrx(2, 1, [1, 2, 3, 0, 4, 5, 6, 0]);
 
         await Assert.ThrowsAsync<InvalidDataException>(() => PictureDecoder.DecodeAsync(bitmap));
         await Assert.ThrowsAsync<InvalidDataException>(() => PictureDecoder.DecodeAsync("not a picture"u8.ToArray()));
@@ -86,16 +86,16 @@ public sealed class PictureDecoderTests
     }
 
     [Fact]
-    public async Task A_bitmap_off_the_clipboard_decodes_top_down_and_opaque()
+    public async Task A_bitmap_off_the_clipboard_decodes_top_down()
     {
-        // Bottom-up rows, as most bitmaps are, with an alpha nobody set.
+        // Bottom-up rows, as most bitmaps are.
         byte[] pixels =
         [
             255, 0, 0, 0, 255, 255, 255, 0, // bottom: blue, white
             0, 0, 255, 0, 0, 255, 0, 0, // top: red, green
         ];
 
-        var decoded = await PictureDecoder.DecodeDibAsync(Dibs.Bgrx(2, 2, pixels));
+        var decoded = await PictureDecoder.DecodeBitmapAsync(BmpFiles.Bgrx(2, 2, pixels));
 
         Assert.Equal((2, 2), (decoded.Width, decoded.Height));
         Assert.Equal([0, 0, 255, 255, 0, 255, 0, 255, 255, 0, 0, 255, 255, 255, 255, 255], decoded.Bgra);
@@ -107,7 +107,7 @@ public sealed class PictureDecoderTests
         // Three pixels make 9 bytes, padded to 12.
         byte[] row = [10, 20, 30, 40, 50, 60, 70, 80, 90, 0, 0, 0];
 
-        var decoded = await PictureDecoder.DecodeDibAsync(Dibs.Of(3, 1, bits: 24, compression: 0, pixels: row));
+        var decoded = await PictureDecoder.DecodeBitmapAsync(BmpFiles.Of(3, 1, bits: 24, compression: 0, pixels: row));
 
         Assert.Equal([10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255], decoded.Bgra);
     }
@@ -119,7 +119,7 @@ public sealed class PictureDecoderTests
         byte[] masks = [0, 0, 0xFF, 0, 0, 0xFF, 0, 0, 0xFF, 0, 0, 0];
         byte[] pixels = [10, 20, 30, 0, 40, 50, 60, 0];
 
-        var decoded = await PictureDecoder.DecodeDibAsync(Dibs.Of(2, -1, bits: 32, compression: 3, pixels: [.. masks, .. pixels]));
+        var decoded = await PictureDecoder.DecodeBitmapAsync(BmpFiles.Of(2, -1, bits: 32, compression: 3, pixels, masks));
 
         Assert.Equal([10, 20, 30, 255, 40, 50, 60, 255], decoded.Bgra);
     }

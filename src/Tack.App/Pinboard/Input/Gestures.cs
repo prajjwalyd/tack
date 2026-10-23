@@ -1,5 +1,6 @@
 using Microsoft.UI;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -192,11 +193,12 @@ sealed class Gestures : BoardPart
 
     void RootMoved(object sender, PointerRoutedEventArgs e)
     {
-        var at = e.GetCurrentPoint(Board.Layers.Root).Position;
+        var point = e.GetCurrentPoint(Board.Layers.Root);
+        var at = point.Position;
         _hover.Pointer = at;
         if (_machine.Sinking)
         {
-            Run(_machine.Move(at.X, at.Y, Now()));
+            Run(_machine.Move(at.X, at.Y, Now()), point);
             Sync();
         }
     }
@@ -240,15 +242,15 @@ sealed class Gestures : BoardPart
         Sync();
     }
 
-    /// <summary>Does what the finished gestures ask.</summary>
-    void Run(IReadOnlyList<GestureOutcome> outcomes)
+    /// <summary>Does what the finished gestures ask; a drag starts from <paramref name="point"/>, the pointer that moved.</summary>
+    void Run(IReadOnlyList<GestureOutcome> outcomes, PointerPoint? point = null)
     {
         if (_machine.Dragged)
         {
-            // The shell's drag takes the pointer from here.
+            // WinUI's drag takes the pointer from here.
             Release();
         }
-        _outcomes.Run(outcomes);
+        _outcomes.Run(outcomes, point);
     }
 
     /// <summary>Brings the board's state and the sinking look up to the machine's, and waits for whatever falls due next.</summary>

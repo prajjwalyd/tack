@@ -14,11 +14,12 @@ namespace Tack.App;
 /// Pinning the selection on purpose (Win+Alt+C): text becomes a note, a
 /// picture a capture, image files prints of those files. Anything that cannot
 /// be pinned gets a short notice instead. Text only ever reaches the board this
-/// way, because the user asked: the clipboard is read only right after the pin
-/// shortcut, and what the user had on it before is put back.
+/// way, because the user asked: the selection is read only right after the pin
+/// shortcut, as text through UI Automation where the app offers it, and
+/// otherwise as the app's own copy, with what the user had on the clipboard
+/// before put back.
 /// </summary>
-/// <param name="owner">The host window, named as the one holding the clipboard open.</param>
-sealed class Pinning(AppState state, Prints prints, CaptureFlow captures, Reveal reveal, Notices notices, string notesFolder, nint owner)
+sealed class Pinning(AppState state, Prints prints, CaptureFlow captures, Reveal reveal, Notices notices, string notesFolder)
 {
     /// <summary>
     /// Set while a selection is pinned: one at a time, and a press meanwhile is
@@ -35,17 +36,28 @@ sealed class Pinning(AppState state, Prints prints, CaptureFlow captures, Reveal
         Background.Run("pinning the selection", () => PinSelectionAsync(target));
     }
 
-    /// <summary>Text dropped on the board: pinned as a note (a link if it is one), on the thread pool since it writes a file.</summary>
+    /// <summary>
+    /// Text dropped on the board: pinned as a note (a link if it is one), on the
+    /// thread pool since it writes a file. The pinning stays outside the trace
+    /// call, which a release build leaves out with its argument.
+    /// </summary>
     public void PinDroppedText(string text) =>
-        Background.Run("pinning dropped text", async () => DevTrace.Write($"dropped text: {await PinTextAsync(text).ConfigureAwait(false)}"));
+        Background.Run("pinning dropped text", async () =>
+        {
+            var outcome = await PinTextAsync(text).ConfigureAwait(false);
+            DevTrace.Write($"dropped text: {outcome}");
+        });
 
     /// <summary>
     /// Text sent from the phone board: pinned as a note (a link if it is one),
     /// with the same notices and reveal as the pin shortcut. Finishes once it is
     /// pinned or turned away.
     /// </summary>
-    public async Task PinPhoneTextAsync(string text) =>
-        DevTrace.Write($"phone text: {await PinTextAsync(text).ConfigureAwait(false)}");
+    public async Task PinPhoneTextAsync(string text)
+    {
+        var outcome = await PinTextAsync(text).ConfigureAwait(false);
+        DevTrace.Write($"phone text: {outcome}");
+    }
 
     /// <summary>Copies the selection in <paramref name="target"/> and pins what it was. Takes up to about two seconds.</summary>
     async Task PinSelectionAsync(Target? target)
@@ -57,7 +69,7 @@ sealed class Pinning(AppState state, Prints prints, CaptureFlow captures, Reveal
         }
         try
         {
-            var grab = await SelectionGrab.GrabAsync(target, owner).ConfigureAwait(false);
+            var grab = await SelectionGrab.GrabAsync(target).ConfigureAwait(false);
             var outcome = grab.KeysHeld ? "keys held too long, nothing sent" : await PinAsync(grab.What).ConfigureAwait(false);
             if (grab.Clipboard is ClipboardFate.Failed failed)
             {

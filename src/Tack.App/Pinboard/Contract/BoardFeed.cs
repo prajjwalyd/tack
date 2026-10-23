@@ -26,7 +26,7 @@ sealed class BoardFeed(DispatcherQueue ui)
 
     public event Action<string>? PrintCopied;
 
-    /// <summary>The print's file is being dragged out; the UI thread sits in the drag until <see cref="PrintDragEnded"/>.</summary>
+    /// <summary>The print's file is being dragged out, until <see cref="PrintDragEnded"/>.</summary>
     public event Action<string>? PrintDragging;
 
     public event Action<string>? PrintDragEnded;

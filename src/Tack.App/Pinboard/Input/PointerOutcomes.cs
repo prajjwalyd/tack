@@ -1,3 +1,4 @@
+using Microsoft.UI.Input;
 using Tack.Core.Diagnostics;
 using Tack.Core.Pinboard.Input;
 
@@ -5,12 +6,18 @@ namespace Tack.App.Pinboard.Input;
 
 /// <summary>
 /// Hands what finished gestures ask for to the app: copy, open, edit, drag
-/// out, the menu at the pointer. UI thread only.
+/// out (<see cref="PrintDrag"/>), the menu at the pointer. UI thread only.
 /// </summary>
 sealed class PointerOutcomes(BoardContext board)
 {
-    /// <summary>Does each in turn. A print gone or leaving is only still copied: that click was made.</summary>
-    public void Run(IReadOnlyList<GestureOutcome> outcomes)
+    readonly PrintDrag _drag = new(board);
+
+    /// <summary>
+    /// Does each in turn. A print gone or leaving is only still copied: that
+    /// click was made. <paramref name="point"/> is the pointer that moved, which
+    /// a drag starts from.
+    /// </summary>
+    public void Run(IReadOnlyList<GestureOutcome> outcomes, PointerPoint? point)
     {
         foreach (var (action, id) in outcomes)
         {
@@ -19,7 +26,7 @@ sealed class PointerOutcomes(BoardContext board)
                 _ = Copy(id);
                 continue;
             }
-            if (board.State.Find(id) is not { Leaving: false })
+            if (board.State.Find(id) is not { Leaving: false } item)
             {
                 continue;
             }
@@ -31,8 +38,12 @@ sealed class PointerOutcomes(BoardContext board)
                 case GestureAction.Edit:
                     board.Actions.Edit(id);
                     break;
+                case GestureAction.StartDrag when point is not null:
+                    _drag.Start(item, point);
+                    break;
                 case GestureAction.StartDrag:
-                    board.Actions.StartDrag(id);
+                    // No pointer to drag with: the press ends as a drag that never started.
+                    board.Actions.DragOutEnded(id, null);
                     break;
                 case GestureAction.Menu:
                     board.Actions.ShowMenu(id, null);

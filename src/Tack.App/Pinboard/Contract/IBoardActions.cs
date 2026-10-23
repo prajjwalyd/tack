@@ -28,8 +28,20 @@ interface IBoardActions
     /// <summary>The shell's "edit": Paint for a picture, Notepad for a note.</summary>
     void Edit(string id);
 
-    /// <summary>Drags the print's file out to another app.</summary>
-    void StartDrag(string id);
+    /// <summary>
+    /// The board starts dragging the print's file out to another app: once a
+    /// capture still being written is, the drag is marked (the board never
+    /// tucks under it) and <see cref="BoardFeed.PrintDragging"/> comes. The
+    /// file's path, or null if the print is gone.
+    /// </summary>
+    Task<string?> DragOutAsync(string id);
+
+    /// <summary>
+    /// The drag is over, or never started (<paramref name="path"/> null):
+    /// <see cref="BoardFeed.PrintDragEnded"/> comes, and the print is unpinned
+    /// quietly if the drop moved its file away.
+    /// </summary>
+    void DragOutEnded(string id, string? path);
 
     /// <summary>Unpins the print with a fall; a capture's or note's own file goes to the Recycle Bin.</summary>
     void Discard(string id);

@@ -84,11 +84,11 @@ sealed class DropTarget : BoardPart
         var deferral = e.GetDeferral();
         try
         {
-            var (plan, items) = await DropReader.ReadAsync(e.DataView);
+            var (plan, files) = await DropReader.ReadAsync(e.DataView);
             // Read while the drop holds its data; the pictures' own files outlast it.
             deferral.Complete();
             deferral = null;
-            await PinAsync(plan, items);
+            await PinAsync(plan, files);
         }
         catch (Exception ex)
         {
@@ -101,7 +101,7 @@ sealed class DropTarget : BoardPart
         }
     }
 
-    async Task PinAsync(DropPlan plan, Dictionary<DroppedFile, IStorageItem> items)
+    async Task PinAsync(DropPlan plan, Dictionary<DroppedFile, StorageFile?> files)
     {
         switch (plan.Outcome)
         {
@@ -117,7 +117,7 @@ sealed class DropTarget : BoardPart
             case DropOutcome.Images:
                 foreach (var image in plan.Images)
                 {
-                    if (await DropReader.BytesAsync(items[image]) is { } bytes)
+                    if (await DropReader.BytesAsync(files[image]) is { } bytes)
                     {
                         Board.Actions.PinImage(string.IsNullOrEmpty(image.Name) ? "Image.png" : image.Name, bytes);
                     }

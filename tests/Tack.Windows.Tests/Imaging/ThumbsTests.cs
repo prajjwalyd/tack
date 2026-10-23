@@ -12,9 +12,6 @@ public sealed class ThumbsTests
 
         Assert.Equal((1200, 600), (thumb.Width, thumb.Height));
         Assert.Equal((360, 180), await SizeOf(thumb.Jpeg));
-        var drag = (await DragImage.FromAsync(thumb.Jpeg))!;
-        Assert.Equal((160, 80), (drag.Width, drag.Height));
-        Assert.Equal(160 * 80 * 4, drag.Bgra.Length);
     }
 
     [Fact]
@@ -29,18 +26,14 @@ public sealed class ThumbsTests
         Assert.Equal((3200, 1600), (flight.Thumb.Width, flight.Thumb.Height));
         // The full picture's hash, not the flight picture's.
         Assert.Equal((await Thumbs.FromPictureAsync(picture)).Hash, flight.Thumb.Hash);
-        var drag = (await DragImage.FromAsync(flight.Jpeg))!;
-        Assert.Equal((160, 80), (drag.Width, drag.Height));
     }
 
     [Fact]
-    public async Task A_small_picture_keeps_its_size_and_a_drag_image_still_fills_the_box()
+    public async Task A_small_picture_keeps_its_size()
     {
         var thumb = await Thumbs.FromPictureAsync(Solid(100, 50, 1, 2, 3));
 
         Assert.Equal((100, 50), await SizeOf(thumb.Jpeg));
-        var drag = (await DragImage.FromAsync(thumb.Jpeg))!;
-        Assert.Equal((160, 80), (drag.Width, drag.Height));
     }
 
     [Fact]
@@ -51,12 +44,6 @@ public sealed class ThumbsTests
         var pixels = (await PictureDecoder.DecodeAsync(thumb.Jpeg)).Bgra;
 
         Assert.All(pixels, channel => Assert.True(channel >= 250));
-    }
-
-    [Fact]
-    public async Task A_drag_image_is_nothing_for_bytes_that_are_no_picture()
-    {
-        Assert.Null(await DragImage.FromAsync([1, 2, 3]));
     }
 
     [Fact]

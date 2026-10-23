@@ -66,6 +66,18 @@ public sealed class AutostartTests : IDisposable
     }
 
     [Fact]
+    public void Refreshing_leaves_a_value_that_already_points_here_unwritten()
+    {
+        // Tack 0.2's value names tack.exe; the same file, so it stays as it is.
+        var older = Exe.Replace("Tack.exe", "tack.exe", StringComparison.Ordinal);
+        At(older).Set(true);
+
+        At().Refresh();
+
+        Assert.Equal($"\"{older}\"", Data());
+    }
+
+    [Fact]
     public void Refreshing_leaves_autostart_off()
     {
         At().Refresh();

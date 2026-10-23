@@ -12,7 +12,7 @@ static class PictureTaker
 {
     /// <param name="attempt">One try; its reason counts only when it gives no picture.</param>
     public static async Task<(CopiedPicture? Picture, Untaken Why)> TakeAsync(
-        Func<(CopiedPicture? Picture, Untaken Why)> attempt,
+        Func<Task<(CopiedPicture? Picture, Untaken Why)>> attempt,
         int tries,
         TimeSpan gap)
     {
@@ -23,7 +23,7 @@ static class PictureTaker
             {
                 await Task.Delay(gap).ConfigureAwait(false);
             }
-            var (picture, reason) = attempt();
+            var (picture, reason) = await attempt().ConfigureAwait(false);
             if (picture != null)
             {
                 return (picture, why);

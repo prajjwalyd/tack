@@ -3,6 +3,7 @@ using Tack.Core.Pinboard.Input;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Storage.Streams;
+using WinRT;
 
 namespace Tack.App.Pinboard.Input;
 
@@ -20,35 +21,35 @@ static class DropReader
             data.Contains(StandardDataFormats.WebLink),
             data.Contains(StandardDataFormats.Text));
 
-    /// <summary>The plan for the drop, with each file's item to read a picture from.</summary>
-    public static async Task<(DropPlan Plan, Dictionary<DroppedFile, IStorageItem> Items)> ReadAsync(DataPackageView data)
+    /// <summary>The plan for the drop, with each file to read a picture from (null for a folder).</summary>
+    public static async Task<(DropPlan Plan, Dictionary<DroppedFile, StorageFile?> Files)> ReadAsync(DataPackageView data)
     {
-        var items = new Dictionary<DroppedFile, IStorageItem>(ReferenceEqualityComparer.Instance);
+        var files = new Dictionary<DroppedFile, StorageFile?>(ReferenceEqualityComparer.Instance);
         if (data.Contains(StandardDataFormats.StorageItems))
         {
             foreach (var item in await data.GetStorageItemsAsync())
             {
-                var file = item as StorageFile;
+                var file = FileOf(item);
                 var size = file is null ? 0 : (long)(await file.GetBasicPropertiesAsync()).Size;
-                items[new DroppedFile(item.Name, file?.ContentType, size)] = item;
+                files[new DroppedFile(item.Name, file?.ContentType, size)] = file;
             }
         }
         string? link = null, text = null;
-        if (items.Count == 0 && data.Contains(StandardDataFormats.WebLink))
+        if (files.Count == 0 && data.Contains(StandardDataFormats.WebLink))
         {
             link = (await data.GetWebLinkAsync())?.OriginalString;
         }
-        if (items.Count == 0 && DropRules.FirstAddress(link) is null && data.Contains(StandardDataFormats.Text))
+        if (files.Count == 0 && DropRules.FirstAddress(link) is null && data.Contains(StandardDataFormats.Text))
         {
             text = await data.GetTextAsync();
         }
-        return (DropRules.Plan([.. items.Keys], link, text), items);
+        return (DropRules.Plan([.. files.Keys], link, text), files);
     }
 
     /// <summary>A dropped picture's bytes, at most 40 MB; null if it cannot be read (a folder, a file gone).</summary>
-    public static async Task<byte[]?> BytesAsync(IStorageItem item)
+    public static async Task<byte[]?> BytesAsync(StorageFile? file)
     {
-        if (item is not StorageFile file)
+        if (file is null)
         {
             return null;
         }
@@ -70,4 +71,11 @@ static class DropReader
             return null;
         }
     }
+
+    /// <summary>
+    /// The item as a file, or null for a folder. Asked of Windows rather than
+    /// cast: under Native AOT the item comes as a bare WinRT object, which a C#
+    /// cast to <see cref="StorageFile"/> never matches.
+    /// </summary>
+    static StorageFile? FileOf(IStorageItem item) => item.IsOfType(StorageItemTypes.File) ? item.As<StorageFile>() : null;
 }

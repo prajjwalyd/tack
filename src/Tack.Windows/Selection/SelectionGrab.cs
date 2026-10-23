@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Tack.Core.Diagnostics;
 using Tack.Windows.Clipboard;
 using Tack.Windows.Input;
@@ -7,12 +8,15 @@ using Windows.Win32.UI.Input.KeyboardAndMouse;
 namespace Tack.Windows.Selection;
 
 /// <summary>
-/// Pinning the selection (Win+Alt+C): Tack asks the app in front to copy what
-/// is selected, reads the copy, and puts the user's clipboard back as it was.
-/// Before sending Ctrl+C it waits for the shortcut's own keys to be let go, so
-/// the app does not read Win+Alt+Ctrl+C. The keys go only to the
-/// <see cref="Target"/>, only its app's copy is read, and the user's clipboard
-/// is put back only if nobody else wrote to it meanwhile.
+/// Pinning the selection (Win+Alt+C). Selected text is read through UI
+/// Automation (<see cref="SelectedText"/>), which leaves the clipboard alone.
+/// Anything else (a picture, files, or an app UI Automation cannot read) is
+/// copied by the app in front: Tack waits for the shortcut's own keys to be
+/// let go, so the app does not read Win+Alt+Ctrl+C, sends Ctrl+C to the
+/// <see cref="Target"/> only, reads only its app's copy, and puts the user's
+/// clipboard back, kept out of clipboard history, unless another app wrote to
+/// it meanwhile. The copy the app makes is its own and goes into history like
+/// any other.
 /// </summary>
 public static class SelectionGrab
 {
@@ -54,41 +58,36 @@ public static class SelectionGrab
     }
 
     /// <summary>
-    /// Waits for the shortcut's keys to be let go, then copies the selection in
-    /// <paramref name="target"/> (the window in front when the shortcut fired),
-    /// reads it and restores the clipboard. Nothing is sent if another window
-    /// has come to the front meanwhile. Takes up to about two seconds, on the
-    /// thread pool; safe to start from the UI thread. <paramref name="owner"/> is
-    /// the host window, named as the one holding the clipboard open.
+    /// Reads the selection in <paramref name="target"/> (the window in front
+    /// when the shortcut fired). Takes up to about two seconds when the app has
+    /// to copy, on a thread of its own; safe to start from the UI thread.
     /// </summary>
-    public static Task<Grab> GrabAsync(Target? target, nint owner) => Task.Run(() => RunAsync(target, owner));
-
-    static async Task<Grab> RunAsync(Target? target, nint owner)
+    public static Task<Grab> GrabAsync(Target? target)
     {
-        var started = Stopwatch.GetTimestamp();
-        var wait = new ReleaseWait(TimeSpan.Zero);
-        while (true)
-        {
-            var step = wait.Step(s_modifiers.Any(Pointer.KeyDown), Stopwatch.GetElapsedTime(started));
-            if (step == Release.Ready)
-            {
-                break;
-            }
-            if (step == Release.TimedOut)
-            {
-                return Grab.Nothing with { KeysHeld = true };
-            }
-            await Task.Delay(s_poll).ConfigureAwait(false);
-        }
         if (target == null)
         {
             Trace("no window was in front");
-            return Grab.Nothing;
+            return Task.FromResult(Grab.Nothing);
+        }
+        // The clipboard thread suits UI Automation too, and the copy's
+        // reading and putting back must share one thread.
+        return ClipboardThread.RunAsync(() => Run(target));
+    }
+
+    static Grab Run(Target target)
+    {
+        if (SelectedText.Read(target) is { } selected)
+        {
+            return new Grab(selected, ClipboardFate.Untouched);
+        }
+        if (!KeysLetGo())
+        {
+            return Grab.Nothing with { KeysHeld = true };
         }
         s_tally.Begin();
         try
         {
-            return await CopyAndReadAsync(owner, target).ConfigureAwait(false);
+            return CopyAndRead(target);
         }
         finally
         {
@@ -96,9 +95,35 @@ public static class SelectionGrab
         }
     }
 
-    static async Task<Grab> CopyAndReadAsync(nint owner, Target target)
+    /// <summary>Waits for the shortcut's keys to be let go; false if they are held too long.</summary>
+    static bool KeysLetGo()
     {
-        var before = ClipboardSnapshot.Take(owner);
+        var started = Stopwatch.GetTimestamp();
+        var wait = new ReleaseWait(TimeSpan.Zero);
+        while (true)
+        {
+            switch (wait.Step(s_modifiers.Any(Pointer.KeyDown), Stopwatch.GetElapsedTime(started)))
+            {
+                case Release.Ready:
+                    return true;
+                case Release.TimedOut:
+                    return false;
+            }
+            Thread.Sleep(s_poll);
+        }
+    }
+
+    static Grab CopyAndRead(Target target)
+    {
+        SavedClipboard? before;
+        try
+        {
+            before = SavedClipboard.Take();
+        }
+        catch (COMException)
+        {
+            before = null;
+        }
         var sequence = SystemClipboard.Sequence();
         if (!target.StillInFront())
         {
@@ -128,10 +153,20 @@ public static class SelectionGrab
                 Trace("the app in front did not copy anything");
                 return Grab.Nothing;
             }
-            await Task.Delay(s_poll).ConfigureAwait(false);
+            Thread.Sleep(s_poll);
         }
-        await Task.Delay(s_secondStep).ConfigureAwait(false);
-        var what = await SystemClipboard.ReadAsync(owner).ConfigureAwait(false);
+        Thread.Sleep(s_secondStep);
+        ClipboardContent what;
+        try
+        {
+            what = ClipboardView.Read();
+        }
+        catch (Exception e)
+        {
+            // The user's clipboard still goes back.
+            Trace($"the copy could not be read ({e.Message})");
+            what = ClipboardContent.Empty;
+        }
         var read = SystemClipboard.Sequence();
         if (read != sequence && !target.WroteClipboard())
         {
@@ -139,10 +174,10 @@ public static class SelectionGrab
             Trace("another app wrote to the clipboard while the copy was read");
             return new Grab(ClipboardContent.Empty, ClipboardFate.LeftNewer);
         }
-        return new Grab(what, Restore(before, owner, read));
+        return new Grab(what, PutBack(before, read));
     }
 
-    static ClipboardFate Restore(ClipboardSnapshot? before, nint owner, uint since)
+    static ClipboardFate PutBack(SavedClipboard? before, uint since)
     {
         if (before == null)
         {
@@ -150,9 +185,15 @@ public static class SelectionGrab
         }
         try
         {
-            return before.Restore(owner, since) == Restored.Done ? ClipboardFate.Restored : ClipboardFate.LeftNewer;
+            if (!before.PutBack(since))
+            {
+                return ClipboardFate.LeftNewer;
+            }
+            return before.Unread > 0
+                ? new ClipboardFate.Failed($"{before.Unread} format(s) could not be read before the copy")
+                : ClipboardFate.Restored;
         }
-        catch (IOException e)
+        catch (Exception e) when (e is COMException or IOException)
         {
             return new ClipboardFate.Failed(e.Message);
         }

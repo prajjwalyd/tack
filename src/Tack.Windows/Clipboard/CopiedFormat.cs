@@ -6,6 +6,6 @@ public enum CopiedFormat
     /// <summary>The registered "PNG" format: a whole PNG file.</summary>
     Png,
 
-    /// <summary>CF_DIB: a bitmap header and its pixels, with no file header.</summary>
-    Dib,
+    /// <summary>Any other bitmap, which Windows hands over as a .bmp file.</summary>
+    Bitmap,
 }

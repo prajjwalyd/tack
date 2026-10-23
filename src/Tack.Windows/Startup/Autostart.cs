@@ -20,20 +20,20 @@ public sealed record Autostart(string ValueName, string ExePath, string Key = Au
     public static Autostart For(AppIdentity identity) => new(identity.RunValueName, Environment.ProcessPath ?? "");
 
     /// <summary>Whether Tack starts with Windows.</summary>
-    public bool Enabled
+    public bool Enabled => Command() is not null;
+
+    /// <summary>The command the Run value holds, or null when there is none.</summary>
+    string? Command()
     {
-        get
+        try
         {
-            try
-            {
-                using var key = Registry.CurrentUser.OpenSubKey(Key);
-                return key?.GetValue(ValueName) is string;
-            }
-            catch (Exception e) when (e is SecurityException or UnauthorizedAccessException or IOException)
-            {
-                DevTrace.Write($"autostart: cannot read the Run key: {e.Message}");
-                return false;
-            }
+            using var key = Registry.CurrentUser.OpenSubKey(Key);
+            return key?.GetValue(ValueName) as string;
+        }
+        catch (Exception e) when (e is SecurityException or UnauthorizedAccessException or IOException)
+        {
+            DevTrace.Write($"autostart: cannot read the Run key: {e.Message}");
+            return null;
         }
     }
 
@@ -63,10 +63,15 @@ public sealed record Autostart(string ValueName, string ExePath, string Key = Au
         }
     }
 
-    /// <summary>At startup: if Tack starts with Windows, points the value at this executable.</summary>
+    /// <summary>
+    /// At startup: if Tack starts with Windows from somewhere else, points the
+    /// value at this executable. It is written only when it differs, so a
+    /// normal start never touches the Run key: an unsigned app rewriting its
+    /// Run value at every start is what antivirus flags as persistence.
+    /// </summary>
     public void Refresh()
     {
-        if (Enabled)
+        if (Command() is { } command && !string.Equals(command, $"\"{ExePath}\"", StringComparison.OrdinalIgnoreCase))
         {
             Set(true);
         }

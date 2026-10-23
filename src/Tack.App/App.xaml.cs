@@ -70,7 +70,7 @@ public partial class App : Application
         var notices = new Notices(state, reveal, feed);
         var saving = new CaptureSaving(state, unpinning, saves, _paths.Captures);
         _captures = new CaptureFlow(state, prints, files, saving, saves, reveal);
-        var pinning = new Pinning(state, prints, _captures, reveal, notices, _paths.Notes, _host.Handle);
+        var pinning = new Pinning(state, prints, _captures, reveal, notices, _paths.Notes);
         var drops = new ImageDrops(prints, files, reveal, notices, _paths.Captures);
         _board.Start(BoardActionsFor(state, saves, feed, ui, prints, unpinning, reveal, pinning, drops), feed);
 
@@ -117,7 +117,6 @@ public partial class App : Application
         AppState state, PendingSaves saves, BoardFeed feed, DispatcherQueue ui,
         Prints prints, Unpinning unpinning, Reveal reveal, Pinning pinning, ImageDrops drops)
     {
-        var window = _board!.Handle;
         var commands = new PrintCommands(state, saves, prints, feed);
         return new BoardActions(
             state,
@@ -126,7 +125,7 @@ public partial class App : Application
             unpinning,
             commands,
             new PrintMenu(state, commands, prints, unpinning, ui, _host!.Handle),
-            new DragOutFlow(state, saves, unpinning, feed, ui, window),
+            new DragOutFlow(state, saves, unpinning, feed),
             pinning,
             drops,
             new SnipTip(state));

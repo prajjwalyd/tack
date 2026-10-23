@@ -135,28 +135,33 @@ Windows package or by its program's full path in Windows' own folders, never
 by name alone, and skips any copy marked private. It ignores the clipboard
 altogether while Win+Alt+C runs.
 
-What Win+Alt+C does with the clipboard:
+What Win+Alt+C does, and when it touches the clipboard:
 
-- It asks the app that was in front when you pressed the shortcut to copy
-  the selection (it sends that window Ctrl+C, or Ctrl+Insert in a terminal,
-  where Ctrl+C would interrupt the running command), and sends nothing if
-  another window has come to the front meanwhile. It takes the copy only
-  if that app wrote it, reads it once, and then puts back what you had on
-  the clipboard before, so a paste still pastes what it did. The copy put
-  back is marked to stay out of Windows' clipboard history and cloud
-  clipboard, which already hold the original, so it does not show up twice.
-  If another app wrote to the clipboard in the meantime, Tack leaves that
-  alone instead of putting your old content over it; if putting yours back
-  fails, the board says "Couldn't restore your clipboard".
-- The app's own copy is an ordinary copy: if clipboard history (Win+V) is
-  on, the selection appears there, as it would after Ctrl+C, and if you
-  turned on clipboard sync across your devices, Windows may send it to the
-  cloud clipboard too. Tack's code cannot prevent that.
-- What comes back is every part of the clipboard that is plain data: text,
-  pictures, HTML and rich text, copied files, and any privacy markers (if
-  what you had carried any of the four, all four come back). A live object
-  copied from Office as an embedded object comes back as its text, rich
-  text and picture, but no longer as an object.
+- Selected text is read through UI Automation, the way a screen reader
+  reads it, from the app that was in front when you pressed the shortcut.
+  Nothing is copied: the clipboard and clipboard history are not touched.
+  Browsers, Office, Notepad, terminals and most editors answer this way.
+  Text selected in a password box is never read ("Not pinned: marked
+  private").
+- Anything else (a picture, files, or text in an app UI Automation cannot
+  read) is copied by that app: Tack sends that window Ctrl+C, or Ctrl+Insert
+  in a terminal, where Ctrl+C would interrupt the running command, and sends
+  nothing if another window has come to the front meanwhile. It takes the
+  copy only if that app wrote it, reads it once, and then puts back what you
+  had on the clipboard before, so a paste still pastes what it did. It puts
+  it back the way Windows offers for this, kept out of clipboard history and
+  the cloud clipboard, which already hold the original, so it does not show
+  up twice. If another app wrote to the clipboard in the meantime, Tack
+  leaves that alone instead of putting your old content over it; if putting
+  yours back fails, the board says "Couldn't restore your clipboard".
+- That copy is the app's own, an ordinary copy: if clipboard history
+  (Win+V) is on, the selection appears there, as it would after Ctrl+C, and
+  if you turned on clipboard sync across your devices, Windows may send it
+  to the cloud clipboard too. Tack's code cannot prevent that.
+- What comes back is every part of the clipboard Windows will hand over:
+  text, pictures, HTML and rich text, copied files, and any privacy markers
+  it carried. A live object copied from Office as an embedded object comes
+  back as its text, rich text and picture, but no longer as an object.
 - Content the copying app marked private is never pinned: password
   managers mark their copies with `ExcludeClipboardContentFromMonitorProcessing`,
   `CanIncludeInClipboardHistory` set to 0, or `Clipboard Viewer Ignore`, and
@@ -164,6 +169,11 @@ What Win+Alt+C does with the clipboard:
   the clipboard before was marked private, it goes back with its marks.
 - If nothing was selected, nothing is read and the clipboard is left as it
   was.
+- Tack reads the clipboard through Windows' own clipboard and never opens
+  it itself, so it never keeps other apps (Snipping Tool, clipboard history)
+  out of it. Once Tack has written to it (a print you copy, or your
+  clipboard put back), no window of Tack's is left owning it, so no app's
+  next copy waits on Tack.
 - Copied files are pinned only if they are PNG or JPEG files on a drive
   letter. A network path is never opened: Windows would connect to that
   server and offer it your sign-in.

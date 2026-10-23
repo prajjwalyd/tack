@@ -54,7 +54,9 @@ sealed class BoardActions(
     /// <summary>Explorer on the print's folder with its file selected, as the menu's "Show in Explorer".</summary>
     public void ShowInFolder(string id) => commands.ShowInFolder(id);
 
-    public void StartDrag(string id) => drag.Start(id);
+    public Task<string?> DragOutAsync(string id) => drag.BeginAsync(id);
+
+    public void DragOutEnded(string id, string? path) => drag.End(id, path);
 
     public void Discard(string id) => unpinning.Remove(id, Removal.Fall);
 

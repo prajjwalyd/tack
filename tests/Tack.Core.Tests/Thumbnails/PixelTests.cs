@@ -73,7 +73,7 @@ public class PixelTests
     public void Thumbnails_fit_their_box_and_keep_the_picture_shape()
     {
         Assert.Equal((360, 180), ThumbnailRules.Fit(1200, 600, ThumbnailRules.ThumbSide));
-        Assert.Equal((160, 80), ThumbnailRules.Fit(360, 180, ThumbnailRules.DragSide));
+        Assert.Equal((160, 80), ThumbnailRules.Fit(360, 180, 160));
         Assert.Equal((1600, 800), ThumbnailRules.Fit(3200, 1600, ThumbnailRules.FlightSide));
         // Already small enough: kept at its size.
         Assert.Equal((200, 100), ThumbnailRules.Fit(200, 100, ThumbnailRules.ThumbSide));

@@ -1,5 +1,4 @@
 using Tack.Windows.Clipboard;
-using Tack.Windows.Imaging;
 using Tack.Windows.Snips;
 
 namespace Tack.Windows.Tests.Snips;
@@ -8,10 +7,10 @@ public sealed class PictureTakerTests
 {
     static readonly CopiedPicture s_picture = new(CopiedFormat.Png, [1]);
 
-    static Func<(CopiedPicture?, Untaken)> Attempts(params (CopiedPicture?, Untaken)[] results)
+    static Func<Task<(CopiedPicture?, Untaken)>> Attempts(params (CopiedPicture?, Untaken)[] results)
     {
         var next = 0;
-        return () => results[Math.Min(next++, results.Length - 1)];
+        return () => Task.FromResult(results[Math.Min(next++, results.Length - 1)]);
     }
 
     [Theory]
@@ -20,7 +19,14 @@ public sealed class PictureTakerTests
     public async Task A_capture_replaced_or_marked_private_is_given_up_at_once(Untaken why)
     {
         var calls = 0;
-        var taken = await PictureTaker.TakeAsync(() => { calls++; return (null, why); }, 6, TimeSpan.Zero);
+        var taken = await PictureTaker.TakeAsync(
+            () =>
+            {
+                calls++;
+                return Task.FromResult<(CopiedPicture?, Untaken)>((null, why));
+            },
+            6,
+            TimeSpan.Zero);
         Assert.Equal((null, why), taken);
         Assert.Equal(1, calls);
     }

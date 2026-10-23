@@ -10,9 +10,6 @@ public static class ThumbnailRules
     public const int ThumbSide = 360;
     public const int ThumbQuality = 85;
 
-    /// <summary>Long side of the drag image that follows the pointer.</summary>
-    public const int DragSide = 160;
-
     /// <summary>Long side of the picture a new capture flies onto the board with: about the snip itself on most screens.</summary>
     public const int FlightSide = 1600;
     public const int FlightQuality = 80;

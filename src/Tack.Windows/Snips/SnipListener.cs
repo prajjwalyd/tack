@@ -33,7 +33,7 @@ public sealed class SnipListener : IDisposable
     public SnipListener(HostWindow host)
     {
         _host = host;
-        _reader = new SnipReader(host.Handle, snip => Captured?.Invoke(snip));
+        _reader = new SnipReader(snip => Captured?.Invoke(snip));
         host.Listen(PInvoke.WM_CLIPBOARDUPDATE, (_, _) => OnChanged());
         // As in Tack 0.2, Tack runs on without snips rather than not at all;
         // screenshot files and everything else still work.

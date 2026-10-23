@@ -20,14 +20,15 @@ sealed class SnipReader
     public static readonly TimeSpan ReadGap = TimeSpan.FromMilliseconds(200);
 
     readonly Channel<HeardSnip> _heard = Channel.CreateUnbounded<HeardSnip>(new UnboundedChannelOptions { SingleReader = true });
-    readonly nint _window;
     readonly Action<Snip> _deliver;
 
-    /// <param name="window">The window named as holding the clipboard open while a capture is read.</param>
+    /// <summary>The copy read last; only the reader uses it.</summary>
+    uint? _last;
+
     /// <param name="deliver">Gets each capture, on a thread-pool thread.</param>
-    public SnipReader(nint window, Action<Snip> deliver)
+    public SnipReader(Action<Snip> deliver)
     {
-        (_window, _deliver) = (window, deliver);
+        _deliver = deliver;
         _ = Task.Run(ReadAllAsync);
     }
 
@@ -55,16 +56,22 @@ sealed class SnipReader
 
     /// <summary>
     /// Reads the capture heard at its sequence number: not if it was marked
-    /// private, and only if nothing else reached the clipboard meanwhile. The
-    /// clipboard is open only while the picture's bytes are copied.
+    /// private, and only if nothing else reached the clipboard meanwhile.
     /// </summary>
     async Task<string> ReadAsync(HeardSnip heard)
     {
-        // Snipping Tool sets the clipboard, then flushes it: reading at once
-        // would hold it open just when Snipping Tool needs it again.
+        // A busy UI thread hears several changes at once, each with the
+        // number the clipboard has by then: that copy is read once.
+        if (heard.Sequence == _last)
+        {
+            return "ignored (heard twice)";
+        }
+        _last = heard.Sequence;
+        // Snipping Tool sets the clipboard, then flushes it: by then Windows
+        // has the whole picture and need not ask Snipping Tool to draw it.
         await Task.Delay(Settle).ConfigureAwait(false);
         var (picture, why) = await PictureTaker.TakeAsync(
-            () => SystemClipboard.TakePicture(_window, heard.Sequence), ReadTries, ReadGap).ConfigureAwait(false);
+            () => ClipboardView.TakePictureAsync(heard.Sequence), ReadTries, ReadGap).ConfigureAwait(false);
         if (picture == null)
         {
             return why switch

@@ -64,12 +64,20 @@ sealed class RailFades
         Canvas.SetTop(host, Canvas.GetTop(layers.Rail));
         layers.Board.Children.Insert(layers.Board.Children.IndexOf(layers.Rail) + 1, host);
         ElementCompositionPreview.SetElementChildVisual(host, _sprite);
-        layers.Rail.SizeChanged += (_, e) => Resize(e.NewSize.Width);
     }
 
-    /// <summary>The row overflows or not, with more to see on these <paramref name="edges"/>.</summary>
-    public void Follow(bool overflows, ScrollEdges edges)
+    /// <summary>
+    /// The board is <paramref name="width"/> wide and the row overflows or
+    /// not, with more to see on these <paramref name="edges"/>. The width is
+    /// the board's own, never the rail's layout size: that lags a layout
+    /// behind, and the picture kept a narrower board's width.
+    /// </summary>
+    public void Follow(double width, bool overflows, ScrollEdges edges)
     {
+        if (width != _width)
+        {
+            Resize(width);
+        }
         if (overflows != _on)
         {
             _on = overflows;
@@ -120,7 +128,7 @@ sealed class RailFades
             masked.Source = picture;
             masked.Mask = _mask;
             _sprite.Brush = masked;
-            Resize(_board.Layers.Rail.ActualWidth);
+            _surface.SourceSize = _sprite.Size;
             return true;
         }
         catch (Exception e)

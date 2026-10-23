@@ -1,11 +1,13 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using Tack.Core.Diagnostics;
 using Tack.Core.Geometry;
 using Tack.Windows.Display;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Gdi;
+using Windows.Win32.System.Ole;
 using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace Tack.Windows.Edge;
@@ -31,12 +33,16 @@ internal sealed unsafe class StripThread
     readonly Action<EdgeEvent> _onEvent;
     readonly HINSTANCE _instance;
     readonly List<(HWND Window, Rect Zone)> _strips = [];
+
+    /// <summary>Every strip's drop target, as the COM object OLE is given.</summary>
+    readonly void* _dropTarget;
     bool _enabled;
 
     StripThread(Action<EdgeEvent> onEvent, HINSTANCE instance)
     {
         (_onEvent, _instance) = (onEvent, instance);
         Pointer = new StripPointer(Emit);
+        _dropTarget = ComInterfaceMarshaller<IOleDropTarget>.ConvertToUnmanaged(new StripDropTarget(Emit));
     }
 
     /// <summary>The strips' state on this thread; null on any other.</summary>
@@ -71,6 +77,7 @@ internal sealed unsafe class StripThread
         {
             self._enabled = false;
             self.Relayout();
+            ComInterfaceMarshaller<IOleDropTarget>.Free(self._dropTarget);
             t_current = null;
             fixed (char* name = ClassName)
             {
@@ -185,7 +192,7 @@ internal sealed unsafe class StripThread
             {
                 throw new Win32Exception();
             }
-            Marshal.ThrowExceptionForHR(PInvoke.RegisterDragDrop(hwnd, StripDropTarget.Instance).Value);
+            Marshal.ThrowExceptionForHR(PInvoke.RegisterDragDrop(hwnd, (IDropTarget*)_dropTarget).Value);
             // Again, in physical px: a window made on a monitor of another DPI
             // may not come out where it was asked.
             if (!PInvoke.SetWindowPos(
@@ -205,7 +212,7 @@ internal sealed unsafe class StripThread
     }
 
     /// <summary>Tells the poller; an exception must never unwind into Windows.</summary>
-    public void Emit(EdgeEvent edgeEvent)
+    void Emit(EdgeEvent edgeEvent)
     {
         try
         {

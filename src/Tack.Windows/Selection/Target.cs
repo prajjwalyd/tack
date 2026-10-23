@@ -72,8 +72,11 @@ public sealed class Target
         {
             return StillInFront();
         }
-        return owner == _window || WindowFacts.ProcessId((HWND)owner) is { } pid && (pid == Pid || pid == _hosted);
+        return owner == _window || WindowFacts.ProcessId((HWND)owner) is { } pid && Owns(pid);
     }
+
+    /// <summary>Whether a process is the target's app: its window's, or the Store app inside its frame.</summary>
+    internal bool Owns(uint pid) => pid == Pid || pid == _hosted;
 
     static unsafe nint Handle(HWND hwnd) => (nint)hwnd.Value;
 }

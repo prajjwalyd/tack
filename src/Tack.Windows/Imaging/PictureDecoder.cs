@@ -48,16 +48,12 @@ public static class PictureDecoder
         return await DecodeAsync(stream, codec).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Decodes the clipboard's CF_DIB bitmap. As for every capture, an alpha
-    /// that is the same everywhere is made opaque (see <see cref="Picture.WithoutFlatAlpha"/>).
-    /// </summary>
-    public static async Task<Picture> DecodeDibAsync(byte[] dib)
+    /// <summary>A .bmp file, as Windows hands over a bitmap copied to the clipboard.</summary>
+    public static async Task<Picture> DecodeBitmapAsync(byte[] bmp)
     {
-        using var memory = new MemoryStream(BitmapFile.For(dib), writable: false);
+        using var memory = new MemoryStream(bmp, writable: false);
         using var stream = memory.AsRandomAccessStream();
-        var picture = await DecodeAsync(stream, BitmapDecoder.BmpDecoderId).ConfigureAwait(false);
-        return picture.WithoutFlatAlpha();
+        return await DecodeAsync(stream, BitmapDecoder.BmpDecoderId).ConfigureAwait(false);
     }
 
     static async Task<Picture> DecodeAsync(IRandomAccessStream stream, Guid codec)

@@ -69,8 +69,9 @@ Both shortcuts can be changed in Settings, under **Shortcuts** (the tray menu's 
   updates; you can turn the check at start off in Settings), and to download
   one when you choose to install it. Updates are signed, and Tack refuses any
   that aren't.
-- Text is never read from your clipboard on its own, only when you press
-  Win + Alt + C, and your clipboard is put back as it was.
+- Text is never read on its own, only when you press Win + Alt + C. Selected
+  text is read without touching your clipboard; when the app has to copy (a
+  picture, files), your clipboard is put back as it was.
 - Tack's own copies of your snips and notes go to the Recycle Bin when they
   leave the board; your Screenshots folder is never touched.
 

@@ -2,10 +2,7 @@ using Tack.Windows.Imaging;
 
 namespace Tack.Windows.Clipboard;
 
-/// <summary>
-/// A picture as copied off the clipboard, still encoded: it is decoded once
-/// the clipboard is closed again, so no other app waits on Tack meanwhile.
-/// </summary>
+/// <summary>A picture as copied off the clipboard, still encoded.</summary>
 public sealed record CopiedPicture(CopiedFormat Format, byte[] Bytes)
 {
     /// <summary>
@@ -18,7 +15,7 @@ public sealed record CopiedPicture(CopiedFormat Format, byte[] Bytes)
         {
             var picture = Format == CopiedFormat.Png
                 ? await PictureDecoder.DecodeAsync(Bytes).ConfigureAwait(false)
-                : await PictureDecoder.DecodeDibAsync(Bytes).ConfigureAwait(false);
+                : await PictureDecoder.DecodeBitmapAsync(Bytes).ConfigureAwait(false);
             return picture.WithoutFlatAlpha();
         }
         catch (InvalidDataException)
