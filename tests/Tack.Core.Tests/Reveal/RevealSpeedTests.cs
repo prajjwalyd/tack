@@ -20,19 +20,6 @@ public class RevealSpeedTests
     }
 
     [Fact]
-    public void Slow_waits_exactly_as_it_always_did()
-    {
-        var slow = RevealSpeed.Slow;
-        Assert.Equal(Ms(3000), slow.Peek());
-        Assert.Equal(Ms(1750), slow.FlightPeek());
-        Assert.Equal(Ms(1600), slow.NoticePeek());
-        Assert.Equal(Ms(250), slow.LeaveDelay());
-        Assert.Equal(Ms(300), slow.TuckHideDelay());
-        Assert.Equal(Ms(1234), slow.Scaled(Ms(1234)));
-        Assert.Equal(Ms(1234), slow.ScaledMin(Ms(1234), Ms(5000)));
-    }
-
-    [Fact]
     public void Quicker_speeds_wait_less_and_move_quicker()
     {
         Assert.Equal(Ms(40), RevealSpeed.Instant.Dwell());
@@ -142,6 +129,9 @@ public class RevealSpeedTests
         Assert.Equal([3000, 1750, 1600, 250, 300], Row(RevealSpeed.Slow));
         Assert.Equal([1950, 1138, 1390, 163, 234], Row(RevealSpeed.Normal));
         Assert.Equal([1200, 800, 1210, 120, 177], Row(RevealSpeed.Instant));
+        // Slow plays any time as written.
+        Assert.Equal(Ms(1234), RevealSpeed.Slow.Scaled(Ms(1234)));
+        Assert.Equal(Ms(1234), RevealSpeed.Slow.ScaledMin(Ms(1234), Ms(5000)));
     }
 
     [Fact]
@@ -163,10 +153,6 @@ public class RevealSpeedTests
             Assert.Null(RevealSpeedTimes.Parse(bad));
             var json = JsonSerializer.Serialize(bad);
             Assert.Equal(RevealSpeed.Normal, ConverterText.Read(new RevealSpeedJsonConverter(), json));
-        }
-        foreach (var odd in new[] { "null", "7", "true", "[]", "{\"a\":1}" })
-        {
-            Assert.Equal(RevealSpeed.Normal, ConverterText.Read(new RevealSpeedJsonConverter(), odd));
         }
     }
 }

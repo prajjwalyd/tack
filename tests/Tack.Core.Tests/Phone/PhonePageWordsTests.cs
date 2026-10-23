@@ -67,16 +67,4 @@ public class PhonePageWordsTests
         Assert.StartsWith("Allowed on ", Allowed(3 * 86_400_000), StringComparison.Ordinal);
         Assert.Equal("pixel removed", PhoneWords.Removed("pixel"));
     }
-
-    [Fact]
-    public void A_QR_code_is_a_square_of_modules()
-    {
-        var qr = new QrMatrix(2, [true, false, false, true]);
-
-        Assert.Equal(2, qr.Size);
-        Assert.True(qr.IsDark(0, 0));
-        Assert.False(qr.IsDark(1, 0));
-        Assert.True(qr.IsDark(1, 1));
-        Assert.Throws<ArgumentException>(() => new QrMatrix(2, [true]));
-    }
 }

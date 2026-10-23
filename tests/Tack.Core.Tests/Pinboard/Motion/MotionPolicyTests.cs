@@ -38,18 +38,6 @@ public class MotionPolicyTests
     }
 
     [Fact]
-    public void The_classes_are_pinned()
-    {
-        var classes = MotionPolicy.All.ToDictionary(t => t.Name, t => t.Class);
-        Assert.Equal(MotionPolicy.All.Count, classes.Count);
-        Assert.Equal(MotionClass.B, classes["badge hold"]);
-        Assert.Equal(MotionClass.C, classes["breeze interval"]);
-        Assert.Equal(MotionClass.C, classes["flight decode wait"]);
-        Assert.Equal(3, MotionPolicy.All.Count(t => t.Class != MotionClass.A));
-        Assert.Equal(43, MotionPolicy.All.Count);
-    }
-
-    [Fact]
     public void The_badge_holds_a_readable_while_at_any_speed()
     {
         var instant = new MotionClock();

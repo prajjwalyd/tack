@@ -1,10 +1,12 @@
-namespace Tack.Core.Pinboard.Motion;
+using Tack.Core.Pinboard.Motion;
+
+namespace Tack.Core.Tests.Pinboard.Motion;
 
 /// <summary>
 /// How a duration, delay or timer on the board follows the Speed setting
-/// (the classes of <see cref="Reveal.RevealSpeedTimes"/>).
+/// (the classes of <see cref="Tack.Core.Reveal.RevealSpeedTimes"/>).
 /// </summary>
-public enum MotionClass
+enum MotionClass
 {
     /// <summary>An animation, or a delay inside one: scales (<see cref="MotionClock.Scaled"/>).</summary>
     A,

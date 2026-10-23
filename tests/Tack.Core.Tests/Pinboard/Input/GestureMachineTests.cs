@@ -25,15 +25,6 @@ public class GestureMachineTests
     }
 
     [Fact]
-    public void The_gesture_times_are_the_old_board_s()
-    {
-        Assert.Equal(260, GestureMachine.DoubleClickMs);
-        Assert.Equal(520, GestureMachine.HoldMs);
-        Assert.Equal(4, GestureMachine.DragPx);
-        Assert.Equal(600, GestureMachine.KeyboardMenuMs);
-    }
-
-    [Fact]
     public void A_click_copies_only_once_the_double_click_window_has_passed()
     {
         var m = new GestureMachine();

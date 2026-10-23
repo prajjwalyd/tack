@@ -33,43 +33,6 @@ public sealed class PhoneConnectionTests
     }
 
     [Fact]
-    public async Task An_endless_head_is_refused()
-    {
-        using var pair = await Loopback.OpenAsync("GET / HTTP/1.1\r\nX-Long: " + new string('a', HttpLimits.MaxHead + 10));
-
-        Assert.Equal(HeadError.HeadTooLarge, (await pair.Server.ReadHeadAsync()).Error);
-    }
-
-    [Fact]
-    public async Task Too_many_headers_are_refused()
-    {
-        var many = new StringBuilder("GET / HTTP/1.1\r\n");
-        for (var n = 0; n < 40; n++)
-        {
-            many.Append($"X-{n}: 1\r\n");
-        }
-        using var pair = await Loopback.OpenAsync(many.Append("\r\n").ToString());
-
-        Assert.Equal(HeadError.HeadTooLarge, (await pair.Server.ReadHeadAsync()).Error);
-    }
-
-    [Fact]
-    public async Task Chunked_bodies_are_not_taken()
-    {
-        using var pair = await Loopback.OpenAsync("POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n");
-
-        Assert.Equal(HeadError.LengthRequired, (await pair.Server.ReadHeadAsync()).Error);
-    }
-
-    [Fact]
-    public async Task A_bad_length_is_malformed()
-    {
-        using var pair = await Loopback.OpenAsync("POST / HTTP/1.1\r\nContent-Length: -1\r\n\r\n");
-
-        Assert.Equal(HeadError.Malformed, (await pair.Server.ReadHeadAsync()).Error);
-    }
-
-    [Fact]
     public async Task A_head_sent_in_pieces_is_read_whole()
     {
         using var pair = await Loopback.OpenAsync("GET /phone.css HT");

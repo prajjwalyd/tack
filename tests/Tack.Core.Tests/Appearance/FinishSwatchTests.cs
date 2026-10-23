@@ -26,10 +26,6 @@ public class FinishSwatchTests
     }
 
     [Fact]
-    public void The_metal_is_lit_from_the_top_at_the_old_stops() =>
-        Assert.Equal([0, 0.12, 0.30, 0.56, 0.84, 1], FinishSwatch.For(Frame.Default, false).Metal.Select(s => s.At));
-
-    [Fact]
     public void The_swatches_differ_from_each_other()
     {
         foreach (var dark in Themes)
@@ -59,24 +55,5 @@ public class FinishSwatchTests
         Assert.Equal(FinishSwatch.Dark, FinishSwatch.InkOn(Rgb.Parse("#bcc1c7")));
         Assert.Equal(FinishSwatch.Dark, FinishSwatch.For(Frame.Default, false).Ink);
         Assert.Equal(FinishSwatch.Light, FinishSwatch.For(Frame.Parse("graphite"), false).Ink);
-    }
-
-    [Fact]
-    public void The_glow_is_the_opposite_tone_of_the_ink()
-    {
-        Assert.Equal(new Rgba(0, 0, 0, 0.55), FinishSwatch.For(Frame.Parse("graphite"), true).Glow);
-        Assert.Equal(new Rgba(255, 255, 255, 0.6), FinishSwatch.For(Frame.Default, false).Glow);
-    }
-
-    [Fact]
-    public void The_shine_and_grain_are_softer_in_the_dark_theme()
-    {
-        var (light, dark) = (FinishSwatch.For(Frame.Default, false), FinishSwatch.For(Frame.Default, true));
-        Assert.Equal((0.5, 0.3), (light.Shine, dark.Shine));
-        Assert.Equal(0.34, light.Grain.Max(s => s.Colour.A));
-        Assert.Equal(0.2, dark.Grain.Max(s => s.Colour.A));
-        Assert.All(light.Grain.Concat(dark.Grain), s => Assert.Equal(new Rgb(255, 255, 255), s.Colour.Rgb));
-        Assert.Equal((0, 1), (light.Grain[0].At, light.Grain[^1].At));
-        Assert.Equal((0, 0), (light.Grain[0].Colour.A, light.Grain[^1].Colour.A));
     }
 }

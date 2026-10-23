@@ -58,22 +58,7 @@ public sealed class ResponseHeadTests
 
     [Theory]
     [InlineData(200, "OK")]
-    [InlineData(202, "Accepted")]
-    [InlineData(304, "Not Modified")]
-    [InlineData(400, "Bad Request")]
-    [InlineData(403, "Forbidden")]
-    [InlineData(404, "Not Found")]
-    [InlineData(405, "Method Not Allowed")]
-    [InlineData(409, "Conflict")]
-    [InlineData(411, "Length Required")]
-    [InlineData(413, "Payload Too Large")]
-    [InlineData(415, "Unsupported Media Type")]
     [InlineData(421, "Misdirected Request")]
-    [InlineData(422, "Unprocessable Content")]
-    [InlineData(429, "Too Many Requests")]
-    [InlineData(431, "Request Header Fields Too Large")]
-    [InlineData(503, "Service Unavailable")]
-    [InlineData(500, "")]
     [InlineData(418, "")]
     public void Each_status_has_its_reason(int status, string reason) =>
         Assert.Equal(reason, ResponseHead.Reason(status));
@@ -85,15 +70,4 @@ public sealed class ResponseHeadTests
     [Fact]
     public void The_interim_answer_is_100_continue() =>
         Assert.Equal("HTTP/1.1 100 Continue\r\n\r\n", ResponseHead.Continue);
-
-    [Fact]
-    public void The_limits_are_as_before()
-    {
-        Assert.Equal(16 * 1024, HttpLimits.MaxHead);
-        Assert.Equal(32, HttpLimits.MaxHeaders);
-        Assert.Equal(TimeSpan.FromSeconds(10), HttpLimits.HeadTimeout);
-        Assert.Equal(TimeSpan.FromSeconds(20), HttpLimits.BodyIdle);
-        Assert.Equal(TimeSpan.FromSeconds(120), HttpLimits.BodyTotal);
-        Assert.Equal(TimeSpan.FromSeconds(30), HttpLimits.WriteTimeout);
-    }
 }

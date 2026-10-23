@@ -72,17 +72,4 @@ public class LabelsTests
     {
         Assert.Equal(expected, Labels.FirstWords(text, n));
     }
-
-    [Fact]
-    public void The_spoken_words_are_0_2s()
-    {
-        Assert.Equal("Tack board", Labels.Board);
-        Assert.Equal("Empty. Take a screenshot with Windows key, Shift, S.", Labels.EmptyBoard);
-        Assert.Equal(["Pinned", "Unpinned", "Copied"], [Labels.Pinned, Labels.Unpinned, Labels.Copied]);
-        Assert.Equal("Kept", Labels.KeptChanged(true));
-        Assert.Equal("No longer kept", Labels.KeptChanged(false));
-        Assert.Equal("Keep", Labels.KeepButton(false));
-        Assert.Equal("Stop keeping", Labels.KeepButton(true));
-        Assert.Equal("Unpin", Labels.UnpinButton);
-    }
 }

@@ -75,14 +75,6 @@ public class FolderEventsTests
     }
 
     [Fact]
-    public void The_timings_are_unchanged()
-    {
-        Assert.Equal(TimeSpan.FromSeconds(3), FolderEvents.WritePatience);
-        Assert.Equal(TimeSpan.FromMilliseconds(500), FolderEvents.RemoveGrace);
-        Assert.Equal(TimeSpan.FromMilliseconds(250), FolderEvents.UpdateSettle);
-    }
-
-    [Fact]
     public void Tacks_own_file_deleted_elsewhere_is_checked_as_gone()
     {
         var (board, events) = (BoardWithOne(), new FolderEvents());

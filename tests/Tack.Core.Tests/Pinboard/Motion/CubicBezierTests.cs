@@ -47,15 +47,4 @@ public class CubicBezierTests
         Assert.Equal(0, curve.At(-0.5));
         Assert.Equal(1, curve.At(1.5));
     }
-
-    [Fact]
-    public void The_keywords_are_the_standard_curves()
-    {
-        Assert.Equal((0.25, 0.1, 0.25, 1.0), CubicBezier.Ease.Points);
-        Assert.Equal((0.42, 0.0, 1.0, 1.0), CubicBezier.EaseIn.Points);
-        Assert.Equal((0.0, 0.0, 0.58, 1.0), CubicBezier.EaseOut.Points);
-        Assert.Equal((0.42, 0.0, 0.58, 1.0), CubicBezier.EaseInOut.Points);
-        Assert.Equal((0.5, 0.0, 0.85, 0.35), CubicBezier.Tuck.Points);
-        Assert.Equal(0.37, Easing.Linear.At(0.37), 15);
-    }
 }

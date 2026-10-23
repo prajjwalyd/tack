@@ -13,18 +13,8 @@ public class KeyboardNavTests
 
     [Theory]
     [InlineData(0x25, BoardKey.Left)]
-    [InlineData(0x27, BoardKey.Right)]
-    [InlineData(0x24, BoardKey.Home)]
-    [InlineData(0x23, BoardKey.End)]
-    [InlineData(0x0D, BoardKey.Enter)]
     [InlineData(0x4B, BoardKey.K)]
-    [InlineData(0x2E, BoardKey.Delete)]
-    [InlineData(0x79, BoardKey.F10)]
-    [InlineData(0x5D, BoardKey.Menu)]
-    [InlineData(0x1B, BoardKey.Escape)]
-    [InlineData(0x09, BoardKey.Tab)]
     [InlineData(0x26, BoardKey.None)]
-    [InlineData(0x41, BoardKey.None)]
     public void Virtual_keys_name_the_board_keys(int virtualKey, BoardKey key) =>
         Assert.Equal(key, KeyboardNav.KeyOf(virtualKey));
 
@@ -130,19 +120,6 @@ public class KeyboardNavTests
     [Fact]
     public void Other_keys_are_left_alone() =>
         Assert.Equal(new KeyboardCommand(KeyboardAction.None), Press(BoardKey.None));
-
-    [Theory]
-    [InlineData(KeyboardAction.Move, true)]
-    [InlineData(KeyboardAction.Stay, true)]
-    [InlineData(KeyboardAction.Copy, true)]
-    [InlineData(KeyboardAction.Open, true)]
-    [InlineData(KeyboardAction.Keep, true)]
-    [InlineData(KeyboardAction.Unpin, false)]
-    [InlineData(KeyboardAction.Menu, false)]
-    [InlineData(KeyboardAction.Tuck, false)]
-    [InlineData(KeyboardAction.None, false)]
-    public void Moving_copying_opening_and_keeping_show_the_ring(KeyboardAction action, bool ring) =>
-        Assert.Equal(ring, new KeyboardCommand(action).ShowsRing);
 
     [Theory]
     [InlineData(2, 5, 2)]

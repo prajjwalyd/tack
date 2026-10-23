@@ -6,8 +6,8 @@ namespace Tack.Core.Pinboard.Motion;
 /// their reduced variants. Each names the layer it moves. The fall and the
 /// quiet removal are <see cref="LeaveMotions"/>, the tip slip
 /// <see cref="TipMotions"/>, the flight <see cref="FlightPath"/>, the swing
-/// <see cref="Swing"/>. Every one of their times, with its class, is in
-/// <see cref="MotionPolicy.All"/>. Durations at Slow are in ms.
+/// <see cref="Swing"/>. The tests hold every one of their times to its class
+/// (MotionPolicy in Tack.Core.Tests). Durations at Slow are in ms.
 /// </summary>
 public static class BoardMotions
 {

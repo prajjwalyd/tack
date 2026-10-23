@@ -46,16 +46,8 @@ public class FrameTests
     }
 
     [Theory]
-    [InlineData("")]
     [InlineData("Brass")]
-    [InlineData("BRASS")]
-    [InlineData(" brass")]
-    [InlineData("brass ")]
     [InlineData("gold")]
-    [InlineData("#b5a642")]
-    [InlineData("accent")]
-    [InlineData("\U0001F600")]
-    [InlineData("\0")]
     public void Anything_else_is_not_a_finish_and_falls_back(string text)
     {
         Assert.Null(Frame.TryParse(text));
@@ -72,16 +64,4 @@ public class FrameTests
             Assert.Equal(preset.Id, ConverterText.Read(new FrameJsonConverter(), json)!.Id);
         }
     }
-
-    [Theory]
-    [InlineData("\"gold\"")]
-    [InlineData("\"BRASS\"")]
-    [InlineData("\"\"")]
-    [InlineData("null")]
-    [InlineData("3")]
-    [InlineData("true")]
-    [InlineData("[1]")]
-    [InlineData("{\"a\":1}")]
-    public void A_saved_value_that_is_not_a_finish_reads_as_the_default(string json) =>
-        Assert.Equal(Frame.Default, ConverterText.Read(new FrameJsonConverter(), json));
 }

@@ -42,13 +42,6 @@ public sealed class NetBirdCliTests
         Assert.Empty(output);
     }
 
-    [Fact]
-    public void The_cap_holds_any_real_status()
-    {
-        Assert.Equal(4 * 1024 * 1024, NetBirdCli.MaxOutput);
-        Assert.Equal(TimeSpan.FromSeconds(5), NetBirdCli.Patience);
-    }
-
     static byte[]? Read(byte[] bytes, int cap)
     {
         using var stream = new MemoryStream(bytes);

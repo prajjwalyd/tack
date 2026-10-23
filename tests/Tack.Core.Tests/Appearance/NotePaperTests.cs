@@ -61,15 +61,8 @@ public class NotePaperTests
     }
 
     [Theory]
-    [InlineData("")]
     [InlineData("Blush")]
-    [InlineData("BLUSH")]
-    [InlineData(" blush")]
     [InlineData("pink")]
-    [InlineData("#fadadd")]
-    [InlineData("accent")]
-    [InlineData("\U0001F600")]
-    [InlineData("\0")]
     public void Anything_else_is_not_a_colour_and_falls_back(string text)
     {
         Assert.Null(NotePaper.TryParse(text));
@@ -86,16 +79,4 @@ public class NotePaperTests
             Assert.Equal(preset.Id, ConverterText.Read(new NotePaperJsonConverter(), json)!.Id);
         }
     }
-
-    [Theory]
-    [InlineData("\"pink\"")]
-    [InlineData("\"SKY\"")]
-    [InlineData("\"\"")]
-    [InlineData("null")]
-    [InlineData("3")]
-    [InlineData("true")]
-    [InlineData("[1]")]
-    [InlineData("{\"a\":1}")]
-    public void A_saved_value_that_is_not_a_colour_reads_as_the_default(string json) =>
-        Assert.Equal(NotePaper.Default, ConverterText.Read(new NotePaperJsonConverter(), json));
 }

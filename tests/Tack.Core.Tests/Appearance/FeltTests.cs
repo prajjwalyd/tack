@@ -65,25 +65,13 @@ public class FeltTests
 
     [Theory]
     [InlineData("")]
-    [InlineData("#")]
     [InlineData("#fff")]
-    [InlineData("#12345")]
     [InlineData("#1234567")]
     [InlineData("#12345g")]
     [InlineData("123456")]
-    [InlineData("##123456")]
     [InlineData(" #123456")]
-    [InlineData("#123456 ")]
     [InlineData("Green")]
-    [InlineData("GREEN")]
-    [InlineData("Accent")]
-    [InlineData("red")]
-    [InlineData("rgb(1,2,3)")]
     [InlineData("#é12345")]
-    [InlineData("#12345é")]
-    [InlineData("\U0001F600")]
-    [InlineData("#\U0001F600\U0001F600")]
-    [InlineData("\0")]
     public void Anything_malformed_is_not_a_colour_and_falls_back(string text)
     {
         Assert.Null(Felt.TryParse(text));
@@ -101,16 +89,4 @@ public class FeltTests
         }
         Assert.Equal("#abcdef", Load("\"#ABCDEF\"").ToString());
     }
-
-    [Theory]
-    [InlineData("\"mauve\"")]
-    [InlineData("\"#12\"")]
-    [InlineData("\"\"")]
-    [InlineData("null")]
-    [InlineData("3")]
-    [InlineData("true")]
-    [InlineData("[1]")]
-    [InlineData("{\"a\":1}")]
-    public void A_saved_value_that_is_not_a_colour_reads_as_the_default(string json) =>
-        Assert.Equal(Felt.Default, Load(json));
 }

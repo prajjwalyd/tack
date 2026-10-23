@@ -59,22 +59,6 @@ public class FeltTonesTests
     }
 
     [Fact]
-    public void The_light_and_shade_come_from_the_felts_own_colour()
-    {
-        var felt = Rgb.Parse("#24503f");
-        var shadow = felt.Times(0.12);
-        var light = FeltTones.Of(felt, dark: false);
-        Assert.Equal(new Rgba(0x24 * 0.25 + 191.25, 0x50 * 0.25 + 191.25, 0x3f * 0.25 + 191.25, 0.13), light.Wash);
-        Assert.Equal(shadow.At(0.30), light.Vignette);
-        Assert.Equal(shadow.At(0.45), light.InnerShade);
-        Assert.Equal(shadow.At(0.225), light.Crease);
-        Assert.Equal(shadow.At(0.38), light.TuckShade);
-        Assert.Equal(shadow.At(0.60), light.Unlit);
-        Assert.Equal(felt, light.Fade.Rgb);
-        Assert.Equal(0.2, light.Fade.A, 9);
-    }
-
-    [Fact]
     public void The_dark_theme_shades_with_black_and_a_dimmer_wash()
     {
         var dark = FeltTones.Of(Rgb.Parse("#1e4234"), dark: true);

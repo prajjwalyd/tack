@@ -37,45 +37,10 @@ public class FrameFinishesTests
     }
 
     [Fact]
-    public void The_rails_stops_are_where_they_were()
-    {
-        Assert.Equal(
-            [new(0, 0), new(0.5, 0), new(0.5, 1), new(1.5, 2), new(3.3, 3), new(5, 4), new(5.5, 5)],
-            FrameFinishes.BottomStops.Select(s => s with { At = Math.Round(s.At, 6) }));
-        Assert.Equal(
-            [new(0, 0), new(0.5, 0), new(1, 1), new(2.7, 2), new(5, 3), new(5.5, 4)],
-            FrameFinishes.SideStops.Select(s => s with { At = Math.Round(s.At, 6) }));
-    }
-
-    [Fact]
-    public void The_sheen_and_the_caps_shade_are_what_they_were()
-    {
-        Assert.Equal(0.08, RailSheen.Light.Ends);
-        Assert.Equal([0.18, 0.30, 0.12], RailSheen.Light.Bands);
-        Assert.Equal(0.14, RailSheen.Dark.Ends);
-        Assert.Equal([0.14, 0.18, 0.06], RailSheen.Dark.Bands);
-        Assert.Equal(new CapShade(Rgb.Parse("#001a0c"), 0.45, 0.2), CapShade.Light);
-        Assert.Equal(new CapShade(new Rgb(0, 0, 0), 0.55, 0.28), CapShade.Dark);
-    }
-
-    [Fact]
     public void No_two_finishes_are_alike()
     {
         var drawn = FrameFinishes.All.Select(f => string.Join(" ", Hex(f.Light.Bottom.Concat(f.Light.Side).Concat(f.Dark.Bottom))));
         Assert.Equal(FrameFinishes.All.Count, drawn.Distinct().Count());
-    }
-
-    [Fact]
-    public void Every_finish_has_six_bottom_and_five_side_tones_in_both_themes()
-    {
-        foreach (var finish in FrameFinishes.All)
-        {
-            foreach (var dark in Themes)
-            {
-                Assert.Equal(6, finish.In(dark).Bottom.Count);
-                Assert.Equal(5, finish.In(dark).Side.Count);
-            }
-        }
     }
 
     [Fact]

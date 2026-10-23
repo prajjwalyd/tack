@@ -1,4 +1,6 @@
-namespace Tack.Core.Pinboard.Motion;
+using Tack.Core.Pinboard.Motion;
+
+namespace Tack.Core.Tests.Pinboard.Motion;
 
 /// <summary>
 /// Every duration, delay and timer of the print motions, each with its class
@@ -6,7 +8,7 @@ namespace Tack.Core.Pinboard.Motion;
 /// class: the Speed setting must move the whole board, uniformly, and what
 /// must not follow it says why.
 /// </summary>
-public static class MotionPolicy
+static class MotionPolicy
 {
     public static IReadOnlyList<MotionTiming> All { get; } =
     [

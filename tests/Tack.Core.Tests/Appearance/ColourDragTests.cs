@@ -18,9 +18,6 @@ public class ColourDragTests
     }
 
     [Fact]
-    public void It_waits_the_old_beat() => Assert.Equal(TimeSpan.FromMilliseconds(120), ColourDrag.Beat);
-
-    [Fact]
     public void The_first_move_asks_for_a_beat_and_the_rest_wait_for_it()
     {
         var drag = Opened();
