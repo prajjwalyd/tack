@@ -33,8 +33,7 @@ sealed class Tray : IDisposable
     {
         (_host, _reveal, _unpinning, _settings, _updater, _openSettings, _quit) =
             (host, reveal, unpinning, settings, updater, openSettings, quit);
-        var assets = Path.Combine(AppContext.BaseDirectory, "Assets");
-        _icon = new TrayIcon(host, identity.DisplayName, Path.Combine(assets, "Tray"), Path.Combine(assets, "Tack.ico"));
+        _icon = new TrayIcon(host, identity.DisplayName, Path.Combine(AppContext.BaseDirectory, "Assets", "Tack.ico"));
         _icon.Clicked += () => reveal.Toggle(RevealReason.Tray);
         _icon.MenuRequested += ShowMenu;
     }

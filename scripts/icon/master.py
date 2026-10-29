@@ -1,4 +1,4 @@
-"""Tack's icon, the vector sizes: the 256 master and the pixel-hinted 48 / 64.
+"""Tack's icon: the one master every size is scaled down from.
 
 A framed felt tile (brushed-aluminium frame, the board's green felt,
 #24503f) seen a little from above, and a brass push-pin driven in
@@ -12,11 +12,9 @@ felt, so the cap sits over the tile's top-right corner like a badge. The pin
 has the shipped character: a flat-topped cap with a bevelled rim and one
 specular point, a waisted grip, a neat flange, a short steel needle.
 
-    python master.py <out.svg> [size=256] [hint=0] [tune=app|light|dark]
+    python master.py <out.svg> [size=256]
 
-`hint=N` snaps the tile and its frame to whole pixels of an N px icon (48: the
-tile's lower edge is dropped, so the frame is even all round). `tune` recolours
-for the tray (light: a darker frame and brass rim; dark: no glare).
+`size` is only the SVG's width and height: the drawing is the same at any.
 """
 import math, sys
 
@@ -29,16 +27,6 @@ PAL = {
     "steel": dict(hi="#ffffff", lt="#dfe4ea", md="#a9b2bc", dk="#6f7983", dd="#4d555e"),
     "felt": dict(lt="#2f6a52", md="#24503f", dk="#183a2d", dd="#0f281f"),
     "alu": dict(hi="#f7f8fa", lt="#dde1e5", md="#b4bac1", dk="#8a9199", dd="#656c74", ee="#4b525a"),
-}
-# Tray tunings: colour swaps on the finished SVG.
-TUNES = {
-    "app": {},
-    # light taskbar: a darker frame and brass rim, so the edges hold on a pale bar
-    "light": {"#f7f8fa": "#e9ecef", "#dde1e5": "#cdd2d7", "#b4bac1": "#9ea5ad", "#8a9199": "#788089",
-              "#656c74": "#565d65", "#a5731d": "#956615", "#71490b": "#5f3d08"},
-    # dark taskbar: a dimmer frame (no glare) and a lighter felt (never a dark hole)
-    "dark": {"#f7f8fa": "#d4d8dc", "#dde1e5": "#c3c8ce", "#2f6a52": "#3a7a62", "#24503f": "#2d5f4b",
-             "#183a2d": "#214a3a", "#0f281f": "#183a2d"},
 }
 
 # ---------------------------------------------------------------- geometry
@@ -152,27 +140,17 @@ def bbox(B, g):
             xs.append(O[0] + lx * c - ly * s); ys.append(O[1] + lx * s + ly * c)
     return min(xs), min(ys), max(xs), max(ys)
 
-def build(size=256, hint=0, tune="app"):
+def build(size=256):
     B = dict(BOARD)
     g = pin_geom(PIN["L"], PIN["D"], PIN["k"])
     sc = BOARD_PX / B["w"]
     tx = 128 - sc * B["w"] / 2
     ty = 128 - sc * (B["h"] + B["t"]) / 2
-    if hint:   # the tile's face and frame on whole output pixels
-        gpx = 256 / hint
-        snap = lambda v: round(v / gpx) * gpx
-        X = snap(tx); Y = snap(ty)
-        W = snap(sc * B["w"]); H = snap(sc * B["h"])
-        tx, ty = X, Y
-        # the pin keeps its place on the felt: scale the board, not the pin
-        B.update(w=W / sc, h=H / sc, fw=max(gpx, snap(sc * B["fw"])) / sc,
-                 t=(0 if hint <= 48 else max(gpx, snap(sc * B["t"]))) / sc)
     x0, y0, x1, y1 = bbox(B, g)
     assert tx + sc * x1 <= 256 and ty + sc * y0 >= 0, "the pin's cap runs off the square"
     face, felt, E, O, u = layout(B)
     Br, S, F, A = PAL["brass"], PAL["steel"], PAL["felt"], PAL["alu"]
     fx0, fy0 = face[0]; fx1, fy1 = face[2]
-    full = True
     o = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="{size}" height="{size}">', "<defs>"]
 
     def lin(id_, stops, ax, ay, bx, by):
@@ -200,9 +178,8 @@ def build(size=256, hint=0, tune="app"):
     lin("flRim", [(0, Br["lt"], None), (.2, Br["hi"], None), (.45, Br["md"], None), (1, Br["dd"], None)], -rf, 0, rf, 0)
     lin("needle", [(0, S["dk"], None), (.3, S["hi"], None), (.6, S["md"], None), (1, S["dd"], None)], -wn / 2, 0, wn / 2, 0)
     o.append('<radialGradient id="spec" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#fff" stop-opacity=".85"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>')
-    if full:
-        o.append('<filter id="weave" x="0" y="0" width="1" height="1"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" seed="7"/><feColorMatrix values="0 0 0 0 .6  0 0 0 0 1  0 0 0 0 .8  0 0 0 .6 -.22"/><feComposite in2="SourceGraphic" operator="in"/></filter>')
-        o.append('<filter id="brush" x="0" y="0" width="1" height="1"><feTurbulence type="fractalNoise" baseFrequency=".012 .9" numOctaves="2" seed="3"/><feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .9 -.35"/><feComposite in2="SourceGraphic" operator="in"/></filter>')
+    o.append('<filter id="weave" x="0" y="0" width="1" height="1"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" seed="7"/><feColorMatrix values="0 0 0 0 .6  0 0 0 0 1  0 0 0 0 .8  0 0 0 .6 -.22"/><feComposite in2="SourceGraphic" operator="in"/></filter>')
+    o.append('<filter id="brush" x="0" y="0" width="1" height="1"><feTurbulence type="fractalNoise" baseFrequency=".012 .9" numOctaves="2" seed="3"/><feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .9 -.35"/><feComposite in2="SourceGraphic" operator="in"/></filter>')
     o.append('<filter id="blurS" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2"/></filter>')
     o.append('<filter id="blurM" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4.5"/></filter>')
     o.append('<filter id="blurL" x="-30%" y="-30%" width="160%" height="170%"><feGaussianBlur stdDeviation="7"/></filter>')
@@ -215,25 +192,21 @@ def build(size=256, hint=0, tune="app"):
     # ---- board: soft shadow, lower edge, frame (brushed), felt (woven), inner shade
     t = B["t"]
     lower = [(q[0], q[1] + t) for q in face]
-    if full:
-        o.append(f'<path d="{rpoly([(q[0] + 3, q[1] + 8) for q in lower], B["r"])}" fill="#000" opacity=".26" filter="url(#blurL)"/>')
-        o.append(f'<path d="{rpoly([(q[0] + 1, q[1] + 2) for q in lower], B["r"])}" fill="#000" opacity=".18" filter="url(#blurS)"/>')
+    o.append(f'<path d="{rpoly([(q[0] + 3, q[1] + 8) for q in lower], B["r"])}" fill="#000" opacity=".26" filter="url(#blurL)"/>')
+    o.append(f'<path d="{rpoly([(q[0] + 1, q[1] + 2) for q in lower], B["r"])}" fill="#000" opacity=".18" filter="url(#blurS)"/>')
     if t > 0:
         o.append(f'<path d="{rpoly(lower, B["r"])}" fill="url(#edge)"/>')
-        o.append(f'<path d="{rpoly(lower, B["r"])}" fill="none" stroke="{A["ee"]}" stroke-opacity=".55" stroke-width="{f(1.2 / sc * 256 / max(size, 64))}"/>')
+        o.append(f'<path d="{rpoly(lower, B["r"])}" fill="none" stroke="{A["ee"]}" stroke-opacity=".55" stroke-width="{f(1.2 / sc)}"/>')
     o.append(f'<path d="{rpoly(face, B["r"])}" fill="url(#aluRim)"/>')
-    hw = 1.0 / sc * 256 / max(size, 48)
-    o.append(f'<path d="{rpoly(face[:2] + lower[2:], B["r"])}" fill="none" stroke="#1d2a24" stroke-opacity=".22" stroke-width="{f(hw)}"/>')
+    o.append(f'<path d="{rpoly(face[:2] + lower[2:], B["r"])}" fill="none" stroke="#1d2a24" stroke-opacity=".22" stroke-width="{f(1.0 / sc)}"/>')
     o.append(f'<path d="{rpoly(inset(face, .9), B["r"] - .9)}" fill="url(#alu)"/>')
     o.append(f'<path d="{rpoly(inset(face, .7), B["r"] - .7)}" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="1.2"/>')
-    if full:
-        o.append(f'<path d="{rpoly(face, B["r"])} {rpoly(felt, fr)}" fill-rule="evenodd" fill="#fff" filter="url(#brush)" opacity=".5"/>')
+    o.append(f'<path d="{rpoly(face, B["r"])} {rpoly(felt, fr)}" fill-rule="evenodd" fill="#fff" filter="url(#brush)" opacity=".5"/>')
     o.append(f'<path d="{rpoly(inset(felt, -1.1), fr + 1.1)}" fill="{A["dk"]}"/>')   # the felt sits a hair below the frame
     o.append(f'<path d="{rpoly(felt, fr)}" fill="url(#felt)"/>')
     o.append(f'<path d="{rpoly(felt, fr)}" fill="url(#feltKey)"/>')
     o.append('<g clip-path="url(#feltClip)">')
-    if full:
-        o.append(f'<rect x="{f(fx0)}" y="{f(fy0)}" width="{f(fx1 - fx0)}" height="{f(fy1 - fy0)}" fill="#fff" filter="url(#weave)" opacity=".32"/>')
+    o.append(f'<rect x="{f(fx0)}" y="{f(fy0)}" width="{f(fx1 - fx0)}" height="{f(fy1 - fy0)}" fill="#fff" filter="url(#weave)" opacity=".32"/>')
     o.append(f'<path d="{rpoly(felt, fr)}" fill="none" stroke="#000" stroke-opacity=".45" stroke-width="{f(B["fw"] * .55)}" filter="url(#blurS)" transform="translate(2 2.4)"/>')
 
     # ---- the pin's shadow: its silhouette sheared away from the light about the hole
@@ -268,12 +241,8 @@ def build(size=256, hint=0, tune="app"):
     o.append(f'<ellipse cx="{f(-rc * .42)}" cy="{f(a - ryc * .1)}" rx="{f(rc * .2)}" ry="{f(ryc * .42)}" fill="url(#spec)"/>')
     o.append(f'<ellipse cx="{f(-rc * .62)}" cy="{f(a + g["Tc"] * .55)}" rx="{f(2.4 * sw)}" ry="{f(g["Tc"] * .3)}" fill="#fff" opacity=".7"/>')
     o.append("</g></g></svg>")
-    svg = "\n".join(o)
-    for a_, b_ in TUNES[tune].items():
-        svg = svg.replace(a_, b_)
-    return svg
+    return "\n".join(o)
 
 if __name__ == "__main__":
-    kw = dict(a.split("=", 1) for a in sys.argv[2:])
-    svg = build(int(kw.get("size", 256)), int(kw.get("hint", 0)), kw.get("tune", "app"))
-    open(sys.argv[1], "w", encoding="utf-8", newline="\n").write(svg + "\n")
+    size = int(sys.argv[2]) if len(sys.argv) > 2 else 256
+    open(sys.argv[1], "w", encoding="utf-8", newline="\n").write(build(size) + "\n")

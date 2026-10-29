@@ -9,7 +9,6 @@ CloseHandle
 CoTaskMemFree
 CreateCompatibleDC
 CreateDIBSection
-CreateIconFromResourceEx
 CreatePopupMenu
 CreateRectRgn
 CreateToolhelp32Snapshot
@@ -47,7 +46,6 @@ GetCurrentThreadId
 GetCursorPos
 GetDC
 GetDpiForMonitor
-GetDpiForSystem
 GetDpiForWindow
 GetForegroundWindow
 GetMessage
@@ -58,7 +56,6 @@ GetPackageFullName
 GetPhysicalCursorPos
 GetProcAddress
 GetStockObject
-GetSystemMetricsForDpi
 GetThreadTimes
 GetWindow
 GetWindowLongPtr

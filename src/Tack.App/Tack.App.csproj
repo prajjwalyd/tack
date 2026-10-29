@@ -28,7 +28,7 @@
 
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
-    <!-- Read from beside the exe: the icon, the tray's glyphs, the print art, the felt and the frame's grain.
+    <!-- Read from beside the exe: the icon, the print art, the felt and the frame's grain.
          The scripts under scripts/ make them. -->
     <Content Include="Assets\Tack.ico;Assets\**\*.png" Exclude="Assets\Phone\**" CopyToOutputDirectory="PreserveNewest" />
     <!-- Played and served from memory: the board's tock and pop, and the phone board's page. -->

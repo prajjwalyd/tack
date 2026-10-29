@@ -7,9 +7,8 @@ namespace Tack.Windows.Shell;
 
 /// <summary>
 /// Tack's icon in the notification area. It adds itself again when Explorer
-/// restarts, reports clicks through its host window, and swaps its glyph when
-/// the taskbar's theme or the screen's scale changes. Windows tells the host
-/// window of both, so nothing waits on the registry as Tack 0.2's thread did.
+/// restarts, reports clicks through its host window, and loads its icon again
+/// at the tray's size when the screen's scale changes.
 /// </summary>
 public sealed unsafe class TrayIcon : IDisposable
 {
@@ -20,16 +19,15 @@ public sealed unsafe class TrayIcon : IDisposable
     readonly string _tooltip;
     readonly TrayGlyph _glyph;
 
-    /// <param name="glyphFolder">Where the tray-light-*.png and tray-dark-*.png glyphs are.</param>
-    /// <param name="fallbackIcon">The app's .ico, shown if a glyph will not load.</param>
-    public TrayIcon(HostWindow host, string tooltip, string glyphFolder, string fallbackIcon)
+    /// <param name="ico">The app's .ico.</param>
+    public TrayIcon(HostWindow host, string tooltip, string ico)
     {
         (_host, _tooltip) = (host, tooltip);
-        _glyph = new TrayGlyph(glyphFolder, fallbackIcon);
+        _glyph = new TrayGlyph(ico);
         host.Listen(CallbackMessage, (_, lParam) => OnMouse((uint)lParam));
         host.Listen(PInvoke.RegisterWindowMessage("TaskbarCreated"), (_, _) => OnTaskbarCreated());
-        // Any setting change, not only "ImmersiveColorSet" (light or dark): a hidden window is not
-        // sure to hear WM_DPICHANGED, and the glyph is swapped only when the right one differs.
+        // Any setting change too: a hidden window is not sure to hear WM_DPICHANGED,
+        // and the icon is loaded again only when its size differs.
         host.Listen(PInvoke.WM_SETTINGCHANGE, (_, _) => UpdateGlyph());
         host.Listen(PInvoke.WM_DPICHANGED, (_, _) => UpdateGlyph());
         host.Listen(PInvoke.WM_DISPLAYCHANGE, (_, _) => UpdateGlyph());
@@ -55,14 +53,14 @@ public sealed unsafe class TrayIcon : IDisposable
         }
     }
 
-    /// <summary>Explorer started again, perhaps in another theme: the icon goes back with the glyph for now.</summary>
+    /// <summary>Explorer started again: the icon goes back, at the size for now.</summary>
     void OnTaskbarCreated()
     {
         _glyph.Refresh();
         Add();
     }
 
-    /// <summary>Shows the glyph for the theme and scale as they are now, if that is another one.</summary>
+    /// <summary>Shows the icon at the tray's size for the scale as it is now, if that is another.</summary>
     void UpdateGlyph()
     {
         if (!_glyph.Refresh())

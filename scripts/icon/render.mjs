@@ -1,6 +1,5 @@
-// Rasterises SVGs to PNGs at exact pixel sizes in headless Chrome (or Edge),
-// the way Windows will see them: each SVG is drawn onto a
-// canvas of its own size, so the hand-pixelled sizes come out pixel for pixel.
+// Rasterises SVGs to PNGs at exact pixel sizes in headless Chrome (or Edge):
+// each SVG is drawn onto a canvas of its own size.
 // Node 22+ (global WebSocket and fetch), no packages.
 //
 //   node render.mjs <in.svg> <size> <out.png> [<in.svg> <size> <out.png> ...]
