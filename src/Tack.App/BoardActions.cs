@@ -20,6 +20,7 @@ sealed class BoardActions(
     DragOutFlow drag,
     Pinning pinning,
     ImageDrops drops,
+    FileDrops linked,
     SnipTip tip) : IBoardActions
 {
     /// <summary>
@@ -67,6 +68,8 @@ sealed class BoardActions(
     public void PinText(string text) => pinning.PinDroppedText(text);
 
     public void PinImage(string name, byte[] bytes) => drops.Pin(name, bytes);
+
+    public void PinFiles(IReadOnlyList<string> paths) => linked.Pin(paths);
 
     public bool TakeFocus()
     {

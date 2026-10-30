@@ -44,6 +44,7 @@ GetCurrentPackageFullName
 GetCurrentThread
 GetCurrentThreadId
 GetCursorPos
+GetDIBits
 GetDC
 GetDpiForMonitor
 GetDpiForWindow
@@ -51,6 +52,7 @@ GetForegroundWindow
 GetMessage
 GetModuleHandle
 GetMonitorInfo
+GetObject
 GetPackageFamilyName
 GetPackageFullName
 GetPhysicalCursorPos
@@ -106,6 +108,7 @@ SetTimer
 SetWindowLongPtr
 SetWindowPos
 SHCreateItemFromParsingName
+SHGetFileInfo
 Shell_NotifyIcon
 SHGetKnownFolderPath
 ShowWindow
@@ -118,11 +121,14 @@ UnregisterHotKey
 WindowFromPhysicalPoint
 WindowFromPoint
 _TRANSFER_SOURCE_FLAGS
+BITMAP
+BITMAPINFO
 BI_COMPRESSION
 CLIPBOARD_FORMAT
 CUIAutomation8
 DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
 DPI_AWARENESS_CONTEXT_UNAWARE
+DIB_USAGE
 DWM_BB_BLURREGION
 DWM_BB_ENABLE
 DWM_WINDOW_CORNER_PREFERENCE
@@ -130,6 +136,7 @@ DWMWA_COLOR_NONE
 DWMWINDOWATTRIBUTE
 E_ABORT
 E_NOINTERFACE
+FILE_FLAGS_AND_ATTRIBUTES
 FileOperation
 FILEOPERATION_FLAGS
 FLASHWINFO_FLAGS
@@ -140,12 +147,15 @@ IDI_APPLICATION
 IDropTarget
 IFileOperation
 IShellItem
+IShellItemImageFactory
 IUIAutomation2
 IUIAutomationTextPattern
 IUIAutomationTextRange
 IUIAutomationTextRangeArray
 MA_NOACTIVATE
 S_OK
+SHGFI_FLAGS
+SIIGBF
 UIA_PATTERN_ID
 VIRTUAL_KEY
 WIN32_ERROR

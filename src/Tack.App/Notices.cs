@@ -1,6 +1,7 @@
 using System.Threading.Channels;
 using Tack.App.Pinboard.Contract;
 using Tack.Core.Diagnostics;
+using Tack.Core.Pinboard.Input;
 
 namespace Tack.App;
 
@@ -16,7 +17,9 @@ sealed class Notices
     public const string NothingSelected = "Nothing selected";
     public const string AlreadyPinned = "Already pinned";
     public const string Private = "Not pinned: marked private";
-    public const string NotPinnable = "Only images and text can be pinned";
+    public const string NotPinnable = "Drop files on the board to pin them";
+    public const string NoPlace = "Can't pin files from there";
+    public static readonly string TooMany = $"Only the first {DropRules.MaxItems} were pinned";
     public const string BadImage = "Can't pin that image";
     public const string Failed = "Couldn't pin that";
     public const string NotRestored = "Couldn't restore your clipboard";

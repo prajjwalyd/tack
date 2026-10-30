@@ -119,7 +119,8 @@ from your phone to your PC, so your carrier or a café's Wi-Fi sees only
 encrypted traffic; the browser still says "Not secure", because it cannot
 see the tunnel. Your board never leaves your PC except to be shown on your
 allowed devices, and photos you pin from the phone are saved on the PC like
-any capture. Your phone's browser keeps the pictures of your prints it has
+any capture. An allowed device can download a file you pinned on the board,
+by its print alone: never a folder, and never any other file or path. Your phone's browser keeps the pictures of your prints it has
 fetched (marked private to that browser, and named by their content), as it
 would any page's images; the board's list and the page are not kept. Turn
 the switch off and the port closes.
@@ -177,6 +178,14 @@ What Win+Alt+C does, and when it touches the clipboard:
 - Copied files are pinned only if they are PNG or JPEG files on a drive
   letter. A network path is never opened: Windows would connect to that
   server and offer it your sign-in.
+
+Files and folders you drop on the board (at most 20 at a time) are pinned
+where they are, by their path in board.json: Tack never copies, moves or
+recycles them, and their print has no "Move to Recycle Bin". Their face is
+the thumbnail Windows draws for Explorer, kept in memory only. Dropped PNG
+and JPEG pictures are still saved as captures. As with copied files, only
+files on a drive letter are pinned. One you move or delete leaves the board
+the next time it comes down.
 
 When a snip from Snipping Tool arrives, Tack looks at the screen around the
 pointer to find where the snip came from, so its print can fly from there.

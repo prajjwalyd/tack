@@ -18,6 +18,19 @@ static class TestPrints
             KeptAt = keptAt,
         };
 
+    /// <summary>A linked file or folder; <paramref name="jpeg"/> null for one Windows drew nothing for.</summary>
+    public static Print File(string id, string path, byte[]? jpeg, bool folder = false, long size = 2_400_000,
+        string type = "Microsoft Word Document", long pinnedAt = 3_000) => new()
+        {
+            Id = id,
+            Path = path,
+            Name = System.IO.Path.GetFileName(path),
+            Kind = Kind.File,
+            Thumb = jpeg is null ? null : new Thumb(jpeg, 240, 320, null),
+            File = new FileFacts(folder, folder ? 0 : size, type),
+            PinnedAt = pinnedAt,
+        };
+
     public static Print Note(string id, string text, long pinnedAt = 2_000) => new()
     {
         Id = id,

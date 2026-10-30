@@ -79,6 +79,20 @@ public sealed class Board
         return Insert(note, arrival, nowMs);
     }
 
+    /// <summary>
+    /// Pins any file or folder where it is, the user's own (never Tack's to
+    /// clean up), with the thumbnail Windows drew for it, if any.
+    /// </summary>
+    public PinOutcome PinFile(string path, Thumb? thumb, FileFacts facts, Arrival arrival, long nowMs)
+    {
+        if (FindPath(path) != null)
+        {
+            return PinOutcome.Exists.Instance;
+        }
+        var file = NewPrint(path, arrival, nowMs) with { Kind = Kind.File, Origin = Origin.Folder, Thumb = thumb, File = facts };
+        return Insert(file, arrival, nowMs);
+    }
+
     /// <summary>Takes a print off the board and hands it back.</summary>
     public Print? Remove(string id)
     {

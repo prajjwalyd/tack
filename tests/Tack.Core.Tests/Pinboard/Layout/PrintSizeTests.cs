@@ -1,4 +1,5 @@
 using Tack.Core.Pinboard.Layout;
+using Tack.Core.Prints;
 
 namespace Tack.Core.Tests.Pinboard.Layout;
 
@@ -26,8 +27,8 @@ public class PrintSizeTests
     [Fact]
     public void A_print_adds_its_paper_border_and_a_note_is_one_size()
     {
-        Assert.Equal((168, 98), PrintSize.Of(isNote: false, 1920, 1080));
-        Assert.Equal((136, 86), PrintSize.Of(isNote: true, 1920, 1080));
-        Assert.Equal((136, 86), PrintSize.Of(isNote: true, 0, 0));
+        Assert.Equal((168, 98), PrintSize.Of(Kind.Image, 1920, 1080));
+        Assert.Equal((136, 86), PrintSize.Of(Kind.Note, 1920, 1080));
+        Assert.Equal((136, 86), PrintSize.Of(Kind.Note, 0, 0));
     }
 }

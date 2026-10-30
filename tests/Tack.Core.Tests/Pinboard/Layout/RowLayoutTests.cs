@@ -1,5 +1,6 @@
 using Tack.Core.Geometry;
 using Tack.Core.Pinboard.Layout;
+using Tack.Core.Prints;
 
 namespace Tack.Core.Tests.Pinboard.Layout;
 
@@ -16,7 +17,7 @@ public class RowLayoutTests
     {
         var entries = row.Select(p =>
         {
-            var (w, h) = PrintSize.Of(p.Note, p.W, p.H);
+            var (w, h) = PrintSize.Of(p.Note ? Kind.Note : Kind.Image, p.W, p.H);
             return new RowEntry(w, h, p.Kept);
         }).ToArray();
         return new RowLayout(entries, window);

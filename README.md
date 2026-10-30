@@ -17,6 +17,8 @@ https://github.com/user-attachments/assets/0e2f1078-f804-4241-9b8f-a8305564e11d
 - **Use it anywhere.** Click to copy, drag it straight into a chat or email,
   double-click to open, press and hold to edit.
 - **Pin text on purpose.** Select something and press **Win + Alt + C**.
+- **Pin any file.** Drop files or folders on the board to keep them at hand.
+  They stay where they are; drag one out or copy it to hand over the file.
 - **No clutter.** Old snips fade out after a week. **Keep** the ones you need.
 
 <p align="center">

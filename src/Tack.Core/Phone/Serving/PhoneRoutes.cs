@@ -16,6 +16,7 @@ public sealed class PhoneRoutes
 {
     const string ThumbPrefix = "/api/thumb/";
     const string PrintPrefix = "/api/print/";
+    const string FilePrefix = "/api/file/";
 
     /// <summary>Lets Android's "Add to Home screen" use Tack's name and icon.</summary>
     static readonly byte[] Manifest =
@@ -101,6 +102,13 @@ public sealed class PhoneRoutes
         {
             return await GateAsync(from.Peer, ours: false).ConfigureAwait(false) is Verdict.Allowed
                 ? await PictureResponse.FullAsync(_host, _host.Find(path[PrintPrefix.Length..])).ConfigureAwait(false)
+                : PhoneResponse.Empty(403);
+        }
+        if (path.StartsWith(FilePrefix, StringComparison.Ordinal))
+        {
+            // Only a file print on the board, by its id: never a path the request names.
+            return await GateAsync(from.Peer, ours: false).ConfigureAwait(false) is Verdict.Allowed
+                ? FileResponse.Download(_host.Find(path[FilePrefix.Length..]))
                 : PhoneResponse.Empty(403);
         }
         return PhoneResponse.Empty(404);

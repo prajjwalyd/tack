@@ -5,7 +5,8 @@ namespace Tack.Core.Pinboard.Words;
 
 /// <summary>
 /// What a screen reader hears from the board: each print's name ("Screenshot,
-/// 2 minutes ago, kept", "Link: github.com, just now"), the board's own name
+/// 2 minutes ago, kept", "Link: github.com, just now", "Report.docx, Microsoft
+/// Word Document, 2 MB, 1 hour ago"), the board's own name
 /// and description, its buttons, and what is said when something happens
 /// without the focus moving.
 /// </summary>
@@ -45,7 +46,11 @@ public static class Labels
     {
         var note = print.IsNote ? print.Note : null;
         var what = "Screenshot";
-        if (!string.IsNullOrEmpty(note?.Link))
+        if (print.IsFile)
+        {
+            what = FileWhat(print, culture);
+        }
+        else if (!string.IsNullOrEmpty(note?.Link))
         {
             what = $"Link: {(string.IsNullOrEmpty(note.Domain) ? note.Link : note.Domain)}";
         }
@@ -55,6 +60,22 @@ public static class Labels
         }
         var kept = print.Kept ? ", kept" : string.Empty;
         return $"{what}, {Age.Spoken(print.PinnedAt, nowMs, culture, zone)}{kept}";
+    }
+
+    /// <summary>A linked file's name, type and size ("Report.docx, Microsoft Word Document, 2 MB"), or a folder's name ("Projects, folder").</summary>
+    static string FileWhat(Print print, CultureInfo? culture)
+    {
+        var name = string.IsNullOrEmpty(print.Name) ? "File" : print.Name;
+        if (print.File is not { } file)
+        {
+            return name;
+        }
+        if (file.Folder)
+        {
+            return $"{name}, folder";
+        }
+        var type = string.IsNullOrWhiteSpace(file.Type) ? string.Empty : $", {file.Type}";
+        return $"{name}{type}, {FileSize.Words(file.Size, culture)}";
     }
 
     /// <summary>The first <paramref name="count"/> words of <paramref name="text"/> on one line, "…" if there were more; "empty" for none.</summary>

@@ -30,16 +30,17 @@ public class DropRulesTests
         Assert.Equal(image, DropRules.IsImage(File(name, type)));
 
     [Fact]
-    public void Images_among_the_files_are_pinned_and_the_rest_left()
+    public void Images_among_the_files_are_pinned_and_files_with_no_place_left()
     {
         var plan = DropRules.Plan([File("a.png"), File("b.txt"), File("c.jpg", size: DroppedImage.MaxBytes)], "https://example.com", "text");
-        Assert.Equal(DropOutcome.Images, plan.Outcome);
+        Assert.Equal(DropOutcome.Files, plan.Outcome);
         Assert.Equal(["a.png", "c.jpg"], plan.Images.Select(f => f.Name));
+        Assert.Empty(plan.Links);
         Assert.Null(plan.Text);
     }
 
     [Fact]
-    public void Files_with_no_image_are_refused_even_with_text()
+    public void Files_with_no_image_and_no_place_on_disk_are_refused_even_with_text()
     {
         var plan = DropRules.Plan([File("b.txt")], null, "text");
         Assert.Equal(DropOutcome.NotPinnable, plan.Outcome);

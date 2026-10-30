@@ -8,8 +8,9 @@ using WinRT;
 namespace Tack.App.Pinboard.Input;
 
 /// <summary>
-/// Reads what was dropped on the board: the files (name, type, size), a link
-/// and text, while the drop's data is still there, then a picture's bytes.
+/// Reads what was dropped on the board: the files and folders (name, type,
+/// size, place on disk), a link and text, while the drop's data is still
+/// there, then a picture's bytes.
 /// Nothing is ever fetched from the web.
 /// </summary>
 static class DropReader
@@ -27,11 +28,14 @@ static class DropReader
         var files = new Dictionary<DroppedFile, StorageFile?>(ReferenceEqualityComparer.Instance);
         if (data.Contains(StandardDataFormats.StorageItems))
         {
-            foreach (var item in await data.GetStorageItemsAsync())
+            var items = await data.GetStorageItemsAsync();
+            for (var i = 0; i < items.Count; i++)
             {
+                var item = items[i];
                 var file = FileOf(item);
-                var size = file is null ? 0 : (long)(await file.GetBasicPropertiesAsync()).Size;
-                files[new DroppedFile(item.Name, file?.ContentType, size)] = file;
+                // Past the cap only the count matters: no need to ask each one's size.
+                var size = file is null || i >= DropRules.MaxItems ? 0 : (long)(await file.GetBasicPropertiesAsync()).Size;
+                files[new DroppedFile(item.Name, file?.ContentType, size, item.Path, Folder: file is null)] = file;
             }
         }
         string? link = null, text = null;

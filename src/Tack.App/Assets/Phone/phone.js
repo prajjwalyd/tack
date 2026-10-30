@@ -5,6 +5,7 @@
 //                         anything else: the PC can't be reached
 //   POST /api/ask         ask the PC again after a denial
 //   GET  /api/thumb/<id>, /api/print/<id>  a print's pictures (addressed by content, so cached)
+//   GET  /api/file/<id>   a pinned file itself, as a download (never a folder)
 //   POST /api/pin         a JPEG or PNG, or text/plain
 // Every call carries X-Tack: 1, which tells the PC it comes from this page.
 "use strict";
@@ -181,7 +182,7 @@ function pin() {
 }
 
 function drawBoard() {
-  const key = JSON.stringify(prints.map((p) => [p.id, p.kept, p.text, p.thumb]));
+  const key = JSON.stringify(prints.map((p) => [p.id, p.kept, p.text, p.thumb, p.name, p.size]));
   if (key === shown) return;
   shown = key;
   // Pins count from the oldest print, so a new one doesn't recolour the rest.
@@ -190,6 +191,11 @@ function drawBoard() {
 
 function item(print, order) {
   const li = h("li", {});
+  const head = h("span", { class: print.kept ? "pin kept" : `pin p${order % PIN_COLOURS}`, "aria-hidden": "true" });
+  if (print.file) {
+    li.append(fileCard(print), head);
+    return li;
+  }
   const button = h("button", { class: "print", type: "button" });
   if (print.note) {
     const link = Boolean(print.link);
@@ -202,9 +208,22 @@ function item(print, order) {
     button.setAttribute("aria-label", "Screenshot. Tap to view.");
     button.addEventListener("click", () => openPrint(print));
   }
-  const head = h("span", { class: print.kept ? "pin kept" : `pin p${order % PIN_COLOURS}`, "aria-hidden": "true" });
   li.append(button, head);
   return li;
+}
+
+// A file pinned on the PC: its thumbnail, name, type and size. A file
+// downloads from the PC when tapped; a folder stays there.
+function fileCard(print) {
+  const about = [print.type, print.size].filter(Boolean).join(" · ");
+  const face = print.thumb ? h("img", { src: print.thumb, alt: "" }) : h("span", { class: "file-blank", "aria-hidden": "true" });
+  const words = [face, h("span", { class: "file-name" }, print.name || ""), h("span", { class: "file-about" }, about)];
+  if (!print.download) {
+    const button = h("button", { class: "print file", type: "button", "aria-label": `${print.name}, folder. Folders stay on the PC.` }, ...words);
+    button.addEventListener("click", () => toast("Folders stay on the PC. Pin the files inside to get them here."));
+    return button;
+  }
+  return h("a", { class: "print file", href: print.download, download: print.name || "", "aria-label": `${print.name}, ${about}. Tap to download.` }, ...words);
 }
 
 // ---- the tip ----

@@ -198,7 +198,7 @@ sealed class PrintRow : BoardPart
 
     public override void Updated(BoardItem item, Print old)
     {
-        if (old.IsNote != item.Print.IsNote || old.Width != item.Print.Width || old.Height != item.Print.Height)
+        if (old.Kind != item.Print.Kind || old.Width != item.Print.Width || old.Height != item.Print.Height)
         {
             Measure(item);
             Layout();
@@ -267,10 +267,10 @@ sealed class PrintRow : BoardPart
         }
     }
 
-    /// <summary>A print's size: a note is one size; a photo fits 160 by 100, plus its paper border.</summary>
+    /// <summary>A print's size: a note is one size, and a file's card; a photo fits 160 by 100, plus its paper border.</summary>
     static void Measure(BoardItem item)
     {
-        (item.W, item.H) = PrintSize.Of(item.Print.IsNote, item.Print.Width, item.Print.Height);
+        (item.W, item.H) = PrintSize.Of(item.Print.Kind, item.Print.Width, item.Print.Height);
         item.View?.Resize(item.W, item.H);
     }
 }

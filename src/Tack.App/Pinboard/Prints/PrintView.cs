@@ -27,7 +27,7 @@ namespace Tack.App.Pinboard.Prints;
 /// <item>KeepButton and XButton: shown on hover at the top corners (Keep left, unpin right).</item>
 /// <item>FocusRing: the keyboard's ring around the card, hidden at rest.</item>
 /// <item>Pin: centred at (50%, 7 px), turning and scaling about its own centre; holds PinShadow (its contact shadow, at rest at opacity <see cref="PinShadowOpacity"/>, scaling about its middle), Brass (a kept print's head) and Glint (the band crossing the brass, resting hidden <see cref="GlintTravel"/> to the left).</item>
-/// <item>Caption: the age under the print, at its height + 5; its words through <see cref="SetAge"/>.</item>
+/// <item>Caption: the age under the print, at its height + 5, under a link's address or a file's full name; its words through <see cref="SetAge"/>.</item>
 /// </list>
 /// The state looks (hover, press, drag, kept, focus) are this view's; the
 /// motions on Drop, Swing, Pin, PinShadow, Glint, Badge and Picture are the
@@ -151,7 +151,7 @@ sealed class PrintView
     public void Update(Print print)
     {
         _face.Show(print);
-        _caption.SetLink(print.Note?.Link);
+        _caption.SetLine(print.Note?.Link is { } link ? Address.WithBreaks(link) : print.IsFile ? print.Name : null);
         SetKept(print.Kept, animate: false);
     }
 

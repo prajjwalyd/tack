@@ -3,10 +3,10 @@ namespace Tack.Core.Pinboard.Input;
 /// <summary>What a line of a print's menu does.</summary>
 public enum PrintMenuAction
 {
-    /// <summary>The picture, or a note's text (a link's URL), onto the clipboard.</summary>
+    /// <summary>The picture, a note's text (a link's URL), or a linked file itself, onto the clipboard.</summary>
     Copy,
 
-    /// <summary>The default app, or the browser for a link.</summary>
+    /// <summary>The default app, the browser for a link, or Explorer for a folder.</summary>
     Open,
 
     /// <summary>The shell's "edit": Paint for a picture.</summary>
@@ -25,6 +25,6 @@ public enum PrintMenuAction
     /// <summary>Unpinned with a fall; a capture's or note's own file goes to the Recycle Bin.</summary>
     Unpin,
 
-    /// <summary>Unpinned, and the file, whoever's it is, goes to the Recycle Bin.</summary>
+    /// <summary>Unpinned, and the file, whoever's it is, goes to the Recycle Bin. Never offered for a linked file.</summary>
     Recycle,
 }

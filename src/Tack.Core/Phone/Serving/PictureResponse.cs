@@ -5,9 +5,9 @@ using Tack.Core.Prints;
 namespace Tack.Core.Phone.Serving;
 
 /// <summary>
-/// A picture print's thumbnail and its full picture, for an allowed device.
-/// Both are addressed by content (<c>?v=</c>), so the phone may keep them.
-/// Anything that is not a picture on the board is 404.
+/// A picture print's thumbnail and its full picture, for an allowed device,
+/// and a linked file's thumbnail. Both are addressed by content
+/// (<c>?v=</c>), so the phone may keep them. Anything else is 404.
 /// </summary>
 internal static class PictureResponse
 {
@@ -16,7 +16,7 @@ internal static class PictureResponse
 
     /// <summary>The thumbnail, as the JPEG the board shows.</summary>
     public static PhoneResponse Thumb(Print? print) =>
-        print is { Kind: Kind.Image, Thumb: { } thumb }
+        print is { Kind: Kind.Image or Kind.File, Thumb: { } thumb }
             ? PhoneResponse.Bytes(200, "image/jpeg", thumb.Jpeg).With("Cache-Control", Keep)
             : PhoneResponse.Empty(404);
 

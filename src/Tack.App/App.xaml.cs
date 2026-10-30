@@ -62,17 +62,20 @@ public partial class App : Application
         var files = new OwnedFiles(_storage, saves);
         var prints = new Prints(state, files, feed, ui);
         var unpinning = new Unpinning(state, _storage, saves, files, feed);
+        FileDrops? linked = null;
         var reveal = new Reveal(state, ui, _board, feed, () =>
         {
             prints.AgeOut();
             _screenshots?.CheckOwned();
+            linked?.CheckGone();
         });
         var notices = new Notices(state, reveal, feed);
         var saving = new CaptureSaving(state, unpinning, saves, _paths.Captures);
         _captures = new CaptureFlow(state, prints, files, saving, saves, reveal);
         var pinning = new Pinning(state, prints, _captures, reveal, notices, _paths.Notes);
         var drops = new ImageDrops(prints, files, reveal, notices, _paths.Captures);
-        _board.Start(BoardActionsFor(state, saves, feed, ui, prints, unpinning, reveal, pinning, drops), feed);
+        linked = new FileDrops(state, prints, unpinning, reveal, notices);
+        _board.Start(BoardActionsFor(state, saves, feed, ui, prints, unpinning, reveal, pinning, drops, linked), feed);
 
         TackSettings settings;
         lock (state.Gate)
@@ -115,7 +118,7 @@ public partial class App : Application
     /// <summary>What the board asks of the app, each command handed to the service that does it.</summary>
     BoardActions BoardActionsFor(
         AppState state, PendingSaves saves, BoardFeed feed, DispatcherQueue ui,
-        Prints prints, Unpinning unpinning, Reveal reveal, Pinning pinning, ImageDrops drops)
+        Prints prints, Unpinning unpinning, Reveal reveal, Pinning pinning, ImageDrops drops, FileDrops linked)
     {
         var commands = new PrintCommands(state, saves, prints, feed);
         return new BoardActions(
@@ -128,6 +131,7 @@ public partial class App : Application
             new DragOutFlow(state, saves, unpinning, feed),
             pinning,
             drops,
+            linked,
             new SnipTip(state));
     }
 

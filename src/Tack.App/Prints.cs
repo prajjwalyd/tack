@@ -37,6 +37,10 @@ sealed class Prints(AppState state, OwnedFiles files, BoardFeed feed, Dispatcher
     public PinOutcome PinNote(string path, NoteBody body, Arrival arrival) =>
         PinWith(arrival, null, (board, now) => board.PinNote(path, body, arrival, now));
 
+    /// <summary>Pins a file or folder where it is, live or restored, with the thumbnail Windows drew for it.</summary>
+    public PinOutcome PinFile(string path, Thumb? thumb, FileFacts facts, Arrival arrival) =>
+        PinWith(arrival, null, (board, now) => board.PinFile(path, thumb, facts, arrival, now));
+
     /// <summary>
     /// Keeps a print, or stops keeping it. The board hears its new state, the
     /// prints that aged out because of it, then the new order if it moved.

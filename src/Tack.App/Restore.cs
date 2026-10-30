@@ -7,7 +7,7 @@ using Tack.Windows.Imaging;
 namespace Tack.App;
 
 /// <summary>
-/// Puts last session's prints and notes back at startup, as they were (kept or
+/// Puts last session's prints, notes and linked files back at startup, as they were (kept or
 /// not, in their old order), then saves board.json once. Until then every save
 /// still lists the prints not put back yet, so a quit or crash halfway forgets
 /// none of them. Each print reaches the board as it comes back, without a
@@ -61,9 +61,12 @@ sealed class Restore(AppState state, Prints prints, string notesFolder)
             var arrival = new Arrival.Restored(print.PinnedAt, print.KeptAt);
             try
             {
-                var pinned = print.Kind == Kind.Note
-                    ? prints.PinNote(print.Path, NoteFiles.Read(print.Path), arrival)
-                    : prints.Pin(print.Path, await Thumbs.MakeAsync(print.Path).ConfigureAwait(false), print.Origin, arrival);
+                var pinned = print.Kind switch
+                {
+                    Kind.Note => prints.PinNote(print.Path, NoteFiles.Read(print.Path), arrival),
+                    Kind.File => await PinFileAsync(print.Path, arrival).ConfigureAwait(false),
+                    _ => prints.Pin(print.Path, await Thumbs.MakeAsync(print.Path).ConfigureAwait(false), print.Origin, arrival),
+                };
                 if (pinned is PinOutcome.New added)
                 {
                     prints.Announce(added.Aged);
@@ -82,5 +85,11 @@ sealed class Restore(AppState state, Prints prints, string notesFolder)
             state.Save();
         }
         prints.AgeOut();
+    }
+
+    async Task<PinOutcome> PinFileAsync(string path, Arrival arrival)
+    {
+        var (thumb, facts) = await FileDrops.ReadAsync(path).ConfigureAwait(false);
+        return prints.PinFile(path, thumb, facts, arrival);
     }
 }

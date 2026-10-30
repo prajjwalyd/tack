@@ -17,6 +17,32 @@ public static class PixelOps
         }
     }
 
+    /// <summary>
+    /// A picture Windows drew with premultiplied alpha (a file's icon), laid on
+    /// white paper. One whose alphas are all 0 never set them and is taken as
+    /// opaque. Every pixel ends opaque.
+    /// </summary>
+    public static void PremultipliedOnWhite(Span<byte> pixels)
+    {
+        var unset = true;
+        for (var at = 3; at < pixels.Length && unset; at += 4)
+        {
+            unset = pixels[at] == 0;
+        }
+        for (var at = 0; at + 4 <= pixels.Length; at += 4)
+        {
+            if (!unset)
+            {
+                var paper = 255 - pixels[at + 3];
+                for (var c = 0; c < 3; c++)
+                {
+                    pixels[at + c] = (byte)Math.Min(255, pixels[at + c] + paper);
+                }
+            }
+            pixels[at + 3] = 255;
+        }
+    }
+
     /// <summary>Premultiplies each colour by its alpha, as Windows wants a drag image.</summary>
     public static void Premultiply(Span<byte> pixels)
     {

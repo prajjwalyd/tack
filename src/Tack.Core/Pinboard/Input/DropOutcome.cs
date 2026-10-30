@@ -6,15 +6,15 @@ public enum DropOutcome
     /// <summary>Nothing to pin, and nothing to say.</summary>
     Nothing,
 
-    /// <summary>Pictures to pin, each read and pinned.</summary>
-    Images,
+    /// <summary>Pictures to read and pin, and files and folders to pin where they are.</summary>
+    Files,
 
     /// <summary>A link or text to pin as a note.</summary>
     Text,
 
-    /// <summary>Files, none of them a PNG or JPEG: "Only images and text can be pinned".</summary>
+    /// <summary>Files with no place on disk to link to, none of them a picture: "Can't pin files from there".</summary>
     NotPinnable,
 
-    /// <summary>Pictures, all of them too large: "Can't pin that image".</summary>
+    /// <summary>Pictures with no place on disk, all of them too large: "Can't pin that image".</summary>
     BadImage,
 }

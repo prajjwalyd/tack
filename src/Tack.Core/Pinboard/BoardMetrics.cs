@@ -106,6 +106,14 @@ public static class BoardMetrics
 
     public const double NoteHeight = 86;
 
+    /// <summary>A linked file's card is one fixed size: its thumbnail in a box above a line with its name.</summary>
+    public const double FileWidth = 120;
+
+    public const double FileHeight = 104;
+
+    /// <summary>The strip under a file's thumbnail that holds its name, inside the card's paper border.</summary>
+    public const double FileNameHeight = 20;
+
     /// <summary>Each print's resting tilt, either way, degrees.</summary>
     public const double MinTilt = 0.3;
 

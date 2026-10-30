@@ -19,13 +19,13 @@ interface IBoardActions
     /// <summary>The one-time tip shows at <paramref name="rect"/> (physical px relative to the window), or, null, it closed.</summary>
     void SetTip(Rect? rect);
 
-    /// <summary>The picture, or a note's text (a link's URL), onto the clipboard; then <see cref="BoardFeed.PrintCopied"/>.</summary>
+    /// <summary>The picture, a note's text (a link's URL), or a linked file itself, onto the clipboard; then <see cref="BoardFeed.PrintCopied"/>.</summary>
     Task CopyAsync(string id);
 
     /// <summary>The print in its default app, or a link in the browser, once a capture is written.</summary>
     void Open(string id);
 
-    /// <summary>The shell's "edit": Paint for a picture, Notepad for a note.</summary>
+    /// <summary>The shell's "edit": Paint for a picture, Notepad for a note; a linked file just opens.</summary>
     void Edit(string id);
 
     /// <summary>
@@ -57,6 +57,9 @@ interface IBoardActions
 
     /// <summary>A PNG or JPEG dropped on the board, at most 40 MB: saved among the captures and pinned like one.</summary>
     void PinImage(string name, byte[] bytes);
+
+    /// <summary>Files and folders dropped on the board, by their paths: pinned where they are, never copied.</summary>
+    void PinFiles(IReadOnlyList<string> paths);
 
     /// <summary>The window takes the keyboard, only when the board came down for the show-or-hide shortcut. Whether it has it.</summary>
     bool TakeFocus();

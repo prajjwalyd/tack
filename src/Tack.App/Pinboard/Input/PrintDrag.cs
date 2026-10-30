@@ -10,7 +10,7 @@ namespace Tack.App.Pinboard.Input;
 /// <summary>
 /// Dragging a print out of the board to another app, with WinUI's own drag
 /// source, started from the pointer that moved the press past the drag
-/// distance. It carries the print's file, as Explorer would, so it can be
+/// distance. It carries the print's file or folder, as Explorer would, so it can be
 /// dropped wherever Windows takes a file, and a note's text too; the file's
 /// own picture follows the pointer. The app marks the drag, so the board never
 /// tucks under it, and unpins the print if the drop moved its file away.
@@ -24,6 +24,9 @@ sealed class PrintDrag(BoardContext board)
     /// they move.
     /// </summary>
     const DataPackageOperation Allowed = DataPackageOperation.Copy | DataPackageOperation.Move | DataPackageOperation.Link;
+
+    /// <summary>A pinned file or folder is the user's own where it is: a drop only ever copies it, never moves it away.</summary>
+    const DataPackageOperation CopyOnly = DataPackageOperation.Copy;
 
     /// <summary>Drags <paramref name="item"/> out from <paramref name="point"/>; returns at once.</summary>
     public async void Start(BoardItem item, PointerPoint point)
@@ -45,9 +48,11 @@ sealed class PrintDrag(BoardContext board)
                     e.Cancel = true;
                     return;
                 }
-                e.AllowedOperations = Allowed;
+                e.AllowedOperations = item.Print.IsFile ? CopyOnly : Allowed;
                 // An array: WinRT is handed a type it can project, which a collection expression's own type is not.
-                IStorageItem[] files = [await StorageFile.GetFileFromPathAsync(path)];
+                IStorageItem[] files = [Directory.Exists(path)
+                    ? await StorageFolder.GetFolderFromPathAsync(path)
+                    : await StorageFile.GetFileFromPathAsync(path)];
                 e.Data.SetStorageItems(files, readOnly: false);
                 if (item.Print.Note is { } note)
                 {

@@ -5,9 +5,10 @@ using Tack.Core.Thumbnails;
 namespace Tack.Core.Prints;
 
 /// <summary>
-/// One screenshot or note pinned to the board. Tack points at screenshot files
-/// where they already are and leaves them there; captures and notes are files
-/// Tack wrote itself, so nobody else knows they are there and Tack cleans them up.
+/// One screenshot, note or file pinned to the board. Tack points at screenshot
+/// files and other files where they already are and leaves them there;
+/// captures and notes are files Tack wrote itself, so nobody else knows they
+/// are there and Tack cleans them up.
 /// </summary>
 public sealed record Print
 {
@@ -21,7 +22,7 @@ public sealed record Print
 
     public Kind Kind { get; init; }
 
-    /// <summary>The picture's thumbnail; null for a note.</summary>
+    /// <summary>The picture's thumbnail, or a file's from Windows; null for a note, or a file Windows drew nothing for.</summary>
     public Thumb? Thumb { get; init; }
 
     /// <summary>When it was first pinned, ms since the Unix epoch. Survives restarts; the history ages prints by it.</summary>
@@ -38,6 +39,9 @@ public sealed record Print
 
     public Origin Origin { get; init; }
 
+    /// <summary>A file print's folder flag, size and type; null for a picture or a note.</summary>
+    public FileFacts? File { get; init; }
+
     /// <summary>When a live arrival reached the board, on the monotonic clock; null for a restored print.</summary>
     public TimeSpan? Arrived { get; init; }
 
@@ -52,6 +56,8 @@ public sealed record Print
     public ulong? Hash => Thumb?.Hash;
 
     public bool IsNote => Kind == Kind.Note;
+
+    public bool IsFile => Kind == Kind.File;
 
     /// <summary>Tack wrote this print's file, so Tack recycles it when the print leaves the board.</summary>
     public bool Owned => Origin == Origin.Capture;

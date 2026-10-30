@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Tack.Windows.Imaging;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
 using Windows.Storage.Streams;
 using WindowsClipboard = Windows.ApplicationModel.DataTransfer.Clipboard;
 
@@ -39,6 +40,29 @@ public static class ClipboardWriter
             throw new IOException("The picture could not be decoded.", e);
         }
         await PutPictureAsync(picture, file.AsSpan().StartsWith(s_pngSignature) ? file : null).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Puts a file or folder itself on the clipboard, as Explorer's Copy does,
+    /// so pasting it anywhere that takes files hands over the original.
+    /// Throws <see cref="IOException"/> as well for one that is gone.
+    /// </summary>
+    public static async Task CopyFileAsync(string path)
+    {
+        IStorageItem item;
+        try
+        {
+            item = Directory.Exists(path)
+                ? await StorageFolder.GetFolderFromPathAsync(path).AsTask().ConfigureAwait(false)
+                : await StorageFile.GetFileFromPathAsync(path).AsTask().ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is FileNotFoundException or UnauthorizedAccessException or ArgumentException or COMException)
+        {
+            throw new IOException("The file could not be found.", e);
+        }
+        // An array: WinRT is handed a type it can project, which a collection expression's own type is not.
+        IStorageItem[] items = [item];
+        await PutAsync(package => package.SetStorageItems(items, readOnly: false)).ConfigureAwait(false);
     }
 
     /// <summary>

@@ -36,13 +36,13 @@ public class BoardRouteTests
         var response = await bench.Get("/api/board", Ours);
 
         const string Picture =
-            $$"""{"id":"1","note":false,"thumb":"/api/thumb/1?v={{FoobarV}}","full":"/api/print/1?v={{FoobarV}}","width":800,"height":600,"text":null,"link":null,"pinnedAt":1000,"kept":true}""";
+            $$"""{"id":"1","note":false,"thumb":"/api/thumb/1?v={{FoobarV}}","full":"/api/print/1?v={{FoobarV}}","width":800,"height":600,"text":null,"link":null,"pinnedAt":1000,"kept":true,"file":false,"name":null,"type":null,"size":null,"download":""}""";
         var note =
             """{"id":"2","note":true,"thumb":"","full":"","width":0,"height":0,"text":""" +
             "\"caf\u00e9 \\\"quoted\\\"\"" +
-            ""","link":null,"pinnedAt":2000,"kept":false}""";
+            ""","link":null,"pinnedAt":2000,"kept":false,"file":false,"name":null,"type":null,"size":null,"download":""}""";
         const string Link =
-            """{"id":"3","note":true,"thumb":"","full":"","width":0,"height":0,"text":"https://example.com/?a=1&b=2","link":"https://example.com/?a=1&b=2","pinnedAt":3000,"kept":false}""";
+            """{"id":"3","note":true,"thumb":"","full":"","width":0,"height":0,"text":"https://example.com/?a=1&b=2","link":"https://example.com/?a=1&b=2","pinnedAt":3000,"kept":false,"file":false,"name":null,"type":null,"size":null,"download":""}""";
         Assert.Equal(200, response.Status);
         Assert.Equal("application/json", response.ContentType);
         Assert.Equal($$"""{"pc":"my-pc","you":"pixel","prints":[{{Picture}},{{note}},{{Link}}]}""", Text(response));

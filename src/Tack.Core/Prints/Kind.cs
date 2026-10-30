@@ -8,4 +8,7 @@ public enum Kind
 
     /// <summary>A short text or a link, on a small paper note.</summary>
     Note,
+
+    /// <summary>Any other file, or a folder, linked where it is: a card with its thumbnail and name.</summary>
+    File,
 }

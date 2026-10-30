@@ -113,6 +113,12 @@ main { max-width: 920px; margin: 0 auto; padding: 8px var(--gutter-r) calc(var(-
 }
 .print:active { transform: scale(.98); }
 .print img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; background: #dcd8d0; }
+/* A file: its thumbnail whole on white, its name and what it is under it. */
+a.print { text-decoration: none; }
+.print.file img, .file-blank { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #fff; }
+.file-name, .file-about { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0 2px; }
+.file-name { margin-top: 5px; font-size: 13px; font-weight: 600; line-height: 18px; }
+.file-about { font-size: 12px; line-height: 16px; color: var(--paper-soft); }
 /* An index card: red header rule under the pin, faint blue rules under the text. */
 .print.note { padding: 0; background: linear-gradient(transparent 18px, var(--rule-red) 18px, var(--rule-red) 19px, transparent 19px), var(--paper); }
 .note-text {

@@ -11,13 +11,14 @@ namespace Tack.App;
 
 /// <summary>
 /// What a print can be asked to do with its file: copy, open, edit, show in
-/// Explorer, save to Pictures. None of it waits on the calling thread: the
+/// Explorer, save to Pictures. A linked file is copied as the file itself,
+/// and is never edited. None of it waits on the calling thread: the
 /// clipboard and the shell work on threads of their own, and a capture still
 /// being written is waited for first.
 /// </summary>
 sealed class PrintCommands(AppState state, PendingSaves saves, Prints prints, BoardFeed feed)
 {
-    /// <summary>The picture, or a note's text (a link's URL), onto the clipboard; then the board shows "Copied".</summary>
+    /// <summary>The picture, a note's text (a link's URL), or a linked file itself, onto the clipboard; then the board shows "Copied".</summary>
     public async Task CopyAsync(string id)
     {
         if (Find(id) is not { } print)
@@ -29,6 +30,10 @@ sealed class PrintCommands(AppState state, PendingSaves saves, Prints prints, Bo
             if (print.Note is { } note)
             {
                 await ClipboardWriter.CopyTextAsync(note.Link ?? note.Text).ConfigureAwait(false);
+            }
+            else if (print.IsFile)
+            {
+                await ClipboardWriter.CopyFileAsync(print.Path).ConfigureAwait(false);
             }
             else
             {
@@ -44,7 +49,7 @@ sealed class PrintCommands(AppState state, PendingSaves saves, Prints prints, Bo
         feed.RaisePrintCopied(id);
     }
 
-    /// <summary>Opens the print: a picture or a note's text file in its default app, a link in the browser.</summary>
+    /// <summary>Opens the print: a picture, a note's text file or a linked file in its default app, a folder in Explorer, a link in the browser.</summary>
     public void Open(string id)
     {
         if (Find(id) is not { } print)
@@ -59,12 +64,15 @@ sealed class PrintCommands(AppState state, PendingSaves saves, Prints prints, Bo
         saves.WhenSaved(print.Path, ShellLauncher.Open);
     }
 
-    /// <summary>Edits the print's file: Paint for a picture. An edited note is read again when the board next comes down.</summary>
+    /// <summary>
+    /// Edits the print's file: Paint for a picture. An edited note is read again
+    /// when the board next comes down. A linked file has no edit: it opens.
+    /// </summary>
     public void Edit(string id)
     {
         if (Find(id) is { } print)
         {
-            saves.WhenSaved(print.Path, ShellLauncher.Edit);
+            saves.WhenSaved(print.Path, print.IsFile ? ShellLauncher.Open : ShellLauncher.Edit);
         }
     }
 

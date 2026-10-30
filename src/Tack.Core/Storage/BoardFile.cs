@@ -89,6 +89,7 @@ public static class BoardFile
         {
             case null: kind = Kind.Image; break;
             case "note": kind = Kind.Note; break;
+            case "file": kind = Kind.File; break;
             default:
                 DevTrace.Write($"skipping a pinned \"{stored.Kind}\", a kind of print this build does not know");
                 return null;
@@ -96,8 +97,13 @@ public static class BoardFile
         var pinnedAt = stored.PinnedAt is { } pinned ? Ms(pinned) : nowMs;
         // A kept print saved without its time counts as kept when pinned.
         long? keptAt = stored.Kept ? stored.KeptAt is { } kept ? Ms(kept) : pinnedAt : null;
-        // A note's file is always Tack's own.
-        var origin = stored.Capture || kind == Kind.Note ? Origin.Capture : Origin.Folder;
+        // A note's file is always Tack's own; a linked file never is, whatever the file says.
+        var origin = kind switch
+        {
+            Kind.Note => Origin.Capture,
+            Kind.File => Origin.Folder,
+            _ => stored.Capture ? Origin.Capture : Origin.Folder,
+        };
         return new SavedPrint(stored.Path, kind, origin, pinnedAt, keptAt);
     }
 

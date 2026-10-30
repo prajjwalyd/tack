@@ -9,8 +9,8 @@ using DragEventArgs = Microsoft.UI.Xaml.DragEventArgs;
 namespace Tack.App.Pinboard.Input;
 
 /// <summary>
-/// Dropping onto the board to pin: PNG and JPEG files, a link or text
-/// (<see cref="DropRules"/>), with the "Drop to pin" cue and the copy cursor
+/// Dropping onto the board to pin: PNG and JPEG files as pictures, any other
+/// file or folder where it is, a link or text (<see cref="DropRules"/>), with the "Drop to pin" cue and the copy cursor
 /// while something pinnable is carried over it. Only while the board is down,
 /// and never a print being dragged out of it. A drop that cannot be pinned
 /// says why under the board.
@@ -109,12 +109,16 @@ sealed class DropTarget : BoardPart
                 Board.Actions.PinText(plan.Text!);
                 break;
             case DropOutcome.NotPinnable:
-                Say(Notices.NotPinnable);
+                Say(Notices.NoPlace);
                 break;
             case DropOutcome.BadImage:
                 Say(Notices.BadImage);
                 break;
-            case DropOutcome.Images:
+            case DropOutcome.Files:
+                if (plan.Links.Count > 0)
+                {
+                    Board.Actions.PinFiles([.. plan.Links.Select(file => file.Path!)]);
+                }
                 foreach (var image in plan.Images)
                 {
                     if (await DropReader.BytesAsync(files[image]) is { } bytes)
@@ -127,6 +131,10 @@ sealed class DropTarget : BoardPart
                     }
                 }
                 break;
+        }
+        if (plan.Over > 0)
+        {
+            Say(Notices.TooMany);
         }
     }
 

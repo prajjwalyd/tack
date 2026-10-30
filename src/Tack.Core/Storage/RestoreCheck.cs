@@ -9,20 +9,27 @@ public static class RestoreCheck
 {
     /// <summary>
     /// An entry Tack itself could have written (a picture for a print, a text
-    /// file directly in <paramref name="notesFolder"/> for a note) whose file
-    /// is still there is tried; one whose file is gone, or that is not a file
-    /// at all, is dropped.
+    /// file directly in <paramref name="notesFolder"/> for a note, a file or
+    /// folder on a drive letter for a linked file) whose file is still there
+    /// is tried; one whose file is gone, or that is not what its kind says, is
+    /// dropped.
     /// </summary>
     public static Restoring Of(SavedPrint print, string notesFolder)
     {
-        var tackWouldPin = print.Kind == Kind.Note ? NoteFiles.IsIn(print.Path, notesFolder) : PathRules.IsImage(print.Path);
+        var tackWouldPin = print.Kind switch
+        {
+            Kind.Note => NoteFiles.IsIn(print.Path, notesFolder),
+            Kind.File => PathRules.IsOnDrive(print.Path),
+            _ => PathRules.IsImage(print.Path),
+        };
         if (!tackWouldPin)
         {
             return Restoring.Invalid;
         }
         try
         {
-            return File.GetAttributes(print.Path).HasFlag(FileAttributes.Directory) ? Restoring.Invalid : Restoring.Try;
+            var folder = File.GetAttributes(print.Path).HasFlag(FileAttributes.Directory);
+            return folder && print.Kind != Kind.File ? Restoring.Invalid : Restoring.Try;
         }
         catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
         {

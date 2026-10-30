@@ -8,8 +8,9 @@ internal sealed class StoredPrint
     public required string Path { get; set; }
 
     /// <summary>
-    /// "note" for a note; absent for a screenshot. Read as text, so a kind from
-    /// a newer Tack skips that print instead of failing the whole file.
+    /// "note" for a note, "file" for a file or folder linked where it is;
+    /// absent for a screenshot. Read as text, so a kind from a newer Tack
+    /// skips that print instead of failing the whole file (as Tack 0.3 skips "file").
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Kind { get; set; }

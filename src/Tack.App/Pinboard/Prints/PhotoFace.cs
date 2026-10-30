@@ -16,7 +16,8 @@ namespace Tack.App.Pinboard.Prints;
 
 /// <summary>
 /// A print's photo inside its paper border: the thumbnail filling the box
-/// (cropped to it), decoded off the UI thread at the size it is drawn; a
+/// (cropped to it), or for a linked file shown whole on white with room for
+/// its name below, decoded off the UI thread at the size it is drawn; a
 /// hairline where photo meets paper, so light screenshots keep their edge;
 /// and the sheen, a diagonal band of light that follows the pointer while hovered.
 /// </summary>
@@ -38,6 +39,8 @@ sealed class PhotoFace
     double _w;
     double _h;
     double _scale = 1;
+    bool _whole;
+    BoardTheme? _theme;
 
     public PhotoFace()
     {
@@ -86,7 +89,26 @@ sealed class PhotoFace
         Decode();
     }
 
-    /// <summary>The photo's size, logical px: the print less its paper border.</summary>
+    /// <summary>
+    /// A linked file's thumbnail or icon is shown <paramref name="whole"/>, on
+    /// white, with the name's strip under the box; a photo fills its box.
+    /// </summary>
+    public void Fit(bool whole)
+    {
+        if (whole == _whole)
+        {
+            return;
+        }
+        _whole = whole;
+        _picture.Stretch = whole ? Stretch.Uniform : Stretch.UniformToFill;
+        var b = BoardMetrics.PrintBorder;
+        Root.Margin = new Thickness(b, b, b, whole ? BoardMetrics.FileNameHeight : b);
+        Paint();
+        _decoded = 0;
+        Decode();
+    }
+
+    /// <summary>The photo's size, logical px: the print less its paper border (and a file's name).</summary>
     public void Resize(double w, double h)
     {
         (_w, _h) = (w, h);
@@ -107,19 +129,31 @@ sealed class PhotoFace
 
     public void ApplyTheme(BoardTheme theme)
     {
-        Root.Background = theme.Brush(theme.IsHighContrast ? theme.Canvas : theme.PhotoEmpty);
+        _theme = theme;
+        Paint();
+    }
+
+    void Paint()
+    {
+        if (_theme is not { } theme)
+        {
+            return;
+        }
+        var empty = _whole ? BoardTheme.Rgba(255, 255, 255, 1) : theme.PhotoEmpty;
+        Root.Background = theme.Brush(theme.IsHighContrast ? theme.Canvas : empty);
         _hairline.BorderThickness = new Thickness(theme.IsHighContrast ? 1 : 0.5);
         _hairline.BorderBrush = theme.Brush(theme.IsHighContrast ? theme.CanvasText : BoardTheme.Rgba(0, 0, 0, 0.14));
     }
 
-    /// <summary>Decodes the thumbnail to the pixels it covers (cropped to fill), unless it already has as many.</summary>
+    /// <summary>Decodes the thumbnail to the pixels it covers (cropped to fill, or whole), unless it already has as many.</summary>
     void Decode()
     {
         if (_jpeg is not { } jpeg || _w <= 0)
         {
             return;
         }
-        var width = (int)Math.Ceiling(Math.Max(_w, _h * _aspect) * _scale);
+        var drawn = _whole ? Math.Min(_w, _h * _aspect) : Math.Max(_w, _h * _aspect);
+        var width = (int)Math.Ceiling(drawn * _scale);
         if (width <= _decoded)
         {
             return;

@@ -34,8 +34,14 @@ public sealed class Snapshot
     static StoredPrint Stored(string path, Kind kind, Origin origin, long pinnedAt, long? keptAt) => new()
     {
         Path = path,
-        Kind = kind == Kind.Note ? "note" : null,
-        Capture = origin == Origin.Capture,
+        Kind = kind switch
+        {
+            Kind.Note => "note",
+            Kind.File => "file",
+            _ => null,
+        },
+        // A linked file is always the user's own: no build may ever recycle it.
+        Capture = kind != Kind.File && origin == Origin.Capture,
         PinnedAt = (ulong)Math.Max(pinnedAt, 0),
         Kept = keptAt.HasValue,
         KeptAt = keptAt is { } kept ? (ulong)Math.Max(kept, 0) : null,

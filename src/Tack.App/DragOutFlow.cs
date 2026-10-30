@@ -70,7 +70,7 @@ sealed class DragOutFlow(AppState state, PendingSaves saves, Unpinning unpinning
             {
                 await Task.Delay(at - waited).ConfigureAwait(false);
                 waited = at;
-                if (!File.Exists(path))
+                if (!Path.Exists(path))
                 {
                     unpinning.RemovePath(path, Removal.Quiet);
                     return;
