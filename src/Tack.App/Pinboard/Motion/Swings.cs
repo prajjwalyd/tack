@@ -16,7 +16,7 @@ sealed class Swings(BoardContext board)
     /// <summary>Pushes <paramref name="item"/> to peak at about <paramref name="amplitude"/> degrees.</summary>
     public void Nudge(BoardItem item, double amplitude)
     {
-        if (board.State.Reduced || item.Leaving || !board.State.Revealed)
+        if (board.State.Reduced || item.Leaving || !board.State.Revealed || item.View is not { } view)
         {
             return;
         }
@@ -29,7 +29,7 @@ sealed class Swings(BoardContext board)
         }
         var swing = Swing.Nudge(amplitude, board.Clock.Scale, current, elapsed);
         Playing? playing = null;
-        playing = board.Keyframer.Play(swing.Timeline().Sample(), item.View.Swing.Visual, () =>
+        playing = board.Keyframer.Play(swing.Timeline().Sample(), view.Swing.Visual, () =>
         {
             if (_going.TryGetValue(item, out var mine) && mine.Playing == playing)
             {
@@ -54,7 +54,10 @@ sealed class Swings(BoardContext board)
         foreach (var (item, going) in _going)
         {
             going.Playing.Cancel();
-            board.Keyframer.Set(item.View.Swing.Visual, Channel.Rotation, 0);
+            if (item.View is { } view)
+            {
+                board.Keyframer.Set(view.Swing.Visual, Channel.Rotation, 0);
+            }
         }
         _going.Clear();
     }

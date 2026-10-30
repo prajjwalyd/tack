@@ -43,7 +43,9 @@ sealed class BoardAutomation : BoardPart
     public int IndexOf(BoardItem item) => Board.State.Order.IndexOf(item.Id);
 
     /// <summary><paramref name="item"/>'s peer, made if need be.</summary>
-    public AutomationPeer? PeerOf(BoardItem item) => FrameworkElementAutomationPeer.CreatePeerForElement(item.View.Slot.Element);
+    /// <remarks>Only a print with a view has one: the list holds the prints near the view, as a virtualized list does.</remarks>
+    public AutomationPeer? PeerOf(BoardItem item) =>
+        item.View is { } view ? FrameworkElementAutomationPeer.CreatePeerForElement(view.Slot.Element) : null;
 
     /// <summary>A screen reader selected or focused <paramref name="item"/>: the keyboard's focus moves there.</summary>
     public void Select(BoardItem item)
@@ -83,14 +85,18 @@ sealed class BoardAutomation : BoardPart
         }
     }
 
-    public override void Added(BoardItem item, bool animate, Flight? flight)
+    public override void Added(BoardItem item, bool animate, Flight? flight) => RowChanged();
+
+    public override void Woke(BoardItem item)
     {
-        if (item.View.Slot.Element is PeerCanvas slot)
+        if (item.View!.Slot.Element is PeerCanvas slot)
         {
             slot.Peer = () => new PrintItemPeer(slot, item, this);
         }
         RowChanged();
     }
+
+    public override void Sleeping(BoardItem item) => RowChanged();
 
     public override void Removed(BoardItem item, Removal how) => RowChanged();
 
@@ -114,5 +120,6 @@ sealed class BoardAutomation : BoardPart
     /// <summary>The list's items, or whether it is empty, changed.</summary>
     void RowChanged() => ListPeer?.InvalidatePeer();
 
-    static AutomationPeer? Existing(BoardItem item) => FrameworkElementAutomationPeer.FromElement(item.View.Slot.Element);
+    static AutomationPeer? Existing(BoardItem item) =>
+        item.View is { } view ? FrameworkElementAutomationPeer.FromElement(view.Slot.Element) : null;
 }

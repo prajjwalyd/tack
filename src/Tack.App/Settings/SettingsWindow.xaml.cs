@@ -17,7 +17,9 @@ namespace Tack.App.Settings;
 /// Settings does, the list of groups and the phone page. Every change applies
 /// at once through <see cref="SettingsChanges"/>; there is no Save. While it
 /// has the keyboard focus it holds the board down, so a change shows live.
-/// Esc closes it, Alt+Left goes back from the phone page. UI thread only.
+/// Closing it, with Esc or its close button, only hides it (see
+/// <see cref="SettingsOpener"/>). Alt+Left goes back from the phone page.
+/// UI thread only.
 /// </summary>
 public sealed partial class SettingsWindow : Window
 {
@@ -65,6 +67,11 @@ public sealed partial class SettingsWindow : Window
         phone.Changed += RenderPhone;
         updater.StatusChanged += UpdatesSection.ShowStatus;
         Activated += OnActivated;
+        AppWindow.Closing += (_, args) =>
+        {
+            args.Cancel = true;
+            Hide();
+        };
         Closed += OnClosed;
         Root.KeyDown += OnKeyDown;
         Root.Loaded += OnLoaded;
@@ -119,6 +126,10 @@ public sealed partial class SettingsWindow : Window
             // A little air above the heading, as at the top of the list.
             ListScroll.ChangeView(null, Math.Max(0, top - 4), null, disableAnimation: true);
         }
+        else
+        {
+            ListScroll.ChangeView(null, 0, null, disableAnimation: true);
+        }
         SyncHead();
         if (_active && target is not null && FocusManager.FindFirstFocusableElement(target) is Control first)
         {
@@ -160,14 +171,30 @@ public sealed partial class SettingsWindow : Window
         _reveal.HoldForSettings(_active);
     }
 
+    /// <summary>Whether it is on screen.</summary>
+    internal bool IsShown => AppWindow.IsVisible;
+
+    /// <summary>Put away until it is opened again.</summary>
+    internal void Hide()
+    {
+        AppWindow.Hide();
+        Leave();
+    }
+
+    /// <summary>Closed for good, as Tack quits.</summary>
     void OnClosed(object sender, WindowEventArgs args)
     {
-        _active = false;
         _settings.Changed -= Render;
         _phone.Changed -= RenderPhone;
         _updater.StatusChanged -= UpdatesSection.ShowStatus;
+        Leave();
+    }
+
+    void Leave()
+    {
+        _active = false;
         _context.RaiseLeaving();
-        // Closed while a shortcut was listening: the shortcuts come back.
+        // Put away while a shortcut was listening: the shortcuts come back.
         _settings.PauseShortcuts(false);
         _reveal.HoldForSettings(false);
     }
@@ -178,7 +205,7 @@ public sealed partial class SettingsWindow : Window
         if (e.Key == VirtualKey.Escape && !alt)
         {
             e.Handled = true;
-            Close();
+            Hide();
         }
         else if (e.Key == VirtualKey.Left && alt && PhoneScroll.Visibility == Visibility.Visible)
         {

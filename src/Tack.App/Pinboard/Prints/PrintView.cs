@@ -85,7 +85,7 @@ sealed class PrintView
         Glint = new("glint", _pin.GlintBand);
         Caption = new("caption", _caption.Element);
         _keyframer = board?.Keyframer ?? new Keyframer(Card.Visual.Compositor);
-        var parts = new PrintParts(_peel.Visual, _peel.CurlVisual, _face.Photo.Sheen, _pin.Body, _face.Photo, _keep, _unpin);
+        var parts = new PrintParts(_peel.Visual, on => _peel.Depth(Card.Visual, on), _peel.CurlVisual, _face.Photo.Sheen, _pin.Body, _face.Photo, _keep, _unpin);
         _states = new PrintStates(this, parts, board, _keyframer);
         _keep.Pressed += down => _states.ButtonPressed(KeepButton, down);
         _unpin.Pressed += down => _states.ButtonPressed(XButton, down);
@@ -162,7 +162,7 @@ sealed class PrintView
         {
             (layer.Element.Width, layer.Element.Height) = (w, h);
         }
-        _peel.Resize(Card.Visual, w, h);
+        _peel.Resize(w, h);
         _lift.Resize(w, h);
         _face.Resize(w, h);
         _ring.Resize(w, h);

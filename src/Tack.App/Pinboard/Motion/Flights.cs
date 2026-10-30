@@ -93,12 +93,13 @@ sealed class Flights(BoardContext board) : BoardPart(board)
         var rest = new LogicalRect(State.WindowWidth / 2 + item.X - Board.Parts.Scroller.Target, item.Y, item.W, item.H);
         var lean = (item.Tilt < 0 ? -1 : 1) * (0.8 + Board.Random.NextDouble() * 0.8);
         var path = new FlightPath(flight.From, rest, item.Tilt, lean, flight.Found, State.WindowWidth, clock);
-        var thumbnail = (item.View.Picture.Element as Image)?.Source;
+        var view = Board.Parts.Row.Wake(item);
+        var thumbnail = (view.Picture.Element as Image)?.Source;
         var stand = new FlightStandIn(Board, item, rest, flying.Picture ?? thumbnail);
         flying.StandIn = stand;
         Board.Layers.Overlay.Children.Add(stand.Root);
 
-        var (keyframer, motions, view) = (Board.Keyframer, Board.Parts.PrintMotions, item.View);
+        var (keyframer, motions) = (Board.Keyframer, Board.Parts.PrintMotions);
         flying.Motions.Add(keyframer.Play(path.StandIn().Sample(), stand.Visual));
         flying.Motions.Add(keyframer.Play(path.Shade().Sample(), stand.Shade));
         flying.Motions.Add(keyframer.Play(path.Paper().Sample(), stand.Paper));
@@ -149,7 +150,10 @@ sealed class Flights(BoardContext board) : BoardPart(board)
             motion.Cancel();
         }
         Land(flying);
-        item.View.Arriving = false;
+        if (item.View is { } view)
+        {
+            view.Arriving = false;
+        }
     }
 
     void Stop(List<DispatcherQueueTimer> timers)

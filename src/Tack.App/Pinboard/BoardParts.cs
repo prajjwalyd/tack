@@ -4,6 +4,7 @@ using Tack.App.Pinboard.Feedback;
 using Tack.App.Pinboard.Input;
 using Tack.App.Pinboard.Motion;
 using Tack.App.Pinboard.Row;
+using Tack.Core.Diagnostics;
 
 namespace Tack.App.Pinboard;
 
@@ -59,4 +60,20 @@ sealed class BoardParts
     public BoardAutomation Automation { get; }
 
     public IReadOnlyList<BoardPart> All { get; }
+
+    /// <summary>Calls every part in order. One that throws is traced, and the rest still run.</summary>
+    public void Each(Action<BoardPart> call)
+    {
+        foreach (var part in All)
+        {
+            try
+            {
+                call(part);
+            }
+            catch (Exception e)
+            {
+                DevTrace.Write($"board: {part.GetType().Name} failed: {e}");
+            }
+        }
+    }
 }

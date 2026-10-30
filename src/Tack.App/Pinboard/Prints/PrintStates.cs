@@ -116,7 +116,7 @@ sealed class PrintStates(PrintView view, PrintParts parts, BoardContext? board, 
             Go(card, Channel.Y, 0, 0, Ease);
             Go(card, Channel.Scale, 1, 0, Ease);
             Go(card, Channel.Rotation, Tilt, 0, Ease);
-            Go(parts.Peel, Channel.Rotation, 0, 0, Ease);
+            Go(parts.Peel, Channel.Rotation, 0, 0, Ease, done: Flat);
             Go(card, Channel.Opacity, drag ? 0.45 : 1, Ms(150), Ease);
             return;
         }
@@ -126,6 +126,7 @@ sealed class PrintStates(PrintView view, PrintParts parts, BoardContext? board, 
             Go(card, Channel.Y, -3, peel, Out);
             Go(card, Channel.Scale, 1, peel, Out);
             Go(card, Channel.Rotation, Tilt * HoverTilt, peel, Out);
+            parts.Depth(true);
             Go(parts.Peel, Channel.Rotation, PeelAngle, peel, Out);
             Go(card, Channel.Opacity, 0.45, Ms(220), Ease, Ms(140));
             return;
@@ -137,14 +138,14 @@ sealed class PrintStates(PrintView view, PrintParts parts, BoardContext? board, 
             Go(card, Channel.Y, 0, ms, PressCurve);
             Go(card, Channel.Scale, 0.97, ms, PressCurve);
             Go(card, Channel.Rotation, Tilt * HoverTilt, Ms(200), Ease);
-            Go(parts.Peel, Channel.Rotation, 0, Ms(200), Ease);
+            Go(parts.Peel, Channel.Rotation, 0, Ms(200), Ease, done: Flat);
         }
         else if (hover)
         {
             Go(card, Channel.Y, -2, Ms(190), Out);
             Go(card, Channel.Scale, 1, Ms(190), Out);
             Go(card, Channel.Rotation, Tilt * HoverTilt + _lean, Ms(220), Out);
-            Go(parts.Peel, Channel.Rotation, 0, Ms(220), Out);
+            Go(parts.Peel, Channel.Rotation, 0, Ms(220), Out, done: Flat);
         }
         else
         {
@@ -152,7 +153,7 @@ sealed class PrintStates(PrintView view, PrintParts parts, BoardContext? board, 
             Go(card, Channel.Y, 0, settle, Spring.Settle.Easing);
             Go(card, Channel.Scale, 1, settle, Spring.Settle.Easing);
             Go(card, Channel.Rotation, Tilt, settle, Spring.Settle.Easing);
-            Go(parts.Peel, Channel.Rotation, 0, settle, Spring.Settle.Easing);
+            Go(parts.Peel, Channel.Rotation, 0, settle, Spring.Settle.Easing, done: Flat);
         }
     }
 
@@ -201,8 +202,21 @@ sealed class PrintStates(PrintView view, PrintParts parts, BoardContext? board, 
     /// <summary>A Slow duration at the Speed setting, or none while nothing eases.</summary>
     double Ms(double slow) => _animate && board is { } b ? b.Clock.Scaled(slow) : 0;
 
-    /// <summary>Eases one channel to <paramref name="target"/>, or puts it there with no time; nothing if it is already on its way there.</summary>
-    void Go(Visual visual, Channel channel, double target, double ms, Easing easing, double delay = 0)
+    /// <summary>The peel has laid the card down: out of perspective, unless a new drag has started.</summary>
+    void Flat()
+    {
+        if (!view.Dragging)
+        {
+            parts.Depth(false);
+        }
+    }
+
+    /// <summary>
+    /// Eases one channel to <paramref name="target"/>, or puts it there with no
+    /// time; nothing if it is already on its way there. <paramref name="done"/>
+    /// runs once it is there, not if another motion takes the channel first.
+    /// </summary>
+    void Go(Visual visual, Channel channel, double target, double ms, Easing easing, double delay = 0, Action? done = null)
     {
         var key = (visual, channel);
         if (_targets.TryGetValue(key, out var last) && last.Target == target && last.Playing is not { Cancelled: true })
@@ -211,7 +225,7 @@ sealed class PrintStates(PrintView view, PrintParts parts, BoardContext? board, 
         }
         if (ms > 0 && _animate)
         {
-            _targets[key] = (target, keyframer.Transition(visual, channel, target, ms, easing, delay));
+            _targets[key] = (target, keyframer.Transition(visual, channel, target, ms, easing, delay, done));
             return;
         }
         if (_targets.ContainsKey(key))
@@ -224,6 +238,7 @@ sealed class PrintStates(PrintView view, PrintParts parts, BoardContext? board, 
             Put(visual, channel, target);
         }
         _targets[key] = (target, null);
+        done?.Invoke();
     }
 
     /// <summary>Puts a channel at <paramref name="value"/> straight on the visual, for a layer no motion is running on.</summary>

@@ -28,7 +28,8 @@ sealed class Arrivals(BoardContext board, PrintRow row)
     public void Hide(BoardItem item)
     {
         _hidden.Add(item);
-        item.View.Slot.Element.Visibility = Visibility.Collapsed;
+        // A print waiting hidden keeps its view, wherever it is in the row, until it shows.
+        row.Wake(item).Slot.Element.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>Shows a hidden print. False if it was not hidden.</summary>
@@ -38,7 +39,10 @@ sealed class Arrivals(BoardContext board, PrintRow row)
         {
             return false;
         }
-        item.View.Slot.Element.Visibility = Visibility.Visible;
+        if (item.View is { } view)
+        {
+            view.Slot.Element.Visibility = Visibility.Visible;
+        }
         return true;
     }
 

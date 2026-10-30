@@ -1,7 +1,6 @@
 using Microsoft.UI.Dispatching;
 using Tack.App.Pinboard.Contract;
 using Tack.App.Pinboard.Model;
-using Tack.Core.Diagnostics;
 using Tack.Core.Pinboard;
 using Tack.Core.Prints;
 using Tack.Core.Reveal;
@@ -134,6 +133,8 @@ sealed class BoardController
         }
         _board.Keyframer.CancelAll();
         Each(part => part.Tucked());
+        // Last, once every part has put its prints' layers at rest.
+        _board.Parts.Row.RestViews();
     }
 
     void Add(Print print, bool animate, Flight? flight, bool append)
@@ -149,7 +150,6 @@ sealed class BoardController
         var at = append ? State.Order.Count : State.KeptCount;
         State.Items[print.Id] = item;
         State.Order.Insert(at, print.Id);
-        _board.Layers.Track.Children.Add(item.View.Slot.Element);
         Each(part => part.Added(item, animate, flight));
     }
 
@@ -174,7 +174,7 @@ sealed class BoardController
     {
         var old = item.Print;
         item.Print = print;
-        item.View.Update(print);
+        item.View?.Update(print);
         Each(part => part.Updated(item, old));
     });
 
@@ -200,7 +200,7 @@ sealed class BoardController
         // The note paper is drawn by the prints themselves.
         foreach (var item in State.Items.Values)
         {
-            item.View.ApplyTheme();
+            item.View?.ApplyTheme();
         }
         Each(part => part.LookChanged(look));
     }
@@ -209,7 +209,7 @@ sealed class BoardController
     {
         foreach (var item in State.Items.Values)
         {
-            item.View.ApplyTheme();
+            item.View?.ApplyTheme();
         }
         Each(part => part.ThemeChanged());
     }
@@ -255,21 +255,7 @@ sealed class BoardController
         }
     }
 
-    /// <summary>Calls every part in order. One that throws is traced, and the rest still run.</summary>
-    void Each(Action<BoardPart> call)
-    {
-        foreach (var part in _board.Parts.All)
-        {
-            try
-            {
-                call(part);
-            }
-            catch (Exception e)
-            {
-                DevTrace.Write($"board: {part.GetType().Name} failed: {e}");
-            }
-        }
-    }
+    void Each(Action<BoardPart> call) => _board.Parts.Each(call);
 
     static DispatcherQueueTimer OneShot(DispatcherQueue queue, Action run)
     {

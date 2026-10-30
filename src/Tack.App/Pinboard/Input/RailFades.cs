@@ -13,11 +13,12 @@ namespace Tack.App.Pinboard.Input;
 /// The rail's edges while the row overflows: the rail is clipped at the
 /// board's sides (never at its foot, so a falling print shows in the
 /// overhang), and each side where more prints wait fades out over 44 px.
-/// The fade is a mask over a picture of the rail: the rail itself is drawn
-/// into a surface, shown through a gradient on a sprite just above it, and
-/// left invisible but still taking the pointer. When the row fits there is
-/// no picture, no mask and no clip, so nothing is drawn twice. Should the
-/// compositor refuse the picture, the rail is only clipped, with no fades.
+/// A fade is the board itself laid back over the prints: a strip just above
+/// the rail shows a picture of the cork under it, through a gradient, so the
+/// prints melt into the felt and frame at that side. The pictures are small
+/// and only change with the cork, never as the prints move or the board
+/// swings. When the row fits there is no clip and no strip. Should the
+/// compositor refuse the pictures, the rail is only clipped, with no fades.
 /// </summary>
 sealed class RailFades
 {
@@ -30,47 +31,42 @@ sealed class RailFades
     readonly BoardContext _board;
     readonly Compositor _compositor;
     readonly Visual _rail;
-    readonly SpriteVisual _sprite;
-    readonly CompositionLinearGradientBrush _mask;
-    readonly CompositionColorGradientStop _leftInner;
-    readonly CompositionColorGradientStop _rightInner;
+    readonly Visual _cork;
+    readonly ContainerVisual _strips;
     readonly CompositionEasingFunction _ease;
-    CompositionVisualSurface? _surface;
+    RectangleClip? _clip;
+    Strip? _left;
+    Strip? _right;
     bool _clipOnly;
     bool _on;
     ScrollEdges _edges;
     double _width;
+
+    /// <summary>One side's fade: a sprite showing the cork beside it through a gradient whose inner stop slides in.</summary>
+    sealed record Strip(SpriteVisual Sprite, CompositionVisualSurface Surface, CompositionColorGradientStop Inner);
 
     public RailFades(BoardContext board)
     {
         _board = board;
         var layers = board.Layers;
         _rail = ElementCompositionPreview.GetElementVisual(layers.Rail);
+        _cork = ElementCompositionPreview.GetElementVisual(layers.Cork);
         _compositor = _rail.Compositor;
         _ease = _compositor.CreateCubicBezierEasingFunction(new Vector2(0.25f, 0.1f), new Vector2(0.25f, 1));
-
-        _mask = _compositor.CreateLinearGradientBrush();
-        _mask.ColorStops.Add(Stop(0, Colors.Transparent));
-        _leftInner = Stop(0, Colors.White);
-        _rightInner = Stop(1, Colors.White);
-        _mask.ColorStops.Add(_leftInner);
-        _mask.ColorStops.Add(_rightInner);
-        _mask.ColorStops.Add(Stop(1, Colors.Transparent));
-
-        _sprite = _compositor.CreateSpriteVisual();
-        _sprite.IsVisible = false;
+        _strips = _compositor.CreateContainerVisual();
+        _strips.IsVisible = false;
         // A host of its own just above the rail: under the veil and the drop cue, turning with the board.
         var host = new Canvas { IsHitTestVisible = false };
         Canvas.SetTop(host, Canvas.GetTop(layers.Rail));
         layers.Board.Children.Insert(layers.Board.Children.IndexOf(layers.Rail) + 1, host);
-        ElementCompositionPreview.SetElementChildVisual(host, _sprite);
+        ElementCompositionPreview.SetElementChildVisual(host, _strips);
     }
 
     /// <summary>
     /// The board is <paramref name="width"/> wide and the row overflows or
     /// not, with more to see on these <paramref name="edges"/>. The width is
     /// the board's own, never the rail's layout size: that lags a layout
-    /// behind, and the picture kept a narrower board's width.
+    /// behind, and the strips kept a narrower board's place.
     /// </summary>
     public void Follow(double width, bool overflows, ScrollEdges edges)
     {
@@ -83,60 +79,86 @@ sealed class RailFades
             _on = overflows;
             Switch(overflows);
         }
-        if (!_on || _clipOnly || _width <= 0 || edges == _edges)
+        if (!_on || _left is null || _right is null || edges == _edges)
         {
             return;
         }
         _edges = edges;
-        Fade(_leftInner, edges.Left ? FadePx / _width : 0);
-        Fade(_rightInner, 1 - (edges.Right ? FadePx / _width : 0));
+        Fade(_left.Inner, edges.Left ? 1 : 0);
+        Fade(_right.Inner, edges.Right ? 0 : 1);
     }
 
-    /// <summary>On: the rail goes into the masked picture, its fades starting from nothing. Off: the rail shows itself again.</summary>
+    /// <summary>On: the rail is clipped and the strips show, their fades starting from nothing. Off: neither.</summary>
     void Switch(bool on)
     {
-        if (_clipOnly || (on && !Picture()))
+        // Sized from the board's width: the rail's own visual can still have an older layout's size.
+        _clip ??= _compositor.CreateRectangleClip(0, 0, (float)_width, (float)BoardMetrics.RailHeight);
+        _rail.Clip = on ? _clip : null;
+        if (on && !Strips())
         {
-            _rail.Clip = on ? _compositor.CreateInsetClip() : null;
             return;
         }
         _edges = default;
-        _leftInner.StopAnimation(nameof(CompositionColorGradientStop.Offset));
-        _rightInner.StopAnimation(nameof(CompositionColorGradientStop.Offset));
-        (_leftInner.Offset, _rightInner.Offset) = (0, 1);
-        if (_surface is not null)
+        foreach (var (strip, rest) in new[] { (_left, 0f), (_right, 1f) })
         {
-            _surface.SourceVisual = on ? _rail : null;
+            if (strip is not null)
+            {
+                strip.Inner.StopAnimation(nameof(CompositionColorGradientStop.Offset));
+                strip.Inner.Offset = rest;
+                strip.Surface.SourceVisual = on ? _cork : null;
+            }
         }
-        _sprite.IsVisible = on;
-        _rail.Opacity = on ? 0 : 1;
+        _strips.IsVisible = on;
     }
 
-    /// <summary>The surface the rail is drawn into, made the first time the row overflows. False if it cannot be.</summary>
-    bool Picture()
+    /// <summary>The two strips, made the first time the row overflows. False if they cannot be.</summary>
+    bool Strips()
     {
-        if (_surface is not null)
+        if (_clipOnly)
+        {
+            return false;
+        }
+        if (_left is not null)
         {
             return true;
         }
         try
         {
-            _surface = _compositor.CreateVisualSurface();
-            var picture = _compositor.CreateSurfaceBrush(_surface);
-            picture.Stretch = CompositionStretch.Fill;
-            var masked = _compositor.CreateMaskBrush();
-            masked.Source = picture;
-            masked.Mask = _mask;
-            _sprite.Brush = masked;
-            _surface.SourceSize = _sprite.Size;
+            _left = NewStrip(outer: 0, inner: 0);
+            _right = NewStrip(outer: 1, inner: 1);
+            Resize(_width);
             return true;
         }
         catch (Exception e)
         {
             DevTrace.Write($"board: no edge fades, only a clip: {e.Message}");
-            (_surface, _clipOnly) = (null, true);
+            (_left, _right, _clipOnly) = (null, null, true);
+            _strips.Children.RemoveAll();
             return false;
         }
+    }
+
+    /// <summary>
+    /// A strip whose cork shows fully at <paramref name="outer"/> (its side of
+    /// the board) and not at all from the inner stop on, which rests at
+    /// <paramref name="inner"/>, on the outer edge: no fade until it slides in.
+    /// </summary>
+    Strip NewStrip(float outer, float inner)
+    {
+        var surface = _compositor.CreateVisualSurface();
+        var picture = _compositor.CreateSurfaceBrush(surface);
+        picture.Stretch = CompositionStretch.Fill;
+        var innerStop = _compositor.CreateColorGradientStop(inner, Colors.Transparent);
+        var gradient = _compositor.CreateLinearGradientBrush();
+        gradient.ColorStops.Add(_compositor.CreateColorGradientStop(outer, Colors.White));
+        gradient.ColorStops.Add(innerStop);
+        var masked = _compositor.CreateMaskBrush();
+        masked.Source = picture;
+        masked.Mask = gradient;
+        var sprite = _compositor.CreateSpriteVisual();
+        sprite.Brush = masked;
+        _strips.Children.InsertAtTop(sprite);
+        return new Strip(sprite, surface, innerStop);
     }
 
     void Resize(double width)
@@ -146,19 +168,23 @@ sealed class RailFades
             return;
         }
         _width = width;
-        var size = new Vector2((float)width, (float)BoardMetrics.RailHeight);
-        _sprite.Size = size;
-        if (_surface is not null)
+        if (_clip is not null)
         {
-            _surface.SourceSize = size;
+            _clip.Right = (float)width;
         }
-        if (_on && !_clipOnly)
+        var size = new Vector2((float)Math.Min(FadePx, width / 2), (float)BoardMetrics.BoardHeight);
+        // The rail's top is this far down the cork: the strips show the cork beside the visible rail.
+        var top = (float)BoardMetrics.TopHidden;
+        foreach (var (strip, x) in new[] { (_left, 0f), (_right, (float)width - size.X) })
         {
-            // Offsets are fractions of the width: the fades keep their 44 px.
-            _leftInner.StopAnimation(nameof(CompositionColorGradientStop.Offset));
-            _rightInner.StopAnimation(nameof(CompositionColorGradientStop.Offset));
-            _leftInner.Offset = _edges.Left ? (float)(FadePx / width) : 0;
-            _rightInner.Offset = _edges.Right ? (float)(1 - FadePx / width) : 1;
+            if (strip is null)
+            {
+                continue;
+            }
+            strip.Sprite.Size = size;
+            strip.Sprite.Offset = new Vector3(x, 0, 0);
+            strip.Surface.SourceOffset = new Vector2(x, top);
+            strip.Surface.SourceSize = size;
         }
     }
 
@@ -169,6 +195,4 @@ sealed class RailFades
         animation.Duration = TimeSpan.FromMilliseconds(Math.Max(1, _board.Clock.Scaled(FadeMs)));
         stop.StartAnimation(nameof(CompositionColorGradientStop.Offset), animation);
     }
-
-    CompositionColorGradientStop Stop(float offset, global::Windows.UI.Color color) => _compositor.CreateColorGradientStop(offset, color);
 }

@@ -79,9 +79,10 @@ sealed class Gestures : BoardPart
         }
     }
 
-    public override void Added(BoardItem item, bool animate, Flight? flight)
+    public override void Woke(BoardItem item)
     {
-        var slot = (Panel)item.View.Slot.Element;
+        var view = item.View!;
+        var slot = (Panel)view.Slot.Element;
         // The slot's whole box takes the pointer, a steady frame however the card moves.
         slot.Background = _hitArea;
         _slots[slot] = item;
@@ -108,21 +109,26 @@ sealed class Gestures : BoardPart
             e.Handled = true;
             Menu(item);
         };
-        PointerButtons.Wire(item, Board);
+        PointerButtons.Wire(item, view, Board);
     }
+
+    public override void Sleeping(BoardItem item) => _slots.Remove(item.View!.Slot.Element);
 
     public override void Removed(BoardItem item, Removal how)
     {
-        _slots.Remove(item.View.Slot.Element);
         _machine.Forget(item.Id);
-        if (_captured?.Slot == item.View.Slot.Element)
+        if (item.View is { } view)
         {
-            Release();
-        }
-        // The controller already let go of it in the state; the look goes too.
-        if (item.View.Hovered)
-        {
-            item.View.SetHover(false);
+            _slots.Remove(view.Slot.Element);
+            if (_captured?.Slot == view.Slot.Element)
+            {
+                Release();
+            }
+            // The controller already let go of it in the state; the look goes too.
+            if (view.Hovered)
+            {
+                view.SetHover(false);
+            }
         }
         Sync();
     }
@@ -132,7 +138,7 @@ sealed class Gestures : BoardPart
         if (item is not null)
         {
             _hover.Leave(item);
-            item.View.SetDragging(true);
+            item.View?.SetDragging(true);
         }
         Sync();
     }
@@ -143,7 +149,7 @@ sealed class Gestures : BoardPart
         {
             _machine.EndPress();
         }
-        item?.View.SetDragging(false);
+        item?.View?.SetDragging(false);
         Sync();
     }
 
@@ -260,8 +266,8 @@ sealed class Gestures : BoardPart
         var sinking = _machine.Sinking && _machine.PressId is { } id ? State.Find(id) : null;
         if (sinking != _sinking)
         {
-            _sinking?.View.SetPressing(false);
-            sinking?.View.SetPressing(true);
+            _sinking?.View?.SetPressing(false);
+            sinking?.View?.SetPressing(true);
             _sinking = sinking;
         }
         Board.Timers.Cancel(_due);

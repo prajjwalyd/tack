@@ -10,8 +10,9 @@ namespace Tack.App.Settings;
 /// <summary>
 /// Opens the one Settings window, or brings it forward if it is open, placed
 /// under the board on the monitor the board is down on (or will come down on).
-/// Created while open: closing it lets the window and its pages go. UI thread
-/// only.
+/// It is made the first time it opens and only hidden after: WinUI never
+/// frees a closed window, so making a new one each time would keep some 9 MB
+/// more for every open. UI thread only.
 /// </summary>
 /// <param name="phone">The phone board, which the phone card and page show.</param>
 /// <param name="updater">Updates, which the updates section shows.</param>
@@ -19,7 +20,7 @@ sealed class SettingsOpener(AppState state, SettingsChanges settings, Reveal rev
 {
     SettingsWindow? _window;
 
-    /// <summary>The window, while it is open.</summary>
+    /// <summary>The window, once it has been opened.</summary>
     public SettingsWindow? Window => _window;
 
     /// <summary>
@@ -29,10 +30,11 @@ sealed class SettingsOpener(AppState state, SettingsChanges settings, Reveal rev
     /// </summary>
     public void Open(string? section = null)
     {
-        var window = _window ?? Create();
+        var window = _window ??= Create();
+        var opening = !window.IsShown;
         Place(window);
         window.Activate();
-        if (section is not null)
+        if (section is not null || opening)
         {
             window.Go(section);
         }
@@ -47,25 +49,24 @@ sealed class SettingsOpener(AppState state, SettingsChanges settings, Reveal rev
     /// </summary>
     public void ShowQuietly(string section)
     {
-        if (_window is not null)
+        if (_window is { IsShown: true })
         {
             Attention.Ask(_window.Handle);
             return;
         }
-        var window = Create();
+        var window = _window ??= Create();
         Place(window);
         window.AppWindow.Show(activateWindow: false);
         window.Go(section);
     }
 
-    /// <summary>Closes the window, if it is open.</summary>
+    /// <summary>Closes the window for good, as Tack quits.</summary>
     public void Close() => _window?.Close();
 
     SettingsWindow Create()
     {
         var window = new SettingsWindow(settings, reveal, phone, updater);
         window.Closed += (_, _) => _window = null;
-        _window = window;
         return window;
     }
 

@@ -62,11 +62,16 @@ sealed partial class PrintItemPeer(FrameworkElement owner, BoardItem item, Board
     protected override int GetSizeOfSetCore() => automation.Count;
 
     /// <summary>Its Keep and unpin buttons; the picture or note's words are its name, not children.</summary>
-    protected override IList<AutomationPeer>? GetChildrenCore() => PeerList.Fill(base.GetChildrenCore(), _buttons ??=
-    [
-        new PrintButtonPeer(item.View.KeepButton.Element, () => Labels.KeepButton(item.Print.Kept), () => automation.Keep(item)),
-        new PrintButtonPeer(item.View.XButton.Element, () => Labels.UnpinButton, () => automation.Unpin(item)),
-    ]);
+    protected override IList<AutomationPeer>? GetChildrenCore() => PeerList.Fill(base.GetChildrenCore(), _buttons ??= Buttons());
+
+    /// <remarks>A peer only exists for a print with a view; none if a screen reader still holds it after the view went.</remarks>
+    PrintButtonPeer[] Buttons() => item.View is { } view
+        ?
+        [
+            new PrintButtonPeer(view.KeepButton.Element, () => Labels.KeepButton(item.Print.Kept), () => automation.Keep(item)),
+            new PrintButtonPeer(view.XButton.Element, () => Labels.UnpinButton, () => automation.Unpin(item)),
+        ]
+        : [];
 
     protected override object GetPatternCore(PatternInterface patternInterface) =>
         patternInterface == PatternInterface.SelectionItem ? this : base.GetPatternCore(patternInterface);

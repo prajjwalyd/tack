@@ -29,7 +29,13 @@ sealed class SlotGlides(Keyframer keyframer)
         var first = _placed.Add(item);
         var from = item.X;
         (item.X, item.Y) = (x, y);
-        item.View.PlaceAt(x, y);
+        // Without a view it has nothing to glide: a view made later starts in its place.
+        if (item.View is not { } view)
+        {
+            Stop(item);
+            return;
+        }
+        view.PlaceAt(x, y);
         if (first || from == x)
         {
             return;
@@ -46,7 +52,7 @@ sealed class SlotGlides(Keyframer keyframer)
             .Key(1, new Pose { X = 0 })
             .Sample();
         _glides[item] = new Glide(offset, Stopwatch.GetTimestamp(), ms);
-        keyframer.Play(motion, item.View.Slot.Visual, () => _glides.Remove(item));
+        keyframer.Play(motion, view.Slot.Visual, () => _glides.Remove(item));
     }
 
     /// <summary>Puts every slot still gliding straight in its place (the motions were cancelled on tuck).</summary>
@@ -67,9 +73,9 @@ sealed class SlotGlides(Keyframer keyframer)
 
     void Stop(BoardItem item)
     {
-        if (_glides.Remove(item))
+        if (_glides.Remove(item) && item.View is { } view)
         {
-            keyframer.Set(item.View.Slot.Visual, Channel.X, 0);
+            keyframer.Set(view.Slot.Visual, Channel.X, 0);
         }
     }
 

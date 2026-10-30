@@ -149,5 +149,6 @@ sealed class Scroller : BoardPart
             track.Translation = translation;
         }
         _fades.Follow(Board.State.BoardWidth, _model.Overflows, _model.Edges);
+        Board.Parts.Row.FollowScroll();
     }
 }

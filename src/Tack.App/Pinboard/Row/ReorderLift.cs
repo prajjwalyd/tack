@@ -24,16 +24,20 @@ sealed class ReorderLift(BoardContext board)
 
     public void Lift(BoardItem item)
     {
+        if (item.View is not { } view)
+        {
+            return;
+        }
         var ms = board.Clock.LayoutMs;
         var motion = new Timeline(ms, easing: CubicBezier.EaseInOut)
             .Key(0, Pose.None)
             .Key(0.45, new Pose { Y = -5, Scale = 1.03 })
             .Key(1, Pose.None)
             .Sample();
-        var slot = item.View.Slot.Element;
+        var slot = view.Slot.Element;
         Canvas.SetZIndex(slot, MovingZ);
         _lifting.Add(item);
-        board.Keyframer.Play(motion, item.View.Drop.Visual);
+        board.Keyframer.Play(motion, view.Drop.Visual);
         board.Timers.Later(ms, () => Land(item));
     }
 
@@ -42,8 +46,11 @@ sealed class ReorderLift(BoardContext board)
     {
         foreach (var item in _lifting.ToArray())
         {
-            board.Keyframer.Set(item.View.Drop.Visual, Channel.Y, 0);
-            board.Keyframer.Set(item.View.Drop.Visual, Channel.Scale, 1);
+            if (item.View is { } view)
+            {
+                board.Keyframer.Set(view.Drop.Visual, Channel.Y, 0);
+                board.Keyframer.Set(view.Drop.Visual, Channel.Scale, 1);
+            }
             Land(item);
         }
     }
@@ -51,9 +58,8 @@ sealed class ReorderLift(BoardContext board)
     void Land(BoardItem item)
     {
         _lifting.Remove(item);
-        var slot = item.View.Slot.Element;
         // Only if nothing has raised it further since (a hover, an arrival).
-        if (Canvas.GetZIndex(slot) == MovingZ)
+        if (item.View?.Slot.Element is { } slot && Canvas.GetZIndex(slot) == MovingZ)
         {
             Canvas.SetZIndex(slot, 0);
         }

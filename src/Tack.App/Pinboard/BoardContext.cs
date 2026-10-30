@@ -77,7 +77,10 @@ sealed class BoardContext
     /// <summary>A leaving print is gone: off the track and out of the board's state.</summary>
     public void Forget(BoardItem item)
     {
-        Layers.Track.Children.Remove(item.View.Slot.Element);
+        if (item.View is { } view)
+        {
+            Layers.Track.Children.Remove(view.Slot.Element);
+        }
         if (State.Find(item.Id) == item)
         {
             State.Items.Remove(item.Id);

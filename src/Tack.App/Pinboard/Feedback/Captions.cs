@@ -32,7 +32,7 @@ sealed class Captions(BoardContext board) : BoardPart(board)
             return;
         }
         _shown = item;
-        item.View.SetAge(TextFor(item));
+        item.View?.SetAge(TextFor(item));
         var next = Age.RefreshMs(item.PinnedAt, Now());
         _refresh = Board.Timers.Later(MotionClock.Fixed(next, "the age follows the clock, not the motion"), () =>
         {

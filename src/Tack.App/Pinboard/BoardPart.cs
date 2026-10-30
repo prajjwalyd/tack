@@ -35,12 +35,25 @@ abstract class BoardPart(BoardContext board)
     {
     }
 
-    /// <summary>A print joined the row (it is in <see cref="BoardState.Order"/> and on the track).</summary>
+    /// <summary>
+    /// A print joined the row (it is in <see cref="BoardState.Order"/>). It
+    /// may have no view yet: one far from view gets it when it comes near (<see cref="Woke"/>).
+    /// </summary>
     public virtual void Added(BoardItem item, bool animate, Flight? flight)
     {
     }
 
-    /// <summary>A print was unpinned: it is <see cref="BoardItem.Leaving"/> and out of the order, still on the track.</summary>
+    /// <summary>A print's view was made: it is on the track, in its place, showing the print.</summary>
+    public virtual void Woke(BoardItem item)
+    {
+    }
+
+    /// <summary>A print's view is about to go (tucked, and far from view): let go of it.</summary>
+    public virtual void Sleeping(BoardItem item)
+    {
+    }
+
+    /// <summary>A print was unpinned: it is <see cref="BoardItem.Leaving"/> and out of the order, still on the track if it has a view.</summary>
     public virtual void Removed(BoardItem item, Removal how)
     {
     }

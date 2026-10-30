@@ -56,10 +56,15 @@ sealed class Hinge
     }
 
     /// <summary>
-    /// Off screen, the stage is drawn flat: a perspective makes the compositor
-    /// keep a buffer to draw it into, which a hidden board does not need.
+    /// Off screen, the board lies flat on a flat stage: turned in perspective,
+    /// it makes the compositor keep buffers to draw it into, which a hidden
+    /// board does not need. It is folded again before it is seen.
     /// </summary>
-    public void Flatten() => _stage.TransformMatrix = Matrix4x4.Identity;
+    public void Flatten()
+    {
+        _stage.TransformMatrix = Matrix4x4.Identity;
+        Set(_board, Channel.Rotation, 0);
+    }
 
     /// <summary>Back in perspective, before the board is seen again.</summary>
     public void Unflatten() => Aim(_width);

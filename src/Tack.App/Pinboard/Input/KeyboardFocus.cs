@@ -36,16 +36,17 @@ sealed class KeyboardFocus(BoardContext board)
     public void Rove(BoardItem? item)
     {
         var old = _id is { } id ? board.State.Find(id) : null;
-        if (old is not null && old != item)
+        if (old?.View is { } was && old != item)
         {
-            old.View.Slot.Element.IsTabStop = false;
-            old.View.SetFocused(false);
+            was.Slot.Element.IsTabStop = false;
+            was.SetFocused(false);
         }
         _id = item?.Id;
         board.Layers.Board.IsTabStop = item is null;
         if (item is not null)
         {
-            item.View.Slot.Element.IsTabStop = true;
+            // The keyboard's print has a view wherever the row is, and keeps it while tucked.
+            board.Parts.Row.Wake(item).Slot.Element.IsTabStop = true;
         }
         Ring(item);
         if (old != item)
@@ -60,23 +61,24 @@ sealed class KeyboardFocus(BoardContext board)
     /// <summary>Whether <paramref name="item"/> has the keyboard right now.</summary>
     public bool HasKeyboard(BoardItem item) =>
         board.Layers.Root.XamlRoot is { } root
-        && ReferenceEquals(FocusManager.GetFocusedElement(root), item.View.Slot.Element);
+        && item.View is { } view
+        && ReferenceEquals(FocusManager.GetFocusedElement(root), view.Slot.Element);
 
     /// <summary>Lets go of the keyboard: nothing on the board is a tab stop until the next <see cref="Rove"/>.</summary>
     public void Blur()
     {
-        if (_id is { } id && board.State.Find(id) is { } item)
+        if (_id is { } id && board.State.Find(id)?.View is { } view)
         {
-            item.View.Slot.Element.IsTabStop = false;
+            view.Slot.Element.IsTabStop = false;
         }
         board.Layers.Board.IsTabStop = false;
     }
 
-    UIElement Target() => Item?.View.Slot.Element ?? (UIElement)board.Layers.Board;
+    UIElement Target() => Item?.View?.Slot.Element ?? (UIElement)board.Layers.Board;
 
     void Ring(BoardItem? item)
     {
-        item?.View.SetFocused(_ringed);
+        item?.View?.SetFocused(_ringed);
         board.Parts.Row.RingHint(_ringed && item is null);
     }
 }

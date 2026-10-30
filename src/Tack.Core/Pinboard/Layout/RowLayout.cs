@@ -76,15 +76,19 @@ public sealed class RowLayout
         return (left, left + _entries[index].Width);
     }
 
-    /// <summary>Whether some of print <paramref name="index"/> shows with the row at <paramref name="scroll"/>.</summary>
-    public bool InView(int index, double scroll)
+    /// <summary>
+    /// Whether some of print <paramref name="index"/> shows with the row at
+    /// <paramref name="scroll"/>, or would with the view <paramref name="margin"/>
+    /// wider each side.
+    /// </summary>
+    public bool InView(int index, double scroll, double margin = 0)
     {
         if (Fits)
         {
             return true;
         }
         var (left, right) = Span(index);
-        return right > scroll && left < BoardWidth + scroll;
+        return right > scroll - margin && left < BoardWidth + scroll + margin;
     }
 
     /// <summary>

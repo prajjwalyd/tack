@@ -13,7 +13,10 @@ static class MotionRest
 {
     public static void Put(BoardItem item, Keyframer keyframer)
     {
-        var view = item.View;
+        if (item.View is not { } view)
+        {
+            return;
+        }
         view.Arriving = false;
         foreach (var layer in new[] { view.Drop, view.Pin })
         {

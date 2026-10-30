@@ -18,13 +18,13 @@ sealed class Leaving(BoardContext board)
     /// <summary>Takes <paramref name="item"/> off the board as <paramref name="how"/> says.</summary>
     public void Leave(BoardItem item, Removal how)
     {
-        var view = item.View;
-        view.Leaving = true;
-        if (!board.State.Revealed)
+        // Out of view, or tucked, it simply goes.
+        if (item.View is not { } view || !board.State.Revealed)
         {
             board.Forget(item);
             return;
         }
+        view.Leaving = true;
         _going.Add(item);
         var (clock, keyframer) = (board.Clock, board.Keyframer);
         if (how != Removal.Fall || board.State.Reduced)

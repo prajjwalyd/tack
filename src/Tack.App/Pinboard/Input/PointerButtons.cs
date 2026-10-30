@@ -2,6 +2,7 @@ using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using Tack.App.Pinboard.Model;
+using Tack.App.Pinboard.Prints;
 
 namespace Tack.App.Pinboard.Input;
 
@@ -13,11 +14,11 @@ namespace Tack.App.Pinboard.Input;
 /// </summary>
 static class PointerButtons
 {
-    /// <summary>Keep toggles keeping <paramref name="item"/>; the cross unpins it.</summary>
-    public static void Wire(BoardItem item, BoardContext board)
+    /// <summary>On <paramref name="item"/>'s <paramref name="view"/>: Keep toggles keeping it; the cross unpins it.</summary>
+    public static void Wire(BoardItem item, PrintView view, BoardContext board)
     {
-        Wire(item.View.KeepButton.Element, item, () => board.Actions.SetKept(item.Id, !item.Print.Kept));
-        Wire(item.View.XButton.Element, item, () => board.Actions.Discard(item.Id));
+        Wire(view.KeepButton.Element, item, () => board.Actions.SetKept(item.Id, !item.Print.Kept));
+        Wire(view.XButton.Element, item, () => board.Actions.Discard(item.Id));
     }
 
     static void Wire(FrameworkElement button, BoardItem item, Action act)

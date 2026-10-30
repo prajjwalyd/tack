@@ -1,5 +1,6 @@
 using Tack.App.Pinboard.Contract;
 using Tack.App.Pinboard.Model;
+using Tack.App.Pinboard.Prints;
 using Tack.Core.Pinboard;
 using Tack.Core.Pinboard.Layout;
 using Tack.Core.Prints;
@@ -28,6 +29,7 @@ sealed class PrintRow : BoardPart
     readonly ReorderLift _lift;
     readonly OrderHold _order;
     readonly Arrivals _arrivals;
+    readonly PrintViews _views;
     bool _gapPending;
 
     public PrintRow(BoardContext board) : base(board)
@@ -38,6 +40,7 @@ sealed class PrintRow : BoardPart
         _lift = new ReorderLift(board);
         _order = new OrderHold(board, ApplyOrder);
         _arrivals = new Arrivals(board, this);
+        _views = new PrintViews(board, this);
     }
 
     /// <summary>The row as last laid out, in <see cref="BoardState.Order"/>: places, the board's width, the scroll extent.</summary>
@@ -45,17 +48,22 @@ sealed class PrintRow : BoardPart
 
     BoardState State => Board.State;
 
-    /// <summary>A new print's board item: its layers, a resting tilt either way and a pin colour from its id.</summary>
+    /// <summary>A new print's board item: a resting tilt either way and a pin colour from its id. Its view comes once it is near the view.</summary>
     public BoardItem Create(Print print)
     {
-        var tilt = Tilt.Next(Board.Random);
-        var item = new BoardItem(print, Board.NewView()) { Tilt = tilt, PinColor = PinPalette.ColorFor(print.Id) };
-        item.View.Update(print);
-        item.View.SetTilt(tilt);
-        item.View.SetPinColor(item.PinColor);
+        var item = new BoardItem(print) { Tilt = Tilt.Next(Board.Random), PinColor = PinPalette.ColorFor(print.Id) };
         Measure(item);
         return item;
     }
+
+    /// <summary><paramref name="item"/>'s view, made now if it has none: for a print about to be seen or focused wherever the row is.</summary>
+    public PrintView Wake(BoardItem item) => _views.Wake(item);
+
+    /// <summary>The row moved: prints coming near the view get their views. The scroller calls this.</summary>
+    public void FollowScroll() => _views.Follow();
+
+    /// <summary>The board has tucked and every motion is at rest: views out of view go until the row comes near them again.</summary>
+    public void RestViews() => _views.Rest();
 
     /// <summary>
     /// Lays the row out and sizes the board for it. Prints glide and the cork
@@ -139,7 +147,11 @@ sealed class PrintRow : BoardPart
 
     public override void Synced() => Layout(instant: true);
 
-    public override void Revealed(RevealReason reason, bool wasRevealed) => _arrivals.Revealed(wasRevealed);
+    public override void Revealed(RevealReason reason, bool wasRevealed)
+    {
+        _views.Revealed();
+        _arrivals.Revealed(wasRevealed);
+    }
 
     public override void Tucking()
     {
@@ -249,7 +261,7 @@ sealed class PrintRow : BoardPart
             if (live[i].PinColor != colors[i])
             {
                 live[i].PinColor = colors[i];
-                live[i].View.SetPinColor(colors[i]);
+                live[i].View?.SetPinColor(colors[i]);
             }
             live[i].Settled = true;
         }
@@ -259,6 +271,6 @@ sealed class PrintRow : BoardPart
     static void Measure(BoardItem item)
     {
         (item.W, item.H) = PrintSize.Of(item.Print.IsNote, item.Print.Width, item.Print.Height);
-        item.View.Resize(item.W, item.H);
+        item.View?.Resize(item.W, item.H);
     }
 }

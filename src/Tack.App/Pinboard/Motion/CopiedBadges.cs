@@ -15,7 +15,11 @@ sealed class CopiedBadges(BoardContext board)
     public void Stamp(BoardItem item)
     {
         Drop(item);
-        var (clock, keyframer, badge) = (board.Clock, board.Keyframer, item.View.Badge.Visual);
+        if (item.View is not { } view)
+        {
+            return;
+        }
+        var (clock, keyframer, badge) = (board.Clock, board.Keyframer, view.Badge.Visual);
         keyframer.Play(BoardMotions.BadgeIn(clock, board.State.Reduced).Sample(), badge);
         _holding[item] = board.Timers.Later(BoardMotions.BadgeHold(clock), () =>
         {

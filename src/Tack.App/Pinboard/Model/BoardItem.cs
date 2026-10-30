@@ -9,15 +9,18 @@ namespace Tack.App.Pinboard.Model;
 /// One print on the board as the board has it: the app's print, how it hangs
 /// (tilt, pin colour, place in the row) and what it is doing. UI thread only.
 /// </summary>
-sealed class BoardItem(Print print, PrintView view)
+sealed class BoardItem(Print print)
 {
     public string Id => Print.Id;
 
     /// <summary>The app's print, swapped for the new copy on each update.</summary>
     public Print Print { get; set; } = print;
 
-    /// <summary>The print's layers on screen.</summary>
-    public PrintView View { get; } = view;
+    /// <summary>
+    /// The print's layers on screen, while it is near the part of the row in
+    /// view; null while it is far away, where it costs only its place in the row.
+    /// </summary>
+    public PrintView? View { get; set; }
 
     /// <summary>The resting tilt, degrees, set once when it arrives.</summary>
     public double Tilt { get; set; }

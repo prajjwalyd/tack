@@ -90,6 +90,9 @@ public class RowLayoutTests
         Assert.Equal([0.0, 0, 0, 0, 0, 0, 0, 0, 0, 72, 258, 444, 630, 816], Shows(layout));
         Assert.Equal(
             [false, false, true, true, true, true, true, true, true, true, true, true, false, false], InViewHalfway(layout));
+        Assert.Equal(
+            [false, true, true, true, true, true, true, true, true, true, true, true, true, false],
+            Enumerable.Range(0, layout.Count).Select(i => layout.InView(i, layout.ScrollExtent / 2, margin: 200)));
     }
 
     [Fact]

@@ -28,7 +28,11 @@ sealed class PrintDrag(BoardContext board)
     /// <summary>Drags <paramref name="item"/> out from <paramref name="point"/>; returns at once.</summary>
     public async void Start(BoardItem item, PointerPoint point)
     {
-        var slot = item.View.Slot.Element;
+        if (item.View is not { } view)
+        {
+            return;
+        }
+        var slot = view.Slot.Element;
         string? path = null;
         async void Starting(UIElement sender, DragStartingEventArgs e)
         {

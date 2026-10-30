@@ -35,7 +35,7 @@ sealed class PointerHover(BoardContext board, IReadOnlyDictionary<UIElement, Boa
         }
         Clear();
         State.Hovered = item;
-        item.View.SetHover(true);
+        item.View?.SetHover(true);
         board.Parts.Captions.Show(item);
     }
 
@@ -56,7 +56,7 @@ sealed class PointerHover(BoardContext board, IReadOnlyDictionary<UIElement, Boa
             return;
         }
         State.Hovered = null;
-        item.View.SetHover(false);
+        item.View?.SetHover(false);
         board.Parts.Captions.Hide(item);
     }
 
@@ -69,7 +69,7 @@ sealed class PointerHover(BoardContext board, IReadOnlyDictionary<UIElement, Boa
         }
         // Relative to the slot, which the lean never moves: a steady frame for the whole hover.
         var lean = HoverLean.At(new LogicalRect(0, 0, item.W, item.H), inSlot.X, inSlot.Y);
-        item.View.Lean(lean.Nx, lean.Ny);
+        item.View?.Lean(lean.Nx, lean.Ny);
     }
 
     /// <summary>The print whose slot is under <paramref name="point"/> (logical px on the window), if any.</summary>

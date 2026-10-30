@@ -46,7 +46,7 @@ sealed class PrintMotions : BoardPart
     /// </summary>
     public void PinOn(BoardItem item)
     {
-        var view = item.View;
+        var view = Board.Parts.Row.Wake(item);
         Touch(item);
         if (State.Reduced)
         {
@@ -71,7 +71,10 @@ sealed class PrintMotions : BoardPart
     /// <summary>The print is on the cork: it leaves the arriving place and swings, against its tilt.</summary>
     public void Arrived(BoardItem item)
     {
-        item.View.Arriving = false;
+        if (item.View is { } view)
+        {
+            view.Arriving = false;
+        }
         Swings.Nudge(item, -(item.Tilt < 0 ? -1 : 1) * BoardMotions.ArrivalSwing);
     }
 
@@ -142,17 +145,17 @@ sealed class PrintMotions : BoardPart
         {
             KeepPress(item, old.Kept);
         }
-        if (!State.Revealed || State.Reduced)
+        if (!State.Revealed || State.Reduced || item.View is not { } view)
         {
             return;
         }
         if (item.Print.Note is { } note && !note.Equals(old.Note))
         {
-            Play(item, BoardMotions.PaperFlash(Clock), item.View.Paper);
+            Play(item, BoardMotions.PaperFlash(Clock), view.Paper);
         }
         else if (item.Print.Thumb is { } thumb && !ReferenceEquals(thumb.Jpeg, old.Thumb?.Jpeg) && old.Thumb is not null)
         {
-            Play(item, BoardMotions.PictureFlash(Clock), item.View.Picture);
+            Play(item, BoardMotions.PictureFlash(Clock), view.Picture);
         }
     }
 
@@ -181,7 +184,11 @@ sealed class PrintMotions : BoardPart
     /// </summary>
     void KeepPress(BoardItem item, bool was)
     {
-        var view = item.View;
+        // Out of view, the print already shows the new state for when it comes near.
+        if (item.View is not { } view)
+        {
+            return;
+        }
         // The view already shows the new state: it flips at the bottom of the press instead.
         view.SetKept(was, animate: false);
         if (State.Reduced)
@@ -206,9 +213,9 @@ sealed class PrintMotions : BoardPart
     /// <summary>A band of light crosses a kept pin's brass, while the board is down and full motion is wanted.</summary>
     void Glint(BoardItem item)
     {
-        if (item.Print.Kept && State.Revealed && !State.Reduced && !item.Leaving)
+        if (item.Print.Kept && State.Revealed && !State.Reduced && !item.Leaving && item.View is { } view)
         {
-            Play(item, BoardMotions.Glint(Clock, PrintView.GlintTravel), item.View.Glint);
+            Play(item, BoardMotions.Glint(Clock, PrintView.GlintTravel), view.Glint);
         }
     }
 
