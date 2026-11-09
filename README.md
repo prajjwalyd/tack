@@ -44,6 +44,10 @@ through [NetBird](https://netbird.io), a free, open-source private network.
 Add it to your home screen and it's one tap from then on. Only devices you
 allow get in, and your board never leaves your PC.
 
+To lock it down further, add a NetBird
+[access policy](https://docs.netbird.io/how-to/manage-network-access) that
+lets only your phone reach your PC, on TCP port 7717.
+
 ## Make it yours
 
 Open **Settings** from the tray icon. Choose the felt colour (or match your
