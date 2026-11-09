@@ -24,7 +24,8 @@
             <BreadcrumbBar.Resources>
                 <x:Double x:Key="BreadcrumbBarItemThemeFontSize">28</x:Double>
                 <x:Double x:Key="BreadcrumbBarChevronFontSize">14</x:Double>
-                <Thickness x:Key="BreadcrumbBarChevronPadding">11,0</Thickness>
+                <!-- Windows Settings leaves about 0.7 of a capital's height either side of the chevron. -->
+                <Thickness x:Key="BreadcrumbBarChevronPadding">7,0</Thickness>
                 <FontWeight x:Key="BreadcrumbBarItemFontWeight">SemiBold</FontWeight>
                 <!-- The way back and the chevron are grey, brightening when pointed at; the page itself is white. -->
                 <StaticResource x:Key="BreadcrumbBarForegroundBrush" ResourceKey="TextFillColorSecondaryBrush" />
