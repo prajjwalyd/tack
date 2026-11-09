@@ -5,7 +5,7 @@
 <h1 align="center">Snip it. It’s tacked.</h1>
 
 <p align="center"><b>The top of your screen, finally useful.</b><br>
-Tack is a small pinboard for Windows that hangs just above the top edge of your screen.</p>
+Tack is a small, native pinboard for Windows that hangs just above the top edge of your screen.</p>
 
 https://github.com/user-attachments/assets/0e2f1078-f804-4241-9b8f-a8305564e11d
 
@@ -20,6 +20,8 @@ https://github.com/user-attachments/assets/0e2f1078-f804-4241-9b8f-a8305564e11d
 - **Pin any file.** Drop files or folders on the board to keep them at hand.
   They stay where they are; drag one out or copy it to hand over the file.
 - **No clutter.** Old snips fade out after a week. **Keep** the ones you need.
+- **Native and quiet.** Built with WinUI 3, with no browser inside. While
+  tucked away it uses almost no CPU.
 
 <p align="center">
   <img src="docs/assets/hero.png" width="880" alt="The Tack board at the top of a Windows desktop with code, a chart, a note, a video frame and a chat pinned on it">
