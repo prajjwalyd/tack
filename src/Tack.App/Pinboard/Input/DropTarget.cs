@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Tack.Core.Diagnostics;
 using Tack.Core.Pinboard;
 using Tack.Core.Pinboard.Input;
+using Tack.Core.Pinboard.Motion;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using DragEventArgs = Microsoft.UI.Xaml.DragEventArgs;
@@ -23,6 +24,9 @@ namespace Tack.App.Pinboard.Input;
 /// </remarks>
 sealed class DropTarget : BoardPart
 {
+    /// <summary>After a drop, how long the empty board's card waits for the print before it comes back.</summary>
+    const double HintBackMs = 1000;
+
     readonly DropCue _cue;
 
     public DropTarget(BoardContext board) : base(board)
@@ -73,7 +77,7 @@ sealed class DropTarget : BoardPart
 
     async void Drop(object sender, DragEventArgs e)
     {
-        _cue.Show(false);
+        _cue.Show(false, drop: true);
         e.Handled = true;
         if (!Takes)
         {
@@ -98,6 +102,8 @@ sealed class DropTarget : BoardPart
         finally
         {
             deferral?.Complete();
+            // The empty board's card comes back if nothing arrived after all.
+            Board.Timers.Later(MotionClock.Fixed(HintBackMs, "after a drop that pinned nothing"), () => Board.Parts.Row.Covered(false));
         }
     }
 

@@ -130,6 +130,9 @@ sealed class PrintRow : BoardPart
     /// <summary>The keyboard's focus ring around the empty board's hint card, or not.</summary>
     public void RingHint(bool on) => _hint.SetRinged(on);
 
+    /// <summary>The drop cue covers the board: the empty board's card steps aside while it shows.</summary>
+    public void Covered(bool on) => _hint.Show(!on && !State.Row.Any());
+
     /// <summary>Holds the app's new orders back for <paramref name="ms"/> (already scaled): a keep press is seen before the print moves.</summary>
     public void HoldOrder(double ms) => _order.Hold(ms);
 

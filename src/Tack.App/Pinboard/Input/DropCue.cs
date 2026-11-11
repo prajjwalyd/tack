@@ -74,7 +74,7 @@ sealed class DropCue
         Canvas.SetTop(_area, BoardMetrics.TopHidden);
         var children = board.Layers.Board.Children;
         children.Insert(children.IndexOf(board.Layers.Veil), _area);
-        board.Layers.Rail.SizeChanged += (_, e) => _area.Width = Math.Max(0, e.NewSize.Width - 2 * Inset);
+        board.Layers.Rail.SizeChanged += (_, e) => Fit(e.NewSize.Width);
         _visual = ElementCompositionPreview.GetElementVisual(_area);
         ElementCompositionPreview.SetIsTranslationEnabled(_label.Element, true);
         _labelVisual = ElementCompositionPreview.GetElementVisual(_label.Element);
@@ -85,8 +85,12 @@ sealed class DropCue
         ApplyTheme();
     }
 
-    /// <summary>Shows the cue, or takes it away, easing either way.</summary>
-    public void Show(bool on)
+    /// <summary>
+    /// Shows the cue, or takes it away, easing either way. The empty board's
+    /// card steps aside while it shows; after a <paramref name="drop"/> it
+    /// stays away, since a print is on its way (whoever drops brings it back if not).
+    /// </summary>
+    public void Show(bool on, bool drop = false)
     {
         if (_shown == on)
         {
@@ -97,7 +101,13 @@ sealed class DropCue
         var fade = _board.Clock.Scaled(FadeMs);
         if (on)
         {
+            // Sized here too: an empty board keeps the rail's first width, so its size never changes.
+            Fit(_board.Layers.Rail.Width);
             _area.Visibility = Visibility.Visible;
+        }
+        if (!drop)
+        {
+            _board.Parts.Row.Covered(on);
         }
         keyframer.Transition(_visual, Channel.Opacity, on ? 1 : 0, fade, CubicBezier.Ease, done: () =>
         {
@@ -127,6 +137,9 @@ sealed class DropCue
         keyframer.Set(_labelVisual, Channel.Y, reduced ? 0 : LabelY);
         keyframer.Set(_labelVisual, Channel.Scale, reduced ? 1 : LabelScale);
     }
+
+    /// <summary>Spans the felt inside the frame of a board whose rail is <paramref name="railWidth"/> wide.</summary>
+    void Fit(double railWidth) => _area.Width = Math.Max(0, railWidth - 2 * Inset);
 
     public void ApplyTheme()
     {
