@@ -24,7 +24,7 @@ https://github.com/user-attachments/assets/15642841-2e5f-42ef-af62-7ab59b90bbc2
   tucked away it uses almost no CPU.
 
 <p align="center">
-  <img src="docs/assets/hero.png" width="880" alt="The Tack board at the top of a Windows desktop with code, a chart, a note, a video frame and a chat pinned on it">
+  <img src="docs/assets/hero.png" width="880" alt="The Tack board at the top of a Windows desktop with code, a chart, a chat, a terminal and a film poster pinned on it">
 </p>
 
 ## Your board, on your phone
@@ -40,7 +40,7 @@ through [NetBird](https://netbird.io), a free, open-source private network.
 3. Scan the QR code with your phone and click **Allow** on your PC.
 
 <p align="center">
-  <img src="docs/assets/phone.png" width="880" alt="The Tack on your phone window with its QR code beside a phone showing the same board in Chrome over 5G">
+  <img src="docs/assets/phone.png" width="880" alt="Tack's Use on your phone settings with a QR code, beside a phone showing the same board in Chrome over 5G">
 </p>
 
 Add it to your home screen and it's one tap from then on. Only devices you
