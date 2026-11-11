@@ -67,6 +67,9 @@ sealed class PrintFace
 
     bool IsNote => _kind == Kind.Note;
 
+    /// <summary>A file's card whose name is cut short on it.</summary>
+    public bool FileNameCut => _kind == Kind.File && _file is { Cut: true };
+
     /// <summary>Shows <paramref name="print"/>: its thumbnail, decoded off the UI thread, its note, or its file's thumbnail and name.</summary>
     public void Show(Print print)
     {

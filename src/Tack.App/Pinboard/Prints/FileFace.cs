@@ -8,7 +8,7 @@ namespace Tack.App.Pinboard.Prints;
 /// <summary>
 /// The name on a linked file's card, on one line under its thumbnail; the
 /// thumbnail itself is the print's photo, shown whole (<see cref="PhotoFace.Fit"/>).
-/// The full name shows in the caption on hover.
+/// When the name is cut short, the full name shows in the caption on hover.
 /// </summary>
 sealed class FileFace
 {
@@ -31,6 +31,9 @@ sealed class FileFace
     public TextBlock Root { get; }
 
     public void Show(string name) => Root.Text = name;
+
+    /// <summary>The name didn't fit on its line and ends in an ellipsis (known once laid out).</summary>
+    public bool Cut => Root.IsTextTrimmed;
 
     public void ApplyTheme(BoardTheme theme) =>
         Root.Foreground = theme.Brush(theme.IsHighContrast ? theme.CanvasText : theme.NoteInk);

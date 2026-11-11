@@ -60,6 +60,8 @@ sealed class PrintView
     readonly PrintStack _stack;
     PinColor _pinColor;
     double _artScale;
+    string? _link;
+    string? _fileName;
 
     /// <param name="theme">The board's colours.</param>
     /// <param name="board">The board, for its keyframer, speed, reduced motion and note paper; without it every look is put in place at once.</param>
@@ -151,7 +153,9 @@ sealed class PrintView
     public void Update(Print print)
     {
         _face.Show(print);
-        _caption.SetLine(print.Note?.Link is { } link ? Address.WithBreaks(link) : print.IsFile ? print.Name : null);
+        _link = print.Note?.Link is { } link ? Address.WithBreaks(link) : null;
+        _fileName = print.IsFile ? print.Name : null;
+        _caption.SetLine(_link);
         SetKept(print.Kept, animate: false);
     }
 
@@ -236,8 +240,16 @@ sealed class PrintView
         _keyframer.Set(FocusRing.Visual, Channel.Opacity, on ? 1 : 0);
     }
 
-    /// <summary>The age under the print, in words ("2 minutes ago"); shown while hovered.</summary>
-    public void SetAge(string text) => _caption.SetAge(text);
+    /// <summary>
+    /// The age under the print, in words ("2 minutes ago"); shown while
+    /// hovered. A file's full name goes over it only when its card cuts the
+    /// name short (known by now: the card is laid out before it's hovered).
+    /// </summary>
+    public void SetAge(string text)
+    {
+        _caption.SetLine(_link ?? (_face.FileNameCut ? _fileName : null));
+        _caption.SetAge(text);
+    }
 
     void Set(Action change)
     {

@@ -7,7 +7,7 @@ namespace Tack.App.Pinboard.Prints;
 /// <summary>
 /// The small print under a print, centred below it: its age in light,
 /// embossed type on the felt, and for a link note its whole address, or for
-/// a linked file its whole name, above (two lines at most, kept narrow enough
+/// a linked file whose card cuts its name short the whole name, above (two lines at most, kept narrow enough
 /// to stay on the felt). The age's
 /// words come from whoever keeps captions fresh, through <see cref="SetAge"/>.
 /// High contrast sets it in system colours on a plain background.
