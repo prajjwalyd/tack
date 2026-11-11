@@ -6,9 +6,8 @@ namespace Tack.App.Pinboard.Prints;
 
 /// <summary>
 /// The small print under a print, centred below it: its age in light,
-/// embossed type on the felt, and for a link note its whole address, or for
-/// a linked file its whole name, above (two lines at most, kept narrow enough
-/// to stay on the felt). The age's
+/// embossed type on the felt, and for a link note its whole address above
+/// (two lines at most, kept narrow enough to stay on the felt). The age's
 /// words come from whoever keeps captions fresh, through <see cref="SetAge"/>.
 /// High contrast sets it in system colours on a plain background.
 /// </summary>
@@ -54,7 +53,7 @@ sealed class PrintCaption
     /// <summary>The age, as said in words ("2 minutes ago").</summary>
     public void SetAge(string text) => _age.Text = _ageEmboss.Text = text;
 
-    /// <summary>A link note's full address (already broken where it may wrap) or a file's name over its age; null for none.</summary>
+    /// <summary>A link note's full address (already broken where it may wrap) over its age; null for none.</summary>
     public void SetLine(string? text)
     {
         _url.Text = _urlEmboss.Text = text ?? "";

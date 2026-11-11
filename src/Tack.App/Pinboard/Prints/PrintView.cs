@@ -151,7 +151,7 @@ sealed class PrintView
     public void Update(Print print)
     {
         _face.Show(print);
-        _caption.SetLine(print.Note?.Link is { } link ? Address.WithBreaks(link) : print.IsFile ? print.Name : null);
+        _caption.SetLine(print.Note?.Link is { } link ? Address.WithBreaks(link) : null);
         SetKept(print.Kept, animate: false);
     }
 
