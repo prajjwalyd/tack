@@ -15,6 +15,6 @@
     <Authors>The Tack contributors</Authors>
     <Copyright>The Tack contributors</Copyright>
     <!-- Above the last release of Tack 0.2 (0.2.1), so its updater offers this one. -->
-    <Version>0.3.0</Version>
+    <Version>0.3.1</Version>
   </PropertyGroup>
 </Project>
