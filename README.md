@@ -104,6 +104,10 @@ To build it yourself, see [docs/development.md](docs/development.md).
 Inspired by [Tendedero](https://github.com/alejandrobujan/tendedero) by Alejandro Buján.
 Built with C#, [WinUI 3](https://learn.microsoft.com/windows/apps/winui/winui3/) and .NET.
 
+The demo video shows [Erg Chebbi sunset](https://commons.wikimedia.org/wiki/File:Erg_Chebbi_sunset.jpg)
+by Thomas Fuhrmann ([CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)). The film and
+series posters in it belong to their studios.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
