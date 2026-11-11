@@ -7,7 +7,7 @@
 <p align="center"><b>The top of your screen, finally useful.</b><br>
 Tack is a small, native pinboard for Windows that hangs just above the top edge of your screen.</p>
 
-https://github.com/user-attachments/assets/0e2f1078-f804-4241-9b8f-a8305564e11d
+https://github.com/user-attachments/assets/15642841-2e5f-42ef-af62-7ab59b90bbc2
 
 - **Snip the way you already do.** Win + Shift + S, Print Screen, or any tool
   that saves to your Screenshots folder. The board drops down, pins it, and
@@ -103,6 +103,10 @@ To build it yourself, see [docs/development.md](docs/development.md).
 
 Inspired by [Tendedero](https://github.com/alejandrobujan/tendedero) by Alejandro Buján.
 Built with C#, [WinUI 3](https://learn.microsoft.com/windows/apps/winui/winui3/) and .NET.
+
+The demo video shows [Erg Chebbi sunset](https://commons.wikimedia.org/wiki/File:Erg_Chebbi_sunset.jpg)
+by Thomas Fuhrmann ([CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)). The film and
+series posters in it belong to their studios.
 
 ## License
 
